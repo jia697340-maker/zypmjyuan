@@ -10134,15 +10134,55 @@
         
         if (isValidProtocol) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
                     .then(registration => {
                         console.log('✅ Service Worker 注册成功:', registration.scope);
-                        // 检查更新
+                        
+                        // 监听 Service Worker 更新
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('🔄 检测到新版本 Service Worker');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'activated') {
+                                    console.log('✅ 新版本已激活');
+                                    // 如果有旧的 Service Worker 在控制页面，提示刷新
+                                    if (navigator.serviceWorker.controller) {
+                                        console.log('🔄 准备刷新页面以应用更新...');
+                                        // 延迟1秒后刷新，给用户一点反应时间
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 1000);
+                                    }
+                                }
+                            });
+                        });
+                        
+                        // 定期检查更新（每30秒）
+                        setInterval(() => {
+                            registration.update();
+                        }, 30000);
+                        
+                        // 立即检查一次更新
                         registration.update();
                     })
                     .catch(error => {
                         console.log('❌ Service Worker 注册失败:', error);
                     });
+            });
+            
+            // 监听来自 Service Worker 的消息
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data && event.data.type === 'SW_UPDATED') {
+                    console.log(`🎉 Service Worker 已更新到版本 ${event.data.version}`);
+                    // 可以在这里显示一个提示，告诉用户应用已更新
+                }
+            });
+            
+            // 监听 Service Worker 控制器变化
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('🔄 Service Worker 控制器已更改，刷新页面...');
+                window.location.reload();
             });
         } else {
             console.log('ℹ️ Service Worker 仅在 http/https 协议下工作（当前: ' + window.location.protocol + '）');
@@ -11782,10 +11822,9 @@
                     const systemPrompt = await generatePrivateSystemPrompt(character, memoryLibrary);
                     const systemTokens = estimateTokenCount(systemPrompt);
                     
-                    // 计算历史消息Token（先过滤隐藏的消息，再根据记忆轮数截取）
-                    const filteredHistory = filterHiddenMessages(character.history || [], character.hiddenMessageRanges || []);
+                    // 计算历史消息Token（根据记忆轮数截取）
                     const maxMemory = parseInt(character.maxMemory) || 10;
-                    const historySlice = filteredHistory.slice(-maxMemory);
+                    const historySlice = (character.history || []).slice(-maxMemory);
                     const historyTokens = calculateTotalTokens(historySlice);
                     
                     // API实际调用的Token = 系统提示词 + 历史消息
@@ -11816,10 +11855,9 @@
                     }
                     const systemTokens = estimateTokenCount(systemPrompt);
                     
-                    // 计算历史消息Token（先过滤隐藏的消息，再根据记忆轮数截取）
-                    const filteredHistory = filterHiddenMessages(group.history || [], group.hiddenMessageRanges || []);
+                    // 计算历史消息Token（根据记忆轮数截取）
                     const maxMemory = parseInt(group.maxMemory) || 10;
-                    const historySlice = filteredHistory.slice(-maxMemory);
+                    const historySlice = (group.history || []).slice(-maxMemory);
                     const historyTokens = calculateTotalTokens(historySlice);
                     
                     // API实际调用的Token = 系统提示词 + 历史消息
@@ -15937,108 +15975,126 @@ ${contextSummary}
                         fileName = `章鱼喷墨_流式备份_${date}_${time}.ee`;
                     }
                     
-                    // 使用流式API创建可写流
-                    const fileHandle = await window.showSaveFilePicker({
-                        suggestedName: fileName,
-                        types: [{
-                            description: '章鱼喷墨备份文件',
-                            accept: {'application/octet-stream': ['.ee']},
-                        }],
-                    });
+                    // 检查是否支持 File System Access API
+                    const supportsFileSystemAccess = 'showSaveFilePicker' in window;
                     
-                    const writableStream = await fileHandle.createWritable();
+                    let writableStream, fileHandle, compressionStream, compressedWriter, reader, writePromise;
+                    let chunks = []; // 用于降级方案收集数据块
                     
-                    // 创建压缩流
-                    const compressionStream = new CompressionStream('gzip');
-                    const compressedWriter = compressionStream.writable.getWriter();
-                    
-                    // 将压缩后的数据写入文件
-                    const reader = compressionStream.readable.getReader();
-                    const writePromise = (async () => {
-                        try {
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                await writableStream.write(value);
+                    if (supportsFileSystemAccess) {
+                        // 使用流式API创建可写流
+                        fileHandle = await window.showSaveFilePicker({
+                            suggestedName: fileName,
+                            types: [{
+                                description: '章鱼喷墨备份文件',
+                                accept: {'application/octet-stream': ['.ee']},
+                            }],
+                        });
+                        
+                        writableStream = await fileHandle.createWritable();
+                        
+                        // 创建压缩流
+                        compressionStream = new CompressionStream('gzip');
+                        compressedWriter = compressionStream.writable.getWriter();
+                        
+                        // 将压缩后的数据写入文件
+                        reader = compressionStream.readable.getReader();
+                        writePromise = (async () => {
+                            try {
+                                while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    await writableStream.write(value);
+                                }
+                            } finally {
+                                await writableStream.close();
                             }
-                        } finally {
-                            await writableStream.close();
-                        }
-                    })();
+                        })();
+                    } else {
+                        // 降级方案：使用内存收集数据，最后一次性下载
+                        showToast('您的浏览器不支持流式保存，将使用传统方式导出...');
+                        compressionStream = new CompressionStream('gzip');
+                        compressedWriter = compressionStream.writable.getWriter();
+                        
+                        // 读取压缩后的数据到内存
+                        reader = compressionStream.readable.getReader();
+                        writePromise = (async () => {
+                            try {
+                                while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    chunks.push(value);
+                                }
+                            } catch (e) {
+                                console.error('读取压缩数据错误:', e);
+                            }
+                        })();
+                    }
                     
                     // 流式写入JSON数据
                     const encoder = new TextEncoder();
                     
                     // 开始写入JSON
-                    await compressedWriter.write(encoder.encode('{"version":1,"exportTime":"' + new Date().toISOString() + '",'));
+                    await compressedWriter.write(encoder.encode('{"_exportVersion":"2.0","_exportTimestamp":' + Date.now() + ',"_optimizedStorage":true,"exportTime":"' + new Date().toISOString() + '",'));
                     
-                    // 导出角色数据
+                    // 导出基础设置数据
+                    showToast('正在导出基础设置...');
+                    await compressedWriter.write(encoder.encode('"apiSettings":' + JSON.stringify(db.apiSettings || {}) + ','));
+                    await compressedWriter.write(encoder.encode('"wallpaper":"' + (db.wallpaper || 'https://i.postimg.cc/W4Z9R9x4/ins-1.jpg') + '",'));
+                    await compressedWriter.write(encoder.encode('"myStickers":' + JSON.stringify(db.myStickers || []) + ','));
+                    await compressedWriter.write(encoder.encode('"stickerCategories":' + JSON.stringify(db.stickerCategories || []) + ','));
+                    await compressedWriter.write(encoder.encode('"homeScreenMode":"' + (db.homeScreenMode || 'night') + '",'));
+                    await compressedWriter.write(encoder.encode('"fontUrl":"' + (db.fontUrl || '') + '",'));
+                    await compressedWriter.write(encoder.encode('"fontLibrary":' + JSON.stringify(db.fontLibrary || []) + ','));
+                    await compressedWriter.write(encoder.encode('"fontSize":' + (db.fontSize || 16) + ','));
+                    await compressedWriter.write(encoder.encode('"customIcons":' + JSON.stringify(db.customIcons || {}) + ','));
+                    
+                    // 导出角色数据（包含完整历史）
                     showToast('正在导出角色数据...');
-                    const characters = await db.characters.toArray();
-                    await compressedWriter.write(encoder.encode('"characters":' + JSON.stringify(characters) + ','));
+                    const charactersWithHistory = [];
+                    for (const char of db.characters) {
+                        const fullHistory = await dataStorage.getChatMessages(char.id, 'private');
+                        const charData = await dataStorage.getData(`character_${char.id}`) || char;
+                        charactersWithHistory.push({
+                            ...charData,
+                            history: fullHistory || []
+                        });
+                    }
+                    await compressedWriter.write(encoder.encode('"characters":' + JSON.stringify(charactersWithHistory) + ','));
                     
-                    // 导出群组数据
+                    // 导出群组数据（包含完整历史）
                     showToast('正在导出群组数据...');
-                    const groups = await db.groups.toArray();
-                    await compressedWriter.write(encoder.encode('"groups":' + JSON.stringify(groups) + ','));
+                    const groupsWithHistory = [];
+                    for (const group of db.groups) {
+                        const fullHistory = await dataStorage.getChatMessages(group.id, 'group');
+                        const groupData = await dataStorage.getData(`group_${group.id}`) || group;
+                        groupsWithHistory.push({
+                            ...groupData,
+                            history: fullHistory || []
+                        });
+                    }
+                    await compressedWriter.write(encoder.encode('"groups":' + JSON.stringify(groupsWithHistory) + ','));
                     
                     // 导出世界书数据
                     showToast('正在导出世界书数据...');
-                    const worldBooks = await db.worldBooks.toArray();
-                    await compressedWriter.write(encoder.encode('"worldBooks":' + JSON.stringify(worldBooks) + ','));
-                    
-                    // 导出说说数据
-                    showToast('正在导出说说数据...');
-                    const qzonePosts = await db.qzonePosts.toArray();
-                    await compressedWriter.write(encoder.encode('"qzonePosts":' + JSON.stringify(qzonePosts) + ','));
-                    
-                    // 导出收藏数据
-                    showToast('正在导出收藏数据...');
-                    const favorites = await db.favorites.toArray();
-                    await compressedWriter.write(encoder.encode('"favorites":' + JSON.stringify(favorites) + ','));
-                    
-                    // 流式导出消息数据（分批处理，避免内存溢出）
-                    showToast('正在流式导出消息数据...');
-                    await compressedWriter.write(encoder.encode('"messageChunks":{'));
-                    
-                    const allKeys = await db.messageChunks.toCollection().primaryKeys();
-                    const totalKeys = allKeys.length;
-                    let processedKeys = 0;
-                    const batchSize = 50; // 每批处理50个消息块
-                    
-                    for (let i = 0; i < allKeys.length; i += batchSize) {
-                        const batchKeys = allKeys.slice(i, i + batchSize);
-                        const batchChunks = await db.messageChunks.bulkGet(batchKeys);
-                        
-                        for (let j = 0; j < batchChunks.length; j++) {
-                            const chunk = batchChunks[j];
-                            if (chunk) {
-                                const prefix = (i === 0 && j === 0) ? '' : ',';
-                                await compressedWriter.write(encoder.encode(prefix + '"' + chunk.key + '":' + JSON.stringify(chunk)));
-                                processedKeys++;
-                                
-                                // 每处理10个块更新一次进度
-                                if (processedKeys % 10 === 0) {
-                                    const progress = Math.round((processedKeys / totalKeys) * 100);
-                                    streamBackupBtn.textContent = `导出中 ${progress}%`;
-                                }
-                            }
-                        }
-                        
-                        // 让出控制权，避免阻塞UI
-                        await new Promise(resolve => setTimeout(resolve, 0));
-                    }
-                    
-                    await compressedWriter.write(encoder.encode('},'));
-                    
-                    // 导出设置数据
-                    showToast('正在导出设置数据...');
-                    const settings = await db.settings.toArray();
-                    await compressedWriter.write(encoder.encode('"settings":' + JSON.stringify(settings) + '}'));
+                    await compressedWriter.write(encoder.encode('"worldBooks":' + JSON.stringify(db.worldBooks || []) + '}'));
                     
                     // 关闭写入流
                     await compressedWriter.close();
                     await writePromise;
+                    
+                    // 如果使用降级方案，创建并下载文件
+                    if (!supportsFileSystemAccess) {
+                        const blob = new Blob(chunks, { type: 'application/octet-stream' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }
                     
                     showToast('流式备份导出成功！');
                     
@@ -19285,7 +19341,7 @@ ${contextSummary}
                         const imageRecogRegex = /\[.*?发来了一张图片：\]/
                         const voiceRegex = /\[.*?的语音：.*?\]/;
                         const photoVideoRegex = /\[.*?发来的照片\/视频：.*?\]/;
-                        const transferRegex = /\[.*?的转账：.*?元.*?\]|\[.*?给你转账：.*?元.*?\]|\[.*?向.*?转账：.*?元.*?\]/;
+                        const transferRegex = /\[.*?的转账：.*?元.*?\]|\[.*?给你转账：.*?元.*?\]|\[.*?向.*?转账：.*?元.*?\]|\[你收取了.*?的转账：.*?元.*?\]|\[你退回了.*?的转账：.*?元.*?\]/;
                         const stickerRegex = /\[.*?的表情包：.*?\]|\[.*?发送的表情包：.*?\]/;
                         const giftRegex = /\[.*?送来的礼物：.*?\]|\[.*?向.*?送来了礼物：.*?\]/;
 
@@ -19662,7 +19718,7 @@ ${contextSummary}
             const isVoiceMessage = /\[.*?的语音：.*?\]/.test(message.content);
             const isStickerMessage = /\[.*?的表情包：.*?\]|\[.*?发送的表情包：.*?\]/.test(message.content);
             const isPhotoVideoMessage = /\[.*?发来的照片\/视频：.*?\]/.test(message.content);
-            const isTransferMessage = /\[.*?给你转账：.*?\]|\[.*?的转账：.*?\]|\[.*?向.*?转账：.*?\]/.test(message.content);
+            const isTransferMessage = /\[.*?给你转账：.*?\]|\[.*?的转账：.*?\]|\[.*?向.*?转账：.*?\]|\[你收取了.*?的转账：.*?\]|\[你退回了.*?的转账：.*?\]/.test(message.content);
             const isGiftMessage = /\[.*?送来的礼物：.*?\]|\[.*?向.*?送来了礼物：.*?\]/.test(message.content);
             const isInvisibleMessage = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/.test(message.content);
 
@@ -19860,9 +19916,11 @@ ${contextSummary}
             // 保存到数据库
             await saveData();
             
-            // 刷新聊天界面
-            renderChatMessages();
+            // 刷新聊天界面（保持当前滚动位置）
+            renderMessages(false, false);
             renderChatList();
+            
+            showToast('消息已撤回');
         }
 
         // 复制消息文本函数
@@ -19899,7 +19957,9 @@ ${contextSummary}
                 /\[.*?向.*?送来了礼物：([\s\S]+)\]/,
                 /\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/,
                 /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/,
-                /\[.*?向.*?转账：([\d.]+)元；备注：(.*?)\]/
+                /\[.*?向.*?转账：([\d.]+)元；备注：(.*?)\]/,
+                /\[你收取了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/,
+                /\[你退回了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/
             ];
 
             for (const pattern of patterns) {
@@ -19908,6 +19968,10 @@ ${contextSummary}
                     // 对于转账消息，组合金额和备注
                     if (match.length === 3) {
                         textToCopy = `转账 ${match[1]} 元，备注：${match[2]}`;
+                    } else if (match.length === 4) {
+                        // 处理"你收取了/退回了XXX的转账"格式
+                        const action = textToCopy.includes('收取') ? '收取' : '退回';
+                        textToCopy = `${action}了 ${match[1]} 的转账 ${match[2]} 元，备注：${match[3]}`;
                     } else {
                         textToCopy = match[1].trim();
                     }
@@ -19972,8 +20036,8 @@ ${contextSummary}
             // 更新选择计数
             updateForwardSelectCount();
             
-            // 高亮已选择的消息
-            renderMessages(false, true);
+            // 高亮已选择的消息（不自动滚动到底部）
+            renderMessages(false, false);
             
             showToast('请选择要转发的消息，然后点击"转发"按钮');
         }
@@ -20545,9 +20609,19 @@ ${contextSummary}
             return Math.max(1, Math.min(60, Math.ceil(text.length / 3.5)));
         }
 
-        function createMessageBubbleElement(message) {
+        function createMessageBubbleElement(message, isUserView = true) {
             // 【核心修复】过滤掉隐藏的系统消息
-            if (message.isHidden) {
+            if (message.isHidden && !message.userOnlyVisible && !message.charOnlyVisible) {
+                return null;
+            }
+            
+            // 【新增】根据视角过滤消息
+            // 如果是用户视角，跳过只给CHAR看的消息
+            if (isUserView && message.charOnlyVisible) {
+                return null;
+            }
+            // 如果是AI视角（实际上用户界面不会有AI视角，这里是为了完整性）
+            if (!isUserView && message.userOnlyVisible) {
                 return null;
             }
             
@@ -20675,6 +20749,8 @@ ${contextSummary}
             const privateSentTransferRegex = /\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/;
             const privateReceivedTransferRegex = /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/;
             const groupTransferRegex = /\[(.*?)\s*向\s*(.*?)\s*转账：([\d.]+)元；备注：(.*?)\]/;
+            const userReceivedTransferRegex = /\[你收取了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/;
+            const userReturnedTransferRegex = /\[你退回了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/;
             const privateGiftRegex = /\[(?:.+?)送来的礼物：([\s\S]+?)\]/;
             const groupGiftRegex = /\[(.*?)\s*向\s*(.*?)\s*送来了礼物：([\s\S]+?)\]/;
             const imageRecogRegex = /\[.*?发来了一张图片：\]/;
@@ -20687,6 +20763,8 @@ ${contextSummary}
             const privateSentTransferMatch = content.match(privateSentTransferRegex);
             const privateReceivedTransferMatch = content.match(privateReceivedTransferRegex);
             const groupTransferMatch = content.match(groupTransferRegex);
+            const userReceivedTransferMatch = content.match(userReceivedTransferRegex);
+            const userReturnedTransferMatch = content.match(userReturnedTransferRegex);
             const privateGiftMatch = content.match(privateGiftRegex);
             const groupGiftMatch = content.match(groupGiftRegex);
             const imageRecogMatch = content.match(imageRecogRegex);
@@ -20765,6 +20843,25 @@ ${contextSummary}
                 bubbleElement = document.createElement('div');
                 bubbleElement.className = 'pv-card';
                 bubbleElement.innerHTML = `<div class="pv-card-content">${photoVideoMatch[1].trim()}</div><div class="pv-card-image-overlay" style="background-image: url('${isSent ? 'https://i.postimg.cc/L8NFrBrW/1752307494497.jpg' : 'https://i.postimg.cc/1tH6ds9g/1752301200490.jpg'}');"></div><div class="pv-card-footer"><svg viewBox="0 0 24 24"><path d="M4,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M4,6V18H20V6H4M10,9A1,1 0 0,1 11,10A1,1 0 0,1 10,11A1,1 0 0,1 9,10A1,1 0 0,1 10,9M8,17L11,13L13,15L17,10L20,14V17H8Z"></path></svg><span>照片/视频・点击查看</span></div>`;
+            } else if (userReceivedTransferMatch || userReturnedTransferMatch) {
+                // 处理"你收取了XXX的转账"或"你退回了XXX的转账"
+                const isReceived = !!userReceivedTransferMatch;
+                const match = userReceivedTransferMatch || userReturnedTransferMatch;
+                const charName = match[1];
+                const amount = parseFloat(match[2]).toFixed(2);
+                const remarkText = match[3] || '';
+                
+                bubbleElement = document.createElement('div');
+                bubbleElement.className = `transfer-card sent-transfer ${isReceived ? 'received' : 'returned'}`;
+                
+                const titleText = isReceived ? `你收取了${charName}的转账` : `你退回了${charName}的转账`;
+                const statusText = isReceived ? '已收款' : '已退回';
+                
+                const remarkHTML = remarkText ? `<p class="transfer-remark">${remarkText}</p>` : '';
+                bubbleElement.innerHTML = `<div class="overlay"></div><div class="transfer-content"><p class="transfer-title">${titleText}</p><p class="transfer-amount">¥${amount}</p>${remarkHTML}<p class="transfer-status">${statusText}</p></div>`;
+                
+                // 这种转账卡片不可点击（已经处理完成）
+                bubbleElement.style.cursor = 'default';
             } else if (privateSentTransferMatch || privateReceivedTransferMatch || groupTransferMatch) {
                 const isSentTransfer = !!privateSentTransferMatch || (groupTransferMatch && isSent);
                 const match = privateSentTransferMatch || privateReceivedTransferMatch || groupTransferMatch;
@@ -22246,11 +22343,14 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
+    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
+    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 5. ✨重要✨ 当我给你送礼物时，你必须通过发送一条指令来表示你已接收礼物。格式必须为：[${character.realName}已接收礼物]。这条指令消息本身不会显示给用户，但会触发礼物状态的变化。你可以在发送这条指令后，再附带一条普通的聊天消息来表达你的感谢和想法。
 6. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
+    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
 7. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
 8. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
@@ -22334,6 +22434,8 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
+    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
+    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 `;
             ruleNum++;
@@ -22342,6 +22444,7 @@ ${contextSummary}
             prompt += `${ruleNum}. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
+    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
 `;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。\n`;
@@ -23269,7 +23372,12 @@ ${contextSummary}
                 }
                 // 先过滤隐藏的消息，再取最大记忆轮数
                 const filteredHistory = filterHiddenMessages(chat.history, chat.hiddenMessageRanges || []);
-                let historySlice = filteredHistory.slice(-chat.maxMemory);
+                
+                // 【修复】过滤掉不可见的系统消息（如转账收取/退回、状态更新等）
+                const invisibleMessageRegex = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]/;
+                const visibleHistory = filteredHistory.filter(msg => !invisibleMessageRegex.test(msg.content));
+                
+                let historySlice = visibleHistory.slice(-chat.maxMemory);
                 
                 // 旁观者模式特殊处理：如果历史消息为空，添加一条启动消息
                 if (currentChatType === 'group' && chat.isObserverMode && historySlice.length === 0) {
@@ -25541,42 +25649,60 @@ ${contextSummary}
                 }
                 
                 // 提取原始转账的金额和备注
-                const transferRegex = /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/;
+                const transferRegex = /\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/;
                 const match = message.content.match(transferRegex);
                 
                 if (match) {
                     const amount = match[1];
                     const remark = match[2];
                     
-                    // 生成新的转账卡片消息（用于UI展示）
-                    let newTransferContent;
+                    // 生成USER视角的转账卡片消息（收取/退回的结果）
+                    // 这个消息只给USER看，显示"你收取了XXX的转账"或"你退回了XXX的转账"
+                    let userViewContent;
                     if (action === 'received') {
-                        newTransferContent = `[${character.myName}给你转账：${amount}元；备注：${remark}]`;
+                        userViewContent = `[你收取了${character.realName}的转账：${amount}元；备注：${remark}]`;
                     } else {
-                        newTransferContent = `[${character.myName}给你转账：${amount}元；备注：${remark}]`;
+                        userViewContent = `[你退回了${character.realName}的转账：${amount}元；备注：${remark}]`;
                     }
                     
-                    const newTransferMessage = {
+                    const userViewMessage = {
                         id: `msg_${Date.now()}`,
                         role: 'user',
-                        content: newTransferContent,
-                        parts: [{type: 'text', text: newTransferContent}],
+                        content: userViewContent,
+                        parts: [{type: 'text', text: userViewContent}],
                         timestamp: Date.now(),
-                        transferStatus: action // 直接设置为已接收或已退回状态
+                        transferStatus: action, // 直接设置为已接收或已退回状态
+                        isHidden: true, // 标记为隐藏消息，不发送给AI
+                        userOnlyVisible: true // 标记为只有USER可见的消息
                     };
                     
-                    character.history.push(newTransferMessage);
+                    character.history.push(userViewMessage);
                     
-                    // 渲染新消息
-                    const newBubble = createMessageBubbleElement(newTransferMessage);
+                    // 渲染新消息（只在USER视角显示）
+                    const newBubble = createMessageBubbleElement(userViewMessage, true); // 传入true表示是用户视角
                     if (newBubble) {
                         messageArea.appendChild(newBubble);
                         messageArea.scrollTop = messageArea.scrollHeight;
                     }
                     
                     // 添加系统通知消息，让AI知道用户的操作
+                    // 这条消息会在AI视角显示为灰色系统提示
                     const systemNotification = {
-                        id: `msg_${Date.now()}_notify`,
+                        role: 'system',
+                        content: action === 'received' 
+                            ? `${character.myName}收取了你的转账`
+                            : `${character.myName}退回了你的转账`,
+                        parts: [{type: 'text', text: action === 'received' 
+                            ? `${character.myName}收取了你的转账`
+                            : `${character.myName}退回了你的转账`}],
+                        timestamp: Date.now() + 1,
+                        charOnlyVisible: true // 标记为只有CHAR可见的消息
+                    };
+                    
+                    character.history.push(systemNotification);
+                    
+                    // 同时添加一条隐藏的指令消息给AI理解
+                    const aiInstruction = {
                         role: 'user',
                         content: action === 'received' 
                             ? `[${character.myName}接收${character.realName}的转账]`
@@ -25584,10 +25710,11 @@ ${contextSummary}
                         parts: [{type: 'text', text: action === 'received' 
                             ? `[${character.myName}接收${character.realName}的转账]`
                             : `[${character.myName}退回${character.realName}的转账]`}],
-                        timestamp: Date.now() + 1
+                        timestamp: Date.now() + 2,
+                        isHidden: true // 这条完全隐藏，只用于AI理解
                     };
                     
-                    character.history.push(systemNotification);
+                    character.history.push(aiInstruction);
                     
                     // 这条消息不需要渲染（因为是不可见指令）
                 }
@@ -31599,6 +31726,8 @@ JSON格式示例：
                     await saveData();
                     renderMessages(false, true);
                     renderChatList();
+                    // 实时更新状态显示
+                    chatRoomStatusText.textContent = character.status;
                     settingsSidebar.classList.remove('open');
                     showToast('聊天记录已清空');
                 }
@@ -33800,6 +33929,44 @@ JSON格式示例：
                     return showToast('请先完整填写API设置！');
                 }
                 
+                // 检查是否存在相同 URL 的预设
+                const existingPresetIndex = db.apiPresets.findIndex(preset => preset.url === r.value);
+                
+                if (existingPresetIndex !== -1) {
+                    const existingPreset = db.apiPresets[existingPresetIndex];
+                    // 检查其他配置是否也相同
+                    const isSameConfig = existingPreset.provider === n.value && 
+                                        existingPreset.key === s.value && 
+                                        existingPreset.model === a.value;
+                    
+                    if (!isSameConfig) {
+                        // URL 相同但其他配置不同，询问是否覆盖
+                        const shouldOverwrite = confirm(`检测到已存在相同 URL 的预设"${existingPreset.name}"，但其他配置不同。\n\n是否要覆盖该预设的内容？\n\n点击"确定"覆盖，点击"取消"创建新预设。`);
+                        
+                        if (shouldOverwrite) {
+                            // 覆盖现有预设
+                            db.apiPresets[existingPresetIndex] = {
+                                name: existingPreset.name, // 保持原预设名称
+                                provider: n.value,
+                                url: r.value,
+                                key: s.value,
+                                model: a.value,
+                                createdAt: existingPreset.createdAt, // 保持原创建时间
+                                updatedAt: Date.now() // 添加更新时间
+                            };
+                            await saveData();
+                            renderPresetList();
+                            showToast(`预设"${existingPreset.name}"已更新！`);
+                            return;
+                        }
+                    } else {
+                        // 完全相同的配置
+                        showToast(`预设"${existingPreset.name}"已存在且配置相同！`);
+                        return;
+                    }
+                }
+                
+                // 创建新预设
                 const presetName = prompt('请输入预设名称：', `预设${db.apiPresets.length + 1}`);
                 if (!presetName) return;
                 
@@ -34270,6 +34437,44 @@ JSON格式示例：
                     return showToast('请先完整填写副API设置！');
                 }
                 
+                // 检查是否存在相同 URL 的预设
+                const existingPresetIndex = db.secondaryApiPresets.findIndex(preset => preset.url === secondaryUrl.value);
+                
+                if (existingPresetIndex !== -1) {
+                    const existingPreset = db.secondaryApiPresets[existingPresetIndex];
+                    // 检查其他配置是否也相同
+                    const isSameConfig = existingPreset.provider === secondaryProvider.value && 
+                                        existingPreset.key === secondaryKey.value && 
+                                        existingPreset.model === secondaryModel.value;
+                    
+                    if (!isSameConfig) {
+                        // URL 相同但其他配置不同，询问是否覆盖
+                        const shouldOverwrite = confirm(`检测到已存在相同 URL 的副API预设"${existingPreset.name}"，但其他配置不同。\n\n是否要覆盖该预设的内容？\n\n点击"确定"覆盖，点击"取消"创建新预设。`);
+                        
+                        if (shouldOverwrite) {
+                            // 覆盖现有预设
+                            db.secondaryApiPresets[existingPresetIndex] = {
+                                name: existingPreset.name, // 保持原预设名称
+                                provider: secondaryProvider.value,
+                                url: secondaryUrl.value,
+                                key: secondaryKey.value,
+                                model: secondaryModel.value,
+                                createdAt: existingPreset.createdAt, // 保持原创建时间
+                                updatedAt: Date.now() // 添加更新时间
+                            };
+                            await saveData();
+                            renderSecondaryPresetList();
+                            showToast(`副API预设"${existingPreset.name}"已更新！`);
+                            return;
+                        }
+                    } else {
+                        // 完全相同的配置
+                        showToast(`副API预设"${existingPreset.name}"已存在且配置相同！`);
+                        return;
+                    }
+                }
+                
+                // 创建新预设
                 const presetName = prompt('请输入副API预设名称：', `副API预设${db.secondaryApiPresets.length + 1}`);
                 if (!presetName) return;
                 
@@ -34477,6 +34682,45 @@ JSON格式示例：
                             return showToast('请先填写Group ID和API Key！');
                         }
                         
+                        // 检查是否存在相同 Group ID 和 API Key 的预设
+                        const existingPresetIndex = db.minimaxPresets.findIndex(preset => 
+                            preset.groupId === groupId && preset.apiKey === apiKey
+                        );
+                        
+                        if (existingPresetIndex !== -1) {
+                            const existingPreset = db.minimaxPresets[existingPresetIndex];
+                            // 检查其他配置是否也相同
+                            const isSameConfig = existingPreset.voiceId === (minimaxVoiceIdInput.value.trim() || 'male-qn-qingse') && 
+                                                existingPreset.speechModel === (minimaxSpeechModelSelect.value || 'speech-01');
+                            
+                            if (!isSameConfig) {
+                                // Group ID 和 API Key 相同但其他配置不同，询问是否覆盖
+                                const shouldOverwrite = confirm(`检测到已存在相同 Group ID 和 API Key 的预设"${existingPreset.name}"，但其他配置不同。\n\n是否要覆盖该预设的内容？\n\n点击"确定"覆盖，点击"取消"创建新预设。`);
+                                
+                                if (shouldOverwrite) {
+                                    // 覆盖现有预设
+                                    db.minimaxPresets[existingPresetIndex] = {
+                                        name: existingPreset.name, // 保持原预设名称
+                                        groupId: groupId,
+                                        apiKey: apiKey,
+                                        voiceId: minimaxVoiceIdInput.value.trim() || 'male-qn-qingse',
+                                        speechModel: minimaxSpeechModelSelect.value || 'speech-01',
+                                        createdAt: existingPreset.createdAt, // 保持原创建时间
+                                        updatedAt: Date.now() // 添加更新时间
+                                    };
+                                    await saveData();
+                                    renderMinimaxPresetList();
+                                    showToast(`预设"${existingPreset.name}"已更新！`);
+                                    return;
+                                }
+                            } else {
+                                // 完全相同的配置
+                                showToast(`预设"${existingPreset.name}"已存在且配置相同！`);
+                                return;
+                            }
+                        }
+                        
+                        // 创建新预设
                         const presetName = prompt('请输入预设名称：', `语音预设${db.minimaxPresets.length + 1}`);
                         if (!presetName) return;
                         
@@ -37276,7 +37520,7 @@ JSON格式示例：
                     renderMessages(false, true);
                     renderChatList();
                     groupSettingsSidebar.classList.remove('open');
-                    showToast('聊天记录已清空');
+                    showToast('聊天记录已清空，所有成员状态已重置');
                 }
             });
             
