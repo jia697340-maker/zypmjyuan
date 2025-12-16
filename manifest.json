@@ -1,0 +1,25 @@
+{
+  "name": "章鱼喷墨机（粘包狗版本）",
+  "short_name": "章鱼喷墨机",
+  "description": "章鱼喷墨机（粘包狗版本）",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fce4ec",
+  "theme_color": "#ff80ab",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/mZ6N4GtT/mmexport1762250594890.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.postimg.cc/mZ6N4GtT/mmexport1762250594890.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
