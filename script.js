@@ -667,7 +667,7 @@
 
                 // LRU缓存配置
                 this.cache = new Map();
-                this.maxCacheSize = 50; // 最大缓存50个数据块
+                this.maxCacheSize = 30; // 减少最大缓存到30个数据块，降低内存占用
                 this.chunkSize = 100; // 每个数据块100条消息
 
                 // 性能监控
@@ -677,6 +677,33 @@
                     operationTimes: [],
                     memoryUsage: 0
                 };
+                
+                // 定期清理缓存，防止内存泄漏
+                this.startAutoCleanup();
+            }
+
+            // 自动清理机制
+            startAutoCleanup() {
+                // 每5分钟清理一次过期缓存
+                setInterval(() => {
+                    if (this.cache.size > this.maxCacheSize * 0.8) {
+                        console.log('触发自动缓存清理...');
+                        // 清理最旧的20%缓存
+                        const deleteCount = Math.floor(this.cache.size * 0.2);
+                        const keys = Array.from(this.cache.keys());
+                        for (let i = 0; i < deleteCount; i++) {
+                            this.cache.delete(keys[i]);
+                        }
+                        console.log(`已清理 ${deleteCount} 个缓存项`);
+                    }
+                }, 5 * 60 * 1000);
+                
+                // 每30分钟强制清理一次内存
+                setInterval(() => {
+                    console.log('执行定期内存清理...');
+                    this.cache.clear();
+                    console.log('缓存已清空');
+                }, 30 * 60 * 1000);
             }
 
 
@@ -693,8 +720,8 @@
                     this.cache.delete(firstKey);
                 }
 
-                // 更新内存使用量估算
-                this.performanceMetrics.memoryUsage = JSON.stringify([...this.cache.values()]).length;
+                // 优化：使用估算而不是实际序列化，避免内存峰值
+                this.performanceMetrics.memoryUsage = this.cache.size * 10000; // 粗略估算每项10KB
             }
 
             // 从缓存获取数据
@@ -965,31 +992,40 @@
                 }
             }
 
-            // 获取存储信息
+            // 获取存储信息（优化版本，避免一次性加载所有数据）
             async getStorageInfo() {
                 const startTime = Date.now();
                 try {
-                    const [storageItems, messageChunks] = await Promise.all([
-                        this.db.storage.toArray(),
-                        this.db.messageChunks.toArray()
+                    // 使用count()代替toArray()来减少内存占用
+                    const [itemCount, chunkCount] = await Promise.all([
+                        this.db.storage.count(),
+                        this.db.messageChunks.count()
                     ]);
 
-                    const storageSize = storageItems.reduce((sum, item) => sum + item.value.length, 0);
-                    const messageSize = messageChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk.messages).length, 0);
+                    // 只获取必要的统计信息，不加载完整数据
+                    let storageSize = 0;
+                    let messageSize = 0;
+                    
+                    // 分批处理，避免一次性加载所有数据
+                    await this.db.storage.each(item => {
+                        storageSize += item.value.length;
+                    });
+                    
+                    await this.db.messageChunks.each(chunk => {
+                        // 估算消息大小，避免序列化
+                        messageSize += chunk.messages.length * 500; // 假设每条消息平均500字节
+                    });
+
                     const totalSize = storageSize + messageSize;
 
                     const info = {
-                        itemCount: storageItems.length,
-                        chunkCount: messageChunks.length,
+                        itemCount: itemCount,
+                        chunkCount: chunkCount,
                         totalSize: totalSize,
                         storageSize: storageSize,
                         messageSize: messageSize,
                         cacheSize: this.cache.size,
-                        items: storageItems.map(item => ({
-                            key: item.key,
-                            size: item.value.length,
-                            timestamp: new Date(item.timestamp).toLocaleString()
-                        }))
+                        items: [] // 不再返回详细列表，减少内存占用
                     };
 
                     // 更新显示
@@ -1019,7 +1055,7 @@
                 else sizeElement.className = 'metric-value error';
             }
 
-            // 清除缓存（清除已删除角色的残留数据）
+            // 清除缓存（清除已删除角色的残留数据）- 优化版本
             async clearCache() {
                 const startTime = Date.now();
                 let deletedCount = 0;
@@ -1028,48 +1064,38 @@
                 try {
                     console.log('开始清理无效缓存...');
                     
-                    // 获取所有存储的键
-                    const allKeys = await this.getAllKeys();
-                    
                     // 获取当前活跃的角色和群组ID列表
-                    // 注意：这里的db是全局变量，可以直接访问
                     const activeCharacterIds = new Set(db.characters.map(c => c.id));
                     const activeGroupIds = new Set(db.groups.map(g => g.id));
                     
-                    // 1. 清理残留的角色和群组数据
-                    for (const key of allKeys) {
+                    // 1. 清理残留的角色和群组数据（使用迭代器避免一次性加载）
+                    await this.db.storage.each(async (item) => {
+                        const key = item.key;
                         if (key.startsWith('character_')) {
                             const id = key.replace('character_', '');
                             if (!activeCharacterIds.has(id)) {
-                                const item = await this.db.storage.get(key);
-                                if (item) {
-                                    deletedSize += item.value.length;
-                                    await this.removeData(key);
-                                    // 同时清理对应的消息记录
-                                    await this.clearChatMessages(id, 'private');
-                                    deletedCount++;
-                                    console.log(`清理残留角色: ${id}`);
-                                }
+                                deletedSize += item.value.length;
+                                await this.removeData(key);
+                                // 同时清理对应的消息记录
+                                await this.clearChatMessages(id, 'private');
+                                deletedCount++;
+                                console.log(`清理残留角色: ${id}`);
                             }
                         } else if (key.startsWith('group_')) {
                             const id = key.replace('group_', '');
                             if (!activeGroupIds.has(id)) {
-                                const item = await this.db.storage.get(key);
-                                if (item) {
-                                    deletedSize += item.value.length;
-                                    await this.removeData(key);
-                                    // 同时清理对应的消息记录
-                                    await this.clearChatMessages(id, 'group');
-                                    deletedCount++;
-                                    console.log(`清理残留群组: ${id}`);
-                                }
+                                deletedSize += item.value.length;
+                                await this.removeData(key);
+                                // 同时清理对应的消息记录
+                                await this.clearChatMessages(id, 'group');
+                                deletedCount++;
+                                console.log(`清理残留群组: ${id}`);
                             }
                         }
-                    }
+                    });
                     
-                    // 2. 清理孤立的消息分块
-                    const allChunks = await this.db.messageChunks.toArray();
-                    for (const chunk of allChunks) {
+                    // 2. 清理孤立的消息分块（使用迭代器避免一次性加载）
+                    await this.db.messageChunks.each(async (chunk) => {
                         let isOrphan = false;
                         
                         if (chunk.chatType === 'private') {
@@ -1084,10 +1110,11 @@
                         
                         if (isOrphan) {
                             await this.db.messageChunks.where('id').equals(chunk.id).delete();
-                            deletedSize += JSON.stringify(chunk.messages).length;
+                            // 估算大小，避免序列化
+                            deletedSize += chunk.messages.length * 500;
                             deletedCount++;
                         }
-                    }
+                    });
 
                     // 3. 清理孤立的缓存对象
                     for (const key of this.cache.keys()) {
@@ -1106,7 +1133,7 @@
                         }
                     }
                     
-                    console.log(`清理完成: 删除 ${deletedCount} 个项目, 释放 ${(deletedSize / 1024).toFixed(2)} KB`);
+                    console.log(`清理完成: 删除 ${deletedCount} 个项目, 释放约 ${(deletedSize / 1024).toFixed(2)} KB`);
                     
                     return { count: deletedCount, size: deletedSize };
                 } catch (error) {
@@ -6970,6 +6997,57 @@ ${contextSummary}
                 }
             });
 
+            // 内存优化按钮
+            const memoryOptimizeBtn = document.createElement('button');
+            memoryOptimizeBtn.className = 'btn';
+            memoryOptimizeBtn.textContent = '🧹 内存优化';
+            memoryOptimizeBtn.style.marginTop = '15px';
+            memoryOptimizeBtn.style.display = 'block';
+            memoryOptimizeBtn.style.backgroundColor = '#4CAF50';
+            memoryOptimizeBtn.style.color = 'white';
+            
+            memoryOptimizeBtn.addEventListener('click', async () => {
+                if (loadingBtn) return;
+                
+                if (!confirm('执行内存优化将：\n\n1. 清空所有缓存\n2. 清理无效数据\n3. 释放内存空间\n\n建议定期执行以防止闪退。\n\n是否继续？')) {
+                    return;
+                }
+                
+                loadingBtn = true;
+                const originalText = memoryOptimizeBtn.textContent;
+                memoryOptimizeBtn.textContent = '优化中...';
+                
+                try {
+                    showToast('正在优化内存...');
+                    
+                    // 1. 清空缓存
+                    dataStorage.cache.clear();
+                    console.log('✓ 缓存已清空');
+                    
+                    // 2. 清理无效数据
+                    const result = await dataStorage.clearCache();
+                    console.log(`✓ 已清理 ${result.count} 个无效项目`);
+                    
+                    // 3. 强制垃圾回收（如果浏览器支持）
+                    if (window.gc) {
+                        window.gc();
+                        console.log('✓ 已触发垃圾回收');
+                    }
+                    
+                    showToast(`✅ 优化完成！\n清理了 ${result.count} 个项目\n释放约 ${(result.size / 1024).toFixed(2)} KB`);
+                    
+                    // 更新存储信息显示
+                    await dataStorage.getStorageInfo();
+                    
+                } catch (error) {
+                    showToast(`优化失败: ${error.message}`);
+                    console.error('内存优化错误:', error);
+                } finally {
+                    loadingBtn = false;
+                    memoryOptimizeBtn.textContent = originalText;
+                }
+            });
+
             tutorialContentArea.appendChild(backupDataBtn);
             tutorialContentArea.appendChild(viaBackupBtn);
             tutorialContentArea.appendChild(streamBackupBtn);
@@ -6977,6 +7055,7 @@ ${contextSummary}
             tutorialContentArea.appendChild(importDataBtn);
             tutorialContentArea.appendChild(streamImportBtn);
             tutorialContentArea.appendChild(viewDataSizeBtn);
+            tutorialContentArea.appendChild(memoryOptimizeBtn);
             tutorialContentArea.appendChild(clearCacheBtn);
             tutorialContentArea.appendChild(batchClearCharBtn);
             tutorialContentArea.appendChild(clearLocalDataBtn);
