@@ -23139,7 +23139,7 @@ JSON格式示例：
                     
                     // 表情包消息
                     if (/\[(?:.+?)发送的表情包[：:]/.test(originalContent) || /\[(?:.+?)的表情包[：:]/.test(originalContent)) {
-                        typeBadge = '<span style="display: inline-block; background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">📦 表情包</span>';
+                        typeBadge = '<span style="display: inline-block; background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">表情包</span>';
                         // 提取表情包内容
                         const stickerMatch = originalContent.match(/\[(?:.+?)(?:发送的)?表情包[：:]([\s\S]+?)\]/);
                         if (stickerMatch) {
@@ -23157,7 +23157,7 @@ JSON格式示例：
                     } 
                     // 图片/视频消息
                     else if (/\[(?:.+?)发来的照片\/视频[：:]/.test(originalContent) || /^https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)/i.test(originalContent)) {
-                        typeBadge = '<span style="display: inline-block; background: #2196f3; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">🖼️ 图片</span>';
+                        typeBadge = '<span style="display: inline-block; background: #2196f3; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">图片</span>';
                         // 提取图片描述或显示[图片]
                         const imageMatch = originalContent.match(/\[(?:.+?)发来的照片\/视频[：:]([\s\S]+?)\]/);
                         if (imageMatch) {
@@ -23168,7 +23168,7 @@ JSON格式示例：
                     } 
                     // 转账消息
                     else if (/\[(?:.+?)(?:给你)?转账[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*转账[：:]/.test(originalContent)) {
-                        typeBadge = '<span style="display: inline-block; background: #f44336; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">💰 转账</span>';
+                        typeBadge = '<span style="display: inline-block; background: #f44336; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">转账</span>';
                         // 提取转账金额和备注
                         const transferMatch = originalContent.match(/转账[：:]([\d.]+)元[；;]备注[：:](.+?)\]/);
                         if (transferMatch) {
@@ -23177,7 +23177,7 @@ JSON格式示例：
                     } 
                     // 礼物消息
                     else if (/\[(?:.+?)送来的礼物[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*送来了礼物[：:]/.test(originalContent)) {
-                        typeBadge = '<span style="display: inline-block; background: #e91e63; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">🎁 礼物</span>';
+                        typeBadge = '<span style="display: inline-block; background: #e91e63; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">礼物</span>';
                         // 提取礼物名称
                         const giftMatch = originalContent.match(/礼物[：:](.+?)\]/);
                         if (giftMatch) {
