@@ -391,6 +391,18 @@
                         <label><input type="radio" name="world-book-position" value="after"> 后</label>
                     </div>
                 </div>
+                <!-- 精简总结区域（仅总结类型世界书显示） -->
+                <div id="summary-compress-section" style="display: none; margin-top: 20px; padding: 15px; background-color: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
+                    <h4 style="margin: 0 0 10px 0; color: #1976d2; font-size: 16px; font-weight: 600;">📝 总结精简</h4>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 12px; line-height: 1.5;">
+                        使用AI精简当前总结内容，提取关键信息，减少Token占用。<br>
+                        <strong style="color: #f57c00;">注意：</strong>精简后会替换原有总结内容，建议先备份。
+                    </p>
+                    <button type="button" class="btn btn-secondary" id="compress-summary-btn" style="width: 100%; background-color: #2196F3; color: white;">
+                        <span class="btn-text">🗜️ 精简目前总结</span>
+                        <div class="spinner" style="display: none;"></div>
+                    </button>
+                </div>
                 <button type="submit" class="btn btn-primary">保存条目</button>
             </form>
         </main>
@@ -1628,6 +1640,22 @@
                         <div style="border-top: 1px solid #e0e0e0; padding-top: 10px; margin-top: 10px;">
                             <button type="button" class="btn btn-primary" id="manual-summary-btn" style="width: 100%; margin-bottom: 10px;">手动总结</button>
                             
+                            <!-- 总结进度显示区域 -->
+                            <div id="summary-progress-info" style="background-color: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                                <div style="font-weight: bold; font-size: 14px; color: #2e7d32; margin-bottom: 8px;">总结进度</div>
+                                <div style="font-size: 13px; color: #555; line-height: 1.6;">
+                                    <div style="margin-bottom: 4px;">
+                                        <strong>当前消息数：</strong><span id="current-message-count">0</span> 条
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <strong>最后总结位置：</strong><span id="last-summary-position">未总结</span>
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 6px;">
+                                        💡 显示最近一次总结（自动或手动）的位置
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="form-group" style="margin-bottom: 10px;">
                                 <label for="custom-summary-prompt">自定义总结提示词</label>
                                 <textarea id="custom-summary-prompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px;"></textarea>
@@ -2258,6 +2286,22 @@
 
                         <div style="border-top: 1px solid #e0e0e0; padding-top: 10px; margin-top: 10px;">
                             <button type="button" class="btn btn-primary" id="group-manual-summary-btn" style="width: 100%; margin-bottom: 10px;">手动总结</button>
+                            
+                            <!-- 群聊总结进度显示区域 -->
+                            <div id="group-summary-progress-info" style="background-color: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                                <div style="font-weight: bold; font-size: 14px; color: #2e7d32; margin-bottom: 8px;">📊 总结进度</div>
+                                <div style="font-size: 13px; color: #555; line-height: 1.6;">
+                                    <div style="margin-bottom: 4px;">
+                                        <strong>当前消息数：</strong><span id="group-current-message-count">0</span> 条
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <strong>最后总结位置：</strong><span id="group-last-summary-position">未总结</span>
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 6px;">
+                                        💡 显示最近一次总结（自动或手动）的位置
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div class="form-group" style="margin-bottom: 10px;">
                                 <label for="group-custom-summary-prompt">自定义总结提示词</label>

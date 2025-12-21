@@ -44,15 +44,13 @@
                             });
                         });
                         
-                        // 定期检查更新（每5分钟，避免频繁检查导致问题）
+                        // 定期检查更新（每30秒）
                         setInterval(() => {
                             registration.update();
-                        }, 5 * 60 * 1000);
+                        }, 30000);
                         
-                        // 延迟检查更新，避免启动时冲突
-                        setTimeout(() => {
-                            registration.update();
-                        }, 3000);
+                        // 立即检查一次更新
+                        registration.update();
                     })
                     .catch(error => {
                         console.log('❌ Service Worker 注册失败:', error);
@@ -67,11 +65,10 @@
                 }
             });
             
-            // 监听 Service Worker 控制器变化（注释掉自动刷新，避免无限循环）
+            // 监听 Service Worker 控制器变化
             navigator.serviceWorker.addEventListener('controllerchange', () => {
-                console.log('🔄 Service Worker 控制器已更改');
-                // 不自动刷新，避免可能的无限循环导致闪退
-                // window.location.reload();
+                console.log('🔄 Service Worker 控制器已更改，刷新页面...');
+                window.location.reload();
             });
         } else {
             console.log('ℹ️ Service Worker 仅在 http/https 协议下工作（当前: ' + window.location.protocol + '）');
@@ -165,446 +162,23 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-        // 图片存储到IndexedDB的Blob存储
-        async function storeImageAsBlob(file) {
-            try {
-                // 压缩图片
-                const compressedBlob = await compressImageToBlob(file, {
-                    quality: 0.8,
-                    maxWidth: 800,
-                    maxHeight: 800
-                });
-                
-                // 生成唯一ID
-                const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                
-                // 存储到IndexedDB
-                await dataStorage.db.imageBlobs.put({
-                    id: imageId,
-                    blob: compressedBlob,
-                    timestamp: Date.now()
-                });
-                
-                // 返回引用ID而不是Base64
-                return `blob:${imageId}`;
-            } catch (error) {
-                console.error('存储图片失败:', error);
-                throw error;
-            }
-        }
-        
-        // 从IndexedDB获取图片Blob并创建URL
-        async function getImageUrl(imageRef) {
-            try {
-                // 如果是旧的Base64格式，直接返回
-                if (imageRef.startsWith('data:')) {
-                    return imageRef;
-                }
-                
-                // 如果是HTTP URL，直接返回
-                if (imageRef.startsWith('http')) {
-                    return imageRef;
-                }
-                
-                // 如果是blob引用，从IndexedDB获取
-                if (imageRef.startsWith('blob:')) {
-                    const imageId = imageRef.replace('blob:', '');
-                    const record = await dataStorage.db.imageBlobs.get(imageId);
-                    if (record && record.blob) {
-                        return URL.createObjectURL(record.blob);
-                    }
-                }
-                
-                return imageRef;
-            } catch (error) {
-                console.error('获取图片URL失败:', error);
-                return imageRef;
-            }
-        }
-        
-        // 自动处理页面上所有图片的blob引用
-        async function processImageElements() {
-            const images = document.querySelectorAll('img[src^="blob:"]');
-            for (const img of images) {
-                const originalSrc = img.getAttribute('src');
-                if (originalSrc && originalSrc.startsWith('blob:') && !originalSrc.startsWith('blob:http')) {
-                    const url = await getImageUrl(originalSrc);
-                    if (url !== originalSrc) {
-                        img.src = url;
-                    }
-                }
-            }
-        }
-        
-        // 监听DOM变化，自动处理新添加的图片
-        const imageObserver = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) { // Element node
-                        if (node.tagName === 'IMG' && node.src && node.src.startsWith('blob:') && !node.src.startsWith('blob:http')) {
-                            getImageUrl(node.getAttribute('src')).then(url => {
-                                if (url !== node.src) {
-                                    node.src = url;
-                                }
-                            });
-                        }
-                        // 处理子元素中的图片
-                        const imgs = node.querySelectorAll && node.querySelectorAll('img[src^="blob:"]');
-                        if (imgs) {
-                            imgs.forEach(img => {
-                                const originalSrc = img.getAttribute('src');
-                                if (originalSrc && originalSrc.startsWith('blob:') && !originalSrc.startsWith('blob:http')) {
-                                    getImageUrl(originalSrc).then(url => {
-                                        if (url !== originalSrc) {
-                                            img.src = url;
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    }
-                });
-            });
-        });
-        
-        // 启动图片监听
-        imageObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        // 🚨 紧急恢复界面
-        function showEmergencyRecovery(usageInMB) {
-            // 创建全屏恢复界面
-            const recoveryDiv = document.createElement('div');
-            recoveryDiv.id = 'emergency-recovery';
-            recoveryDiv.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                z-index: 999999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            `;
-            
-            recoveryDiv.innerHTML = `
-                <div style="background: white; border-radius: 20px; padding: 30px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 60px; margin-bottom: 10px;">⚠️</div>
-                        <h2 style="margin: 0; color: #ff3b30; font-size: 24px;">检测到数据库过大</h2>
-                    </div>
-                    
-                    <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                        <p style="margin: 0 0 10px 0; font-weight: 600; color: #856404;">当前状态：</p>
-                        <p style="margin: 0; color: #856404;">📊 数据库大小: <strong>${usageInMB.toFixed(2)} MB</strong></p>
-                        <p style="margin: 5px 0 0 0; color: #856404;">⚠️ 这可能导致应用闪退</p>
-                    </div>
-                    
-                    <div style="background: #d1ecf1; border: 2px solid #17a2b8; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                        <p style="margin: 0 0 10px 0; font-weight: 600; color: #0c5460;">解决方案：</p>
-                        <p style="margin: 0; color: #0c5460; line-height: 1.6;">
-                            将Base64图片转换为Blob存储<br>
-                            ✅ 数据库大小减少70%<br>
-                            ✅ 彻底解决闪退问题<br>
-                            ✅ 不会丢失任何数据
-                        </p>
-                    </div>
-                    
-                    <div id="recovery-progress" style="display: none; margin-bottom: 20px;">
-                        <div style="background: #f0f0f0; border-radius: 10px; height: 30px; overflow: hidden; margin-bottom: 10px;">
-                            <div id="recovery-progress-bar" style="background: linear-gradient(90deg, #4CAF50, #8BC34A); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;"></div>
-                        </div>
-                        <p id="recovery-status" style="text-align: center; margin: 0; color: #666; font-size: 14px;">准备转换...</p>
-                    </div>
-                    
-                    <button id="start-recovery-btn" style="width: 100%; padding: 15px; background: #4CAF50; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
-                        🔄 立即转换并修复
-                    </button>
-                    
-                    <button id="skip-recovery-btn" style="width: 100%; padding: 12px; background: #f0f0f0; color: #666; border: none; border-radius: 10px; font-size: 14px; cursor: pointer;">
-                        跳过（不推荐，可能继续闪退）
-                    </button>
-                    
-                    <p style="margin: 15px 0 0 0; text-align: center; color: #999; font-size: 12px;">
-                        💡 转换过程需要几分钟，请勿关闭页面
-                    </p>
-                </div>
-            `;
-            
-            document.body.appendChild(recoveryDiv);
-            
-            // 开始转换按钮
-            document.getElementById('start-recovery-btn').addEventListener('click', async () => {
-                await startEmergencyConversion();
-            });
-            
-            // 跳过按钮
-            document.getElementById('skip-recovery-btn').addEventListener('click', () => {
-                if (confirm('⚠️ 警告\n\n跳过转换可能导致：\n- 应用继续闪退\n- 数据无法保存\n- 功能异常\n\n确定要跳过吗？')) {
-                    document.body.removeChild(recoveryDiv);
-                    // 继续正常加载
-                    continueNormalLoad();
-                }
-            });
-        }
-        
-        // 紧急转换函数
-        async function startEmergencyConversion() {
-            const progressDiv = document.getElementById('recovery-progress');
-            const progressBar = document.getElementById('recovery-progress-bar');
-            const statusText = document.getElementById('recovery-status');
-            const startBtn = document.getElementById('start-recovery-btn');
-            const skipBtn = document.getElementById('skip-recovery-btn');
-            
-            progressDiv.style.display = 'block';
-            startBtn.disabled = true;
-            skipBtn.disabled = true;
-            startBtn.style.opacity = '0.5';
-            skipBtn.style.opacity = '0.5';
-            
-            try {
-                statusText.textContent = '正在加载数据...';
-                progressBar.style.width = '10%';
-                progressBar.textContent = '10%';
-                
-                // 加载基础数据
-                let data = await dataStorage.getData('章鱼喷墨机');
-                if (!data) {
-                    throw new Error('无法加载数据');
-                }
-                
-                // 临时构建db对象
-                const tempDb = { ...data, characters: [], groups: [] };
-                
-                statusText.textContent = '正在扫描图片...';
-                progressBar.style.width = '20%';
-                progressBar.textContent = '20%';
-                
-                // 获取所有角色和群组
-                const allKeys = await dataStorage.getAllKeys();
-                const characterKeys = allKeys.filter(key => key.startsWith('character_'));
-                const groupKeys = allKeys.filter(key => key.startsWith('group_'));
-                
-                for (const key of characterKeys) {
-                    const charData = await dataStorage.getData(key);
-                    if (charData) tempDb.characters.push(charData);
-                }
-                
-                for (const key of groupKeys) {
-                    const groupData = await dataStorage.getData(key);
-                    if (groupData) tempDb.groups.push(groupData);
-                }
-                
-                let convertedCount = 0;
-                let totalImages = 0;
-                
-                // 统计需要转换的图片数量
-                for (const char of tempDb.characters) {
-                    if (char.avatar && char.avatar.startsWith('data:')) totalImages++;
-                    if (char.avatarLibrary) {
-                        totalImages += char.avatarLibrary.filter(a => a.url && a.url.startsWith('data:')).length;
-                    }
-                }
-                if (tempDb.myAvatarLibrary) {
-                    totalImages += tempDb.myAvatarLibrary.filter(a => a.url && a.url.startsWith('data:')).length;
-                }
-                if (tempDb.myStickers) {
-                    totalImages += tempDb.myStickers.filter(s => s.url && s.url.startsWith('data:')).length;
-                }
-                
-                statusText.textContent = `发现 ${totalImages} 张需要转换的图片`;
-                progressBar.style.width = '30%';
-                progressBar.textContent = '30%';
-                
-                if (totalImages === 0) {
-                    statusText.textContent = '没有需要转换的图片';
-                    progressBar.style.width = '100%';
-                    progressBar.textContent = '100%';
-                    
-                    setTimeout(() => {
-                        localStorage.setItem('base64-converted', 'true');
-                        location.reload();
-                    }, 1000);
-                    return;
-                }
-                
-                // 转换角色头像
-                for (const char of tempDb.characters) {
-                    if (char.avatar && char.avatar.startsWith('data:')) {
-                        try {
-                            const response = await fetch(char.avatar);
-                            const blob = await response.blob();
-                            const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                            
-                            await dataStorage.db.imageBlobs.put({
-                                id: imageId,
-                                blob: blob,
-                                timestamp: Date.now()
-                            });
-                            
-                            char.avatar = `blob:${imageId}`;
-                            convertedCount++;
-                            
-                            const progress = 30 + (convertedCount / totalImages) * 60;
-                            progressBar.style.width = `${progress}%`;
-                            progressBar.textContent = `${Math.round(progress)}%`;
-                            statusText.textContent = `正在转换... ${convertedCount}/${totalImages}`;
-                        } catch (e) {
-                            console.error('转换头像失败:', e);
-                        }
-                    }
-                    
-                    // 转换头像库
-                    if (char.avatarLibrary) {
-                        for (const avatar of char.avatarLibrary) {
-                            if (avatar.url && avatar.url.startsWith('data:')) {
-                                try {
-                                    const response = await fetch(avatar.url);
-                                    const blob = await response.blob();
-                                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                    
-                                    await dataStorage.db.imageBlobs.put({
-                                        id: imageId,
-                                        blob: blob,
-                                        timestamp: Date.now()
-                                    });
-                                    
-                                    avatar.url = `blob:${imageId}`;
-                                    convertedCount++;
-                                    
-                                    const progress = 30 + (convertedCount / totalImages) * 60;
-                                    progressBar.style.width = `${progress}%`;
-                                    progressBar.textContent = `${Math.round(progress)}%`;
-                                    statusText.textContent = `正在转换... ${convertedCount}/${totalImages}`;
-                                } catch (e) {
-                                    console.error('转换头像库失败:', e);
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 保存角色数据
-                    await dataStorage.saveData(`character_${char.id}`, char);
-                }
-                
-                // 转换我的头像库
-                if (tempDb.myAvatarLibrary) {
-                    for (const avatar of tempDb.myAvatarLibrary) {
-                        if (avatar.url && avatar.url.startsWith('data:')) {
-                            try {
-                                const response = await fetch(avatar.url);
-                                const blob = await response.blob();
-                                const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                
-                                await dataStorage.db.imageBlobs.put({
-                                    id: imageId,
-                                    blob: blob,
-                                    timestamp: Date.now()
-                                });
-                                
-                                avatar.url = `blob:${imageId}`;
-                                convertedCount++;
-                                
-                                const progress = 30 + (convertedCount / totalImages) * 60;
-                                progressBar.style.width = `${progress}%`;
-                                progressBar.textContent = `${Math.round(progress)}%`;
-                                statusText.textContent = `正在转换... ${convertedCount}/${totalImages}`;
-                            } catch (e) {
-                                console.error('转换我的头像库失败:', e);
-                            }
-                        }
-                    }
-                }
-                
-                // 转换表情包
-                if (tempDb.myStickers) {
-                    for (const sticker of tempDb.myStickers) {
-                        if (sticker.url && sticker.url.startsWith('data:')) {
-                            try {
-                                const response = await fetch(sticker.url);
-                                const blob = await response.blob();
-                                const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                
-                                await dataStorage.db.imageBlobs.put({
-                                    id: imageId,
-                                    blob: blob,
-                                    timestamp: Date.now()
-                                });
-                                
-                                sticker.url = `blob:${imageId}`;
-                                convertedCount++;
-                                
-                                const progress = 30 + (convertedCount / totalImages) * 60;
-                                progressBar.style.width = `${progress}%`;
-                                progressBar.textContent = `${Math.round(progress)}%`;
-                                statusText.textContent = `正在转换... ${convertedCount}/${totalImages}`;
-                            } catch (e) {
-                                console.error('转换表情包失败:', e);
-                            }
-                        }
-                    }
-                }
-                
-                // 保存更新后的数据
-                statusText.textContent = '正在保存数据...';
-                progressBar.style.width = '95%';
-                progressBar.textContent = '95%';
-                
-                await dataStorage.saveData('章鱼喷墨机', tempDb);
-                
-                // 标记已转换
-                localStorage.setItem('base64-converted', 'true');
-                
-                statusText.textContent = '转换完成！正在刷新页面...';
-                progressBar.style.width = '100%';
-                progressBar.textContent = '100%';
-                
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-                
-            } catch (error) {
-                statusText.textContent = `转换失败: ${error.message}`;
-                statusText.style.color = '#ff3b30';
-                console.error('紧急转换失败:', error);
-                
-                setTimeout(() => {
-                    if (confirm('转换失败，是否重试？')) {
-                        location.reload();
-                    } else {
-                        continueNormalLoad();
-                    }
-                }, 2000);
-            }
-        }
-        
-        // 继续正常加载
-        async function continueNormalLoad() {
-            const recoveryDiv = document.getElementById('emergency-recovery');
-            if (recoveryDiv) {
-                document.body.removeChild(recoveryDiv);
-            }
-            // 重新调用loadData，但跳过检测
-            localStorage.setItem('base64-converted', 'skip');
-            location.reload();
-        }
-
-        async function compressImageToBlob(file, options = {}) {
+        async function compressImage(file, options = {}) {
             const {
                 quality = 0.8, maxWidth = 800, maxHeight = 800
             } = options;
 
-            // 如果文件是GIF，直接返回原始Blob
+            // --- 新增：处理GIF动图 ---
+            // 如果文件是GIF，则不经过canvas压缩，直接返回原始文件数据以保留动画
             if (file.type === 'image/gif') {
-                return file;
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
+                });
             }
 
-            // 对其他静态图片进行压缩
+            // --- 对其他静态图片（如PNG, JPG）进行压缩 ---
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
@@ -634,34 +208,21 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
 
+                        // 对于有透明背景的PNG图片，先填充一个白色背景
+                        // 这样可以防止透明区域在转换成JPEG时变黑
                         if (file.type === 'image/png') {
-                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillStyle = '#FFFFFF'; // 白色背景
                             ctx.fillRect(0, 0, width, height);
                         }
 
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // 转换为Blob而不是Base64
-                        canvas.toBlob((blob) => {
-                            if (blob) {
-                                resolve(blob);
-                            } else {
-                                reject(new Error('图片压缩失败'));
-                            }
-                        }, 'image/jpeg', quality);
+                        // --- 关键修正：将输出格式改为 'image/jpeg' ---
+                        // JPEG格式可以显著减小文件大小，避免浏览器处理超大Base64字符串时崩溃
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                        resolve(compressedDataUrl);
                     };
                 };
-            });
-        }
-        
-        // 兼容旧版本的compressImage函数（返回Base64，但建议使用storeImageAsBlob）
-        async function compressImage(file, options = {}) {
-            const blob = await compressImageToBlob(file, options);
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
             });
         }
 
@@ -1091,7 +652,7 @@
                 this.db = new Dexie('章鱼喷墨机DB_V2');
 
                 // 定义数据库结构
-                this.db.version(1).stores({
+                this.db.version(2).stores({
                     // 基础数据存储
                     storage: 'key, value, timestamp',
                     // 消息分块存储
@@ -1102,13 +663,16 @@
                     memorySummaries: 'id, chatId, chatType, name, content, messageCount, timestamp',
                     // 记忆快照存储
                     memorySnapshots: 'id, chatId, chatType, name, data, timestamp',
-                    // 图片Blob存储（避免Base64导致数据库过大）
-                    imageBlobs: 'id, blob, timestamp'
+                    // 图片Blob存储（新增）
+                    imageBlobs: 'id, data, mimeType, timestamp'
+                }).upgrade(trans => {
+                    // 数据库升级时的迁移逻辑
+                    console.log('数据库升级到版本2，添加图片Blob存储');
                 });
 
                 // LRU缓存配置
                 this.cache = new Map();
-                this.maxCacheSize = 30; // 减少最大缓存到30个数据块，降低内存占用
+                this.maxCacheSize = 50; // 最大缓存50个数据块
                 this.chunkSize = 100; // 每个数据块100条消息
 
                 // 性能监控
@@ -1118,33 +682,6 @@
                     operationTimes: [],
                     memoryUsage: 0
                 };
-                
-                // 定期清理缓存，防止内存泄漏
-                this.startAutoCleanup();
-            }
-
-            // 自动清理机制
-            startAutoCleanup() {
-                // 每5分钟清理一次过期缓存
-                setInterval(() => {
-                    if (this.cache.size > this.maxCacheSize * 0.8) {
-                        console.log('触发自动缓存清理...');
-                        // 清理最旧的20%缓存
-                        const deleteCount = Math.floor(this.cache.size * 0.2);
-                        const keys = Array.from(this.cache.keys());
-                        for (let i = 0; i < deleteCount; i++) {
-                            this.cache.delete(keys[i]);
-                        }
-                        console.log(`已清理 ${deleteCount} 个缓存项`);
-                    }
-                }, 5 * 60 * 1000);
-                
-                // 每30分钟强制清理一次内存
-                setInterval(() => {
-                    console.log('执行定期内存清理...');
-                    this.cache.clear();
-                    console.log('缓存已清空');
-                }, 30 * 60 * 1000);
             }
 
 
@@ -1161,8 +698,8 @@
                     this.cache.delete(firstKey);
                 }
 
-                // 优化：使用估算而不是实际序列化，避免内存峰值
-                this.performanceMetrics.memoryUsage = this.cache.size * 10000; // 粗略估算每项10KB
+                // 更新内存使用量估算
+                this.performanceMetrics.memoryUsage = JSON.stringify([...this.cache.values()]).length;
             }
 
             // 从缓存获取数据
@@ -1177,6 +714,220 @@
                 }
                 this.performanceMetrics.cacheMisses++;
                 return null;
+            }
+
+            // ===== 新增：图片Blob存储方法 =====
+            
+            // 将Base64图片数据存储为Blob
+            async saveImageBlob(imageData) {
+                try {
+                    // 检查是否是Base64数据
+                    if (!imageData || !imageData.startsWith('data:')) {
+                        return imageData; // 如果是URL，直接返回
+                    }
+
+                    // 提取MIME类型和Base64数据
+                    const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!matches) {
+                        return imageData;
+                    }
+
+                    const mimeType = matches[1];
+                    const base64Data = matches[2];
+
+                    // 生成唯一ID
+                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+                    // 将Base64转换为Blob
+                    const byteCharacters = atob(base64Data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: mimeType });
+
+                    // 存储到IndexedDB
+                    await this.db.imageBlobs.put({
+                        id: imageId,
+                        data: blob,
+                        mimeType: mimeType,
+                        timestamp: Date.now()
+                    });
+
+                    console.log(`图片已保存为Blob: ${imageId}, 大小: ${(blob.size / 1024).toFixed(2)}KB`);
+                    
+                    // 返回引用ID
+                    return `blob:${imageId}`;
+                } catch (error) {
+                    console.error('保存图片Blob失败:', error);
+                    return imageData; // 失败时返回原数据
+                }
+            }
+
+            // 从Blob存储中获取图片数据
+            async getImageBlob(imageRef) {
+                try {
+                    // 检查是否是Blob引用
+                    if (!imageRef || !imageRef.startsWith('blob:')) {
+                        return imageRef; // 如果是URL或Base64，直接返回
+                    }
+
+                    // 提取图片ID
+                    const imageId = imageRef.replace('blob:', '');
+
+                    // 从IndexedDB获取
+                    const record = await this.db.imageBlobs.get(imageId);
+                    if (!record) {
+                        console.warn(`未找到图片Blob: ${imageId}`);
+                        return null;
+                    }
+
+                    // 将Blob转换回Base64
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(record.data);
+                    });
+                } catch (error) {
+                    console.error('获取图片Blob失败:', error);
+                    return null;
+                }
+            }
+
+            // 处理消息中的图片数据（保存前）
+            async processMessageImages(message) {
+                try {
+                    const processedMessage = { ...message };
+
+                    // 处理imageUrl字段
+                    if (processedMessage.imageUrl && processedMessage.imageUrl.startsWith('data:')) {
+                        processedMessage.imageUrl = await this.saveImageBlob(processedMessage.imageUrl);
+                    }
+
+                    // 处理parts中的图片
+                    if (processedMessage.parts && Array.isArray(processedMessage.parts)) {
+                        processedMessage.parts = await Promise.all(
+                            processedMessage.parts.map(async (part) => {
+                                if (part.type === 'image' && part.data && part.data.startsWith('data:')) {
+                                    return {
+                                        ...part,
+                                        data: await this.saveImageBlob(part.data)
+                                    };
+                                }
+                                return part;
+                            })
+                        );
+                    }
+
+                    // 处理content中的Base64图片（如果有）
+                    if (typeof processedMessage.content === 'string' && processedMessage.content.startsWith('data:')) {
+                        processedMessage.content = await this.saveImageBlob(processedMessage.content);
+                    }
+
+                    return processedMessage;
+                } catch (error) {
+                    console.error('处理消息图片失败:', error);
+                    return message;
+                }
+            }
+
+            // 恢复消息中的图片数据（读取后）
+            async restoreMessageImages(message) {
+                try {
+                    const restoredMessage = { ...message };
+
+                    // 恢复imageUrl字段
+                    if (restoredMessage.imageUrl && restoredMessage.imageUrl.startsWith('blob:')) {
+                        restoredMessage.imageUrl = await this.getImageBlob(restoredMessage.imageUrl);
+                    }
+
+                    // 恢复parts中的图片
+                    if (restoredMessage.parts && Array.isArray(restoredMessage.parts)) {
+                        restoredMessage.parts = await Promise.all(
+                            restoredMessage.parts.map(async (part) => {
+                                if (part.type === 'image' && part.data && part.data.startsWith('blob:')) {
+                                    return {
+                                        ...part,
+                                        data: await this.getImageBlob(part.data)
+                                    };
+                                }
+                                return part;
+                            })
+                        );
+                    }
+
+                    // 恢复content中的图片引用
+                    if (typeof restoredMessage.content === 'string' && restoredMessage.content.startsWith('blob:')) {
+                        restoredMessage.content = await this.getImageBlob(restoredMessage.content);
+                    }
+
+                    return restoredMessage;
+                } catch (error) {
+                    console.error('恢复消息图片失败:', error);
+                    return message;
+                }
+            }
+
+            // ===== 图片Blob存储方法结束 =====
+
+            // 清理未使用的图片Blob
+            async cleanupUnusedImages() {
+                try {
+                    console.log('开始清理未使用的图片...');
+                    
+                    // 获取所有图片Blob的ID
+                    const allImageBlobs = await this.db.imageBlobs.toArray();
+                    const allImageIds = new Set(allImageBlobs.map(img => img.id));
+                    
+                    // 获取所有消息中使用的图片ID
+                    const usedImageIds = new Set();
+                    const allMessageChunks = await this.db.messageChunks.toArray();
+                    
+                    for (const chunk of allMessageChunks) {
+                        for (const msg of chunk.messages) {
+                            // 检查imageUrl
+                            if (msg.imageUrl && msg.imageUrl.startsWith('blob:')) {
+                                usedImageIds.add(msg.imageUrl.replace('blob:', ''));
+                            }
+                            
+                            // 检查parts中的图片
+                            if (msg.parts && Array.isArray(msg.parts)) {
+                                for (const part of msg.parts) {
+                                    if (part.type === 'image' && part.data && part.data.startsWith('blob:')) {
+                                        usedImageIds.add(part.data.replace('blob:', ''));
+                                    }
+                                }
+                            }
+                            
+                            // 检查content
+                            if (typeof msg.content === 'string' && msg.content.startsWith('blob:')) {
+                                usedImageIds.add(msg.content.replace('blob:', ''));
+                            }
+                        }
+                    }
+                    
+                    // 找出未使用的图片ID
+                    const unusedImageIds = [...allImageIds].filter(id => !usedImageIds.has(id));
+                    
+                    // 删除未使用的图片
+                    if (unusedImageIds.length > 0) {
+                        await this.db.imageBlobs.bulkDelete(unusedImageIds);
+                        console.log(`已清理 ${unusedImageIds.length} 张未使用的图片`);
+                    } else {
+                        console.log('没有需要清理的图片');
+                    }
+                    
+                    return {
+                        total: allImageIds.size,
+                        used: usedImageIds.size,
+                        cleaned: unusedImageIds.length
+                    };
+                } catch (error) {
+                    console.error('清理图片失败:', error);
+                    return null;
+                }
             }
 
             // 保存基础数据（非消息数据）
@@ -1228,13 +979,18 @@
             async saveChatMessages(chatId, chatType, messages) {
                 const startTime = Date.now();
                 try {
+                    // 处理消息中的图片数据（转换为Blob引用）
+                    const processedMessages = await Promise.all(
+                        messages.map(msg => this.processMessageImages(msg))
+                    );
+
                     // 清除该聊天的所有现有分块
                     await this.db.messageChunks.where('chatId').equals(chatId).and(chunk => chunk.chatType === chatType).delete();
 
                     // 将消息分块存储
                     const chunks = [];
-                    for (let i = 0; i < messages.length; i += this.chunkSize) {
-                        const chunkMessages = messages.slice(i, i + this.chunkSize);
+                    for (let i = 0; i < processedMessages.length; i += this.chunkSize) {
+                        const chunkMessages = processedMessages.slice(i, i + this.chunkSize);
                         const chunkId = `${chatId}_${chatType}_${Math.floor(i / this.chunkSize)}`;
 
                         chunks.push({
@@ -1251,7 +1007,7 @@
                         await this.db.messageChunks.bulkPut(chunks);
                     }
 
-                    // 更新缓存
+                    // 更新缓存（缓存原始消息，不是处理后的）
                     const cacheKey = `messages_${chatId}_${chatType}`;
                     this.updateCache(cacheKey, messages);
 
@@ -1293,18 +1049,23 @@
                         allMessages = allMessages.concat(chunk.messages);
                     });
 
+                    // 恢复消息中的图片数据
+                    const restoredMessages = await Promise.all(
+                        allMessages.map(msg => this.restoreMessageImages(msg))
+                    );
+
                     // 如果没有限制，更新缓存
                     if (!limit) {
-                        this.updateCache(cacheKey, allMessages);
+                        this.updateCache(cacheKey, restoredMessages);
                     }
 
                     // 应用分页
                     if (limit) {
-                        const result = allMessages.slice(offset, offset + limit);
+                        const result = restoredMessages.slice(offset, offset + limit);
                         return result;
                     }
 
-                    return allMessages;
+                    return restoredMessages;
                 } catch (error) {
                     console.error('获取消息失败:', error);
                     return [];
@@ -1411,6 +1172,7 @@
                     await this.db.storage.clear();
                     await this.db.messageChunks.clear();
                     await this.db.metadata.clear();
+                    await this.db.imageBlobs.clear(); // 清理图片Blob
                     this.cache.clear();
                     console.log('所有数据已清空');
 
@@ -1433,40 +1195,31 @@
                 }
             }
 
-            // 获取存储信息（优化版本，避免一次性加载所有数据）
+            // 获取存储信息
             async getStorageInfo() {
                 const startTime = Date.now();
                 try {
-                    // 使用count()代替toArray()来减少内存占用
-                    const [itemCount, chunkCount] = await Promise.all([
-                        this.db.storage.count(),
-                        this.db.messageChunks.count()
+                    const [storageItems, messageChunks] = await Promise.all([
+                        this.db.storage.toArray(),
+                        this.db.messageChunks.toArray()
                     ]);
 
-                    // 只获取必要的统计信息，不加载完整数据
-                    let storageSize = 0;
-                    let messageSize = 0;
-                    
-                    // 分批处理，避免一次性加载所有数据
-                    await this.db.storage.each(item => {
-                        storageSize += item.value.length;
-                    });
-                    
-                    await this.db.messageChunks.each(chunk => {
-                        // 估算消息大小，避免序列化
-                        messageSize += chunk.messages.length * 500; // 假设每条消息平均500字节
-                    });
-
+                    const storageSize = storageItems.reduce((sum, item) => sum + item.value.length, 0);
+                    const messageSize = messageChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk.messages).length, 0);
                     const totalSize = storageSize + messageSize;
 
                     const info = {
-                        itemCount: itemCount,
-                        chunkCount: chunkCount,
+                        itemCount: storageItems.length,
+                        chunkCount: messageChunks.length,
                         totalSize: totalSize,
                         storageSize: storageSize,
                         messageSize: messageSize,
                         cacheSize: this.cache.size,
-                        items: [] // 不再返回详细列表，减少内存占用
+                        items: storageItems.map(item => ({
+                            key: item.key,
+                            size: item.value.length,
+                            timestamp: new Date(item.timestamp).toLocaleString()
+                        }))
                     };
 
                     // 更新显示
@@ -1496,7 +1249,7 @@
                 else sizeElement.className = 'metric-value error';
             }
 
-            // 清除缓存（清除已删除角色的残留数据）- 优化版本
+            // 清除缓存（清除已删除角色的残留数据）
             async clearCache() {
                 const startTime = Date.now();
                 let deletedCount = 0;
@@ -1505,38 +1258,48 @@
                 try {
                     console.log('开始清理无效缓存...');
                     
+                    // 获取所有存储的键
+                    const allKeys = await this.getAllKeys();
+                    
                     // 获取当前活跃的角色和群组ID列表
+                    // 注意：这里的db是全局变量，可以直接访问
                     const activeCharacterIds = new Set(db.characters.map(c => c.id));
                     const activeGroupIds = new Set(db.groups.map(g => g.id));
                     
-                    // 1. 清理残留的角色和群组数据（使用迭代器避免一次性加载）
-                    await this.db.storage.each(async (item) => {
-                        const key = item.key;
+                    // 1. 清理残留的角色和群组数据
+                    for (const key of allKeys) {
                         if (key.startsWith('character_')) {
                             const id = key.replace('character_', '');
                             if (!activeCharacterIds.has(id)) {
-                                deletedSize += item.value.length;
-                                await this.removeData(key);
-                                // 同时清理对应的消息记录
-                                await this.clearChatMessages(id, 'private');
-                                deletedCount++;
-                                console.log(`清理残留角色: ${id}`);
+                                const item = await this.db.storage.get(key);
+                                if (item) {
+                                    deletedSize += item.value.length;
+                                    await this.removeData(key);
+                                    // 同时清理对应的消息记录
+                                    await this.clearChatMessages(id, 'private');
+                                    deletedCount++;
+                                    console.log(`清理残留角色: ${id}`);
+                                }
                             }
                         } else if (key.startsWith('group_')) {
                             const id = key.replace('group_', '');
                             if (!activeGroupIds.has(id)) {
-                                deletedSize += item.value.length;
-                                await this.removeData(key);
-                                // 同时清理对应的消息记录
-                                await this.clearChatMessages(id, 'group');
-                                deletedCount++;
-                                console.log(`清理残留群组: ${id}`);
+                                const item = await this.db.storage.get(key);
+                                if (item) {
+                                    deletedSize += item.value.length;
+                                    await this.removeData(key);
+                                    // 同时清理对应的消息记录
+                                    await this.clearChatMessages(id, 'group');
+                                    deletedCount++;
+                                    console.log(`清理残留群组: ${id}`);
+                                }
                             }
                         }
-                    });
+                    }
                     
-                    // 2. 清理孤立的消息分块（使用迭代器避免一次性加载）
-                    await this.db.messageChunks.each(async (chunk) => {
+                    // 2. 清理孤立的消息分块
+                    const allChunks = await this.db.messageChunks.toArray();
+                    for (const chunk of allChunks) {
                         let isOrphan = false;
                         
                         if (chunk.chatType === 'private') {
@@ -1551,11 +1314,10 @@
                         
                         if (isOrphan) {
                             await this.db.messageChunks.where('id').equals(chunk.id).delete();
-                            // 估算大小，避免序列化
-                            deletedSize += chunk.messages.length * 500;
+                            deletedSize += JSON.stringify(chunk.messages).length;
                             deletedCount++;
                         }
-                    });
+                    }
 
                     // 3. 清理孤立的缓存对象
                     for (const key of this.cache.keys()) {
@@ -1574,7 +1336,7 @@
                         }
                     }
                     
-                    console.log(`清理完成: 删除 ${deletedCount} 个项目, 释放约 ${(deletedSize / 1024).toFixed(2)} KB`);
+                    console.log(`清理完成: 删除 ${deletedCount} 个项目, 释放 ${(deletedSize / 1024).toFixed(2)} KB`);
                     
                     return { count: deletedCount, size: deletedSize };
                 } catch (error) {
@@ -1608,11 +1370,24 @@
 
                         let migratedCharacters = 0;
                         let migratedGroups = 0;
+                        let migratedImages = 0;
 
-                        // 迁移角色消息
+                        // 迁移角色消息（包含图片处理）
                         if (characters) {
                             for (const char of characters) {
                                 if (char.history && char.history.length > 0) {
+                                    // 处理消息中的图片
+                                    const processedHistory = await Promise.all(
+                                        char.history.map(async (msg) => {
+                                            const processed = await this.processMessageImages(msg);
+                                            // 统计迁移的图片数量
+                                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
+                                            if (msg.parts) {
+                                                migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
+                                            }
+                                            return processed;
+                                        })
+                                    );
                                     await this.saveChatMessages(char.id, 'private', char.history);
                                 }
                                 // 保存角色信息（不包含history）
@@ -1623,10 +1398,22 @@
                             }
                         }
 
-                        // 迁移群组消息
+                        // 迁移群组消息（包含图片处理）
                         if (groups) {
                             for (const group of groups) {
                                 if (group.history && group.history.length > 0) {
+                                    // 处理消息中的图片
+                                    const processedHistory = await Promise.all(
+                                        group.history.map(async (msg) => {
+                                            const processed = await this.processMessageImages(msg);
+                                            // 统计迁移的图片数量
+                                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
+                                            if (msg.parts) {
+                                                migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
+                                            }
+                                            return processed;
+                                        })
+                                    );
                                     await this.saveChatMessages(group.id, 'group', group.history);
                                 }
                                 // 保存群组信息（不包含history）
@@ -1638,7 +1425,7 @@
                         }
 
                         migrationSuccess = true;
-                        console.log(`数据迁移完成: ${migratedCharacters}个角色, ${migratedGroups}个群组`);
+                        console.log(`数据迁移完成: ${migratedCharacters}个角色, ${migratedGroups}个群组, ${migratedImages}张图片`);
 
                         // 迁移成功后立即删除旧数据库
                         try {
@@ -1826,28 +1613,6 @@
         }
 
         const loadData = async () => {
-            // 🚨 紧急检测：检查数据库大小，如果过大则进入紧急恢复模式
-            try {
-                const estimate = await navigator.storage.estimate();
-                const usageInMB = (estimate.usage || 0) / 1024 / 1024;
-                console.log(`当前存储使用: ${usageInMB.toFixed(2)} MB`);
-                
-                // 如果存储超过30MB，显示紧急恢复提示
-                if (usageInMB > 30) {
-                    console.warn('⚠️ 检测到数据库过大，可能导致闪退');
-                    
-                    // 检查是否已经转换过
-                    const converted = localStorage.getItem('base64-converted');
-                    if (!converted) {
-                        // 显示紧急恢复界面
-                        showEmergencyRecovery(usageInMB);
-                        return; // 暂停正常加载流程
-                    }
-                }
-            } catch (e) {
-                console.log('无法检测存储大小:', e);
-            }
-            
             // 首先尝试数据迁移
             await dataStorage.migrateFromOldStorage();
 
@@ -1906,6 +1671,31 @@
             if (db.showStatusBar === undefined) db.showStatusBar = false;
             if (db.enableLockScreen === undefined) db.enableLockScreen = false;
             if (!db.lockScreenWallpaper) db.lockScreenWallpaper = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            
+            // 悬浮歌词设置 - 深度合并以保留所有属性
+            if (!db.floatingLyricsSettings) {
+                db.floatingLyricsSettings = {
+                    activeFontSize: 18,
+                    otherFontSize: 13,
+                    linesCount: 3,
+                    activeColor: '#ff80ab',
+                    previousColor: '#787878',
+                    upcomingColor: '#787878',
+                    lineGap: 8
+                };
+            } else {
+                // 确保所有属性都存在，使用默认值填充缺失的属性
+                const defaultSettings = {
+                    activeFontSize: 18,
+                    otherFontSize: 13,
+                    linesCount: 3,
+                    activeColor: '#ff80ab',
+                    previousColor: '#787878',
+                    upcomingColor: '#787878',
+                    lineGap: 8
+                };
+                db.floatingLyricsSettings = { ...defaultSettings, ...db.floatingLyricsSettings };
+            }
             
             // 锁屏密码配置
             if (!db.lockScreenPassword) db.lockScreenPassword = {
@@ -7159,7 +6949,7 @@ ${contextSummary}
                             item.style.cssText = 'display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s;';
                             item.innerHTML = `
                                 <input type="checkbox" class="chat-checkbox" data-item-key="${itemKey}" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
-                                <img src="${char.avatar}" onerror="this.src='https://i.postimg.cc/mZ6N4GtT/mmexport1762250594890.jpg'" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; object-fit: cover;">
+                                <img src="${char.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 600;">${char.remarkName || char.realName}</div>
                                     <div style="font-size: 12px; color: #666;">私聊 · 消息数: ${char.history ? char.history.length : 0}</div>
@@ -7213,7 +7003,7 @@ ${contextSummary}
                             item.style.cssText = 'display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s;';
                             item.innerHTML = `
                                 <input type="checkbox" class="chat-checkbox" data-item-key="${itemKey}" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
-                                <img src="${group.avatar}" onerror="this.src='https://i.postimg.cc/mZ6N4GtT/mmexport1762250594890.jpg'" style="width: 40px; height: 40px; border-radius: 10px; margin-right: 12px; object-fit: cover;">
+                                <img src="${group.avatar}" style="width: 40px; height: 40px; border-radius: 10px; margin-right: 12px;">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 600;">${group.name}</div>
                                     <div style="font-size: 12px; color: #666;">群聊 (${group.members.length}人) · 消息数: ${group.history ? group.history.length : 0}</div>
@@ -7333,30 +7123,6 @@ ${contextSummary}
                         let processedCount = 0;
                         const deletedIds = new Set();
                         
-                        // 辅助函数：清除消息中的图片 Blob
-                        async function clearMessageImages(messages) {
-                            if (!messages || !Array.isArray(messages)) return;
-                            
-                            for (const msg of messages) {
-                                if (msg.parts && Array.isArray(msg.parts)) {
-                                    for (const part of msg.parts) {
-                                        // 清除图片类型的 Blob
-                                        if (part.type === 'image' && part.data) {
-                                            if (part.data.startsWith('blob:') && !part.data.startsWith('blob:http')) {
-                                                const blobId = part.data.replace('blob:', '');
-                                                try {
-                                                    await dataStorage.db.imageBlobs.delete(blobId);
-                                                    console.log(`已删除图片 Blob: ${blobId}`);
-                                                } catch (e) {
-                                                    console.error('删除图片 Blob 失败:', e);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
                         for (const itemKey of selectedItems) {
                             const [type, id] = itemKey.split('_');
                             
@@ -7368,15 +7134,12 @@ ${contextSummary}
                                 const character = db.characters[charIndex];
                                 
                                 if (clearType === 'messages') {
-                                    // 仅清除聊天记录 - 先清除消息中的图片，再清除数据库
-                                    await clearMessageImages(character.history);
-                                    await dataStorage.clearChatMessages(character.id, 'private');
+                                    // 仅清除聊天记录
                                     character.history = [];
                                     character.status = '在线';
-                                    character.autoSummarizedFloors = []; // 清空已总结记录
+                                    await dataStorage.clearChatMessages(character.id, 'private');
                                 } else {
                                     // 删除角色和所有数据
-                                    await clearMessageImages(character.history);
                                     await dataStorage.clearChatMessages(character.id, 'private');
                                     await dataStorage.removeData(`character_${character.id}`);
                                     db.characters.splice(charIndex, 1);
@@ -7392,9 +7155,7 @@ ${contextSummary}
                                 const group = db.groups[groupIndex];
                                 
                                 if (clearType === 'messages') {
-                                    // 仅清除聊天记录 - 先清除消息中的图片，再清除数据库
-                                    await clearMessageImages(group.history);
-                                    await dataStorage.clearChatMessages(group.id, 'group');
+                                    // 仅清除聊天记录
                                     group.history = [];
                                     // 重置所有群成员的在线状态
                                     if (group.members) {
@@ -7405,9 +7166,9 @@ ${contextSummary}
                                             }
                                         });
                                     }
+                                    await dataStorage.clearChatMessages(group.id, 'group');
                                 } else {
                                     // 删除群聊和所有数据
-                                    await clearMessageImages(group.history);
                                     await dataStorage.clearChatMessages(group.id, 'group');
                                     await dataStorage.removeData(`group_${group.id}`);
                                     db.groups.splice(groupIndex, 1);
@@ -7488,680 +7249,6 @@ ${contextSummary}
                     console.error('清除数据错误:', error);
                 }
             });
-
-            // 内存优化按钮
-            const memoryOptimizeBtn = document.createElement('button');
-            memoryOptimizeBtn.className = 'btn';
-            memoryOptimizeBtn.textContent = '内存优化';
-            memoryOptimizeBtn.style.marginTop = '15px';
-            memoryOptimizeBtn.style.display = 'block';
-            memoryOptimizeBtn.style.backgroundColor = '#4CAF50';
-            memoryOptimizeBtn.style.color = 'white';
-            
-            memoryOptimizeBtn.addEventListener('click', async () => {
-                if (loadingBtn) return;
-                
-                if (!confirm('执行内存优化将：\n\n1. 清空所有缓存\n2. 清理无效数据\n3. 释放内存空间\n\n建议定期执行以防止闪退。\n\n是否继续？')) {
-                    return;
-                }
-                
-                loadingBtn = true;
-                const originalText = memoryOptimizeBtn.textContent;
-                memoryOptimizeBtn.textContent = '优化中...';
-                
-                try {
-                    showToast('正在优化内存...');
-                    
-                    // 1. 清空缓存
-                    dataStorage.cache.clear();
-                    console.log('✓ 缓存已清空');
-                    
-                    // 2. 清理无效数据
-                    const result = await dataStorage.clearCache();
-                    console.log(`✓ 已清理 ${result.count} 个无效项目`);
-                    
-                    // 3. 强制垃圾回收（如果浏览器支持）
-                    if (window.gc) {
-                        window.gc();
-                        console.log('✓ 已触发垃圾回收');
-                    }
-                    
-                    showToast(`✅ 优化完成！\n清理了 ${result.count} 个项目\n释放约 ${(result.size / 1024).toFixed(2)} KB`);
-                    
-                    // 更新存储信息显示
-                    await dataStorage.getStorageInfo();
-                    
-                } catch (error) {
-                    showToast(`优化失败: ${error.message}`);
-                    console.error('内存优化错误:', error);
-                } finally {
-                    loadingBtn = false;
-                    memoryOptimizeBtn.textContent = originalText;
-                }
-            });
-
-            // Base64转Blob优化按钮
-            const convertBase64Btn = document.createElement('button');
-            convertBase64Btn.className = 'btn';
-            convertBase64Btn.textContent = '转换旧数据图片存储格式';
-            convertBase64Btn.style.marginTop = '15px';
-            convertBase64Btn.style.display = 'block';
-            convertBase64Btn.style.backgroundColor = '#2196F3';
-            convertBase64Btn.style.color = 'white';
-            
-            convertBase64Btn.addEventListener('click', async () => {
-                if (loadingBtn) return;
-                
-                if (!confirm('⚠️ 重要优化功能\n\n将Base64图片转换为Blob存储可以：\n\n1. 大幅减少数据库大小（减少70%以上）\n2. 彻底解决闪退问题\n3. 提升加载速度\n\n此过程可能需要几分钟，请勿关闭页面。\n\n是否继续？')) {
-                    return;
-                }
-                
-                loadingBtn = true;
-                const originalText = convertBase64Btn.textContent;
-                convertBase64Btn.textContent = '转换中...';
-                
-                try {
-                    showToast('正在扫描需要转换的图片...');
-                    let convertedCount = 0;
-                    let totalSize = 0;
-                    let savedSize = 0;
-                    
-                    // 转换角色头像
-                    for (const char of db.characters) {
-                        if (char.avatar && char.avatar.startsWith('data:')) {
-                            const originalSize = char.avatar.length;
-                            totalSize += originalSize;
-                            
-                            // 将Base64转换为Blob
-                            const response = await fetch(char.avatar);
-                            const blob = await response.blob();
-                            const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                            
-                            await dataStorage.db.imageBlobs.put({
-                                id: imageId,
-                                blob: blob,
-                                timestamp: Date.now()
-                            });
-                            
-                            char.avatar = `blob:${imageId}`;
-                            savedSize += originalSize - imageId.length;
-                            convertedCount++;
-                            
-                            if (convertedCount % 5 === 0) {
-                                showToast(`已转换 ${convertedCount} 张图片...`);
-                            }
-                        }
-                        
-                        // 转换头像库
-                        if (char.avatarLibrary) {
-                            for (const avatar of char.avatarLibrary) {
-                                if (avatar.url && avatar.url.startsWith('data:')) {
-                                    const originalSize = avatar.url.length;
-                                    totalSize += originalSize;
-                                    
-                                    const response = await fetch(avatar.url);
-                                    const blob = await response.blob();
-                                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                    
-                                    await dataStorage.db.imageBlobs.put({
-                                        id: imageId,
-                                        blob: blob,
-                                        timestamp: Date.now()
-                                    });
-                                    
-                                    avatar.url = `blob:${imageId}`;
-                                    savedSize += originalSize - imageId.length;
-                                    convertedCount++;
-                                    
-                                    if (convertedCount % 5 === 0) {
-                                        showToast(`已转换 ${convertedCount} 张图片...`);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 转换我的头像库
-                    if (db.myAvatarLibrary) {
-                        for (const avatar of db.myAvatarLibrary) {
-                            if (avatar.url && avatar.url.startsWith('data:')) {
-                                const originalSize = avatar.url.length;
-                                totalSize += originalSize;
-                                
-                                const response = await fetch(avatar.url);
-                                const blob = await response.blob();
-                                const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                
-                                await dataStorage.db.imageBlobs.put({
-                                    id: imageId,
-                                    blob: blob,
-                                    timestamp: Date.now()
-                                });
-                                
-                                avatar.url = `blob:${imageId}`;
-                                savedSize += originalSize - imageId.length;
-                                convertedCount++;
-                                
-                                if (convertedCount % 5 === 0) {
-                                    showToast(`已转换 ${convertedCount} 张图片...`);
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 转换表情包
-                    if (db.myStickers) {
-                        for (const sticker of db.myStickers) {
-                            if (sticker.url && sticker.url.startsWith('data:')) {
-                                const originalSize = sticker.url.length;
-                                totalSize += originalSize;
-                                
-                                const response = await fetch(sticker.url);
-                                const blob = await response.blob();
-                                const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                
-                                await dataStorage.db.imageBlobs.put({
-                                    id: imageId,
-                                    blob: blob,
-                                    timestamp: Date.now()
-                                });
-                                
-                                sticker.url = `blob:${imageId}`;
-                                savedSize += originalSize - imageId.length;
-                                convertedCount++;
-                                
-                                if (convertedCount % 5 === 0) {
-                                    showToast(`已转换 ${convertedCount} 张图片...`);
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 保存更新后的数据
-                    await saveData();
-                    
-                    // 清理缓存
-                    dataStorage.cache.clear();
-                    
-                    showToast(`✅ 转换完成！\n\n共转换 ${convertedCount} 张图片\n节省空间约 ${(savedSize / 1024 / 1024).toFixed(2)} MB\n\n建议刷新页面以完全生效`);
-                    
-                    // 询问是否刷新页面
-                    setTimeout(() => {
-                        if (confirm('转换完成！是否立即刷新页面以应用更改？')) {
-                            window.location.reload();
-                        }
-                    }, 2000);
-                    
-                } catch (error) {
-                    showToast(`转换失败: ${error.message}`);
-                    console.error('Base64转换错误:', error);
-                } finally {
-                    loadingBtn = false;
-                    convertBase64Btn.textContent = originalText;
-                }
-            });
-
-            // 图片压缩质量控制区域
-            const imageCompressionSection = document.createElement('div');
-            imageCompressionSection.style.marginTop = '20px';
-            imageCompressionSection.style.padding = '15px';
-            imageCompressionSection.style.backgroundColor = '#e3f2fd';
-            imageCompressionSection.style.borderRadius = '10px';
-            imageCompressionSection.style.border = '2px solid #2196F3';
-
-            const compressionTitle = document.createElement('h3');
-            compressionTitle.textContent = '图片压缩设置';
-            compressionTitle.style.marginTop = '0';
-            compressionTitle.style.marginBottom = '15px';
-            compressionTitle.style.color = '#1976d2';
-            imageCompressionSection.appendChild(compressionTitle);
-
-            // 当前图片总大小显示
-            const currentSizeDisplay = document.createElement('div');
-            currentSizeDisplay.style.marginBottom = '15px';
-            currentSizeDisplay.style.padding = '10px';
-            currentSizeDisplay.style.backgroundColor = 'white';
-            currentSizeDisplay.style.borderRadius = '8px';
-            currentSizeDisplay.style.fontSize = '14px';
-            currentSizeDisplay.innerHTML = `
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span>当前图片总数：</span>
-                    <span id="current-image-count" style="font-weight: bold; color: #1976d2;">计算中...</span>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span> 预估总大小：</span>
-                    <span id="current-image-size" style="font-weight: bold; color: #1976d2;">计算中...</span>
-                </div>
-            `;
-            imageCompressionSection.appendChild(currentSizeDisplay);
-
-            // 压缩质量滑动条
-            const qualityLabel = document.createElement('label');
-            qualityLabel.textContent = '压缩质量：';
-            qualityLabel.style.display = 'block';
-            qualityLabel.style.marginBottom = '10px';
-            qualityLabel.style.fontWeight = '600';
-            imageCompressionSection.appendChild(qualityLabel);
-
-            const qualitySliderContainer = document.createElement('div');
-            qualitySliderContainer.style.display = 'flex';
-            qualitySliderContainer.style.alignItems = 'center';
-            qualitySliderContainer.style.gap = '15px';
-            qualitySliderContainer.style.marginBottom = '15px';
-
-            const qualitySlider = document.createElement('input');
-            qualitySlider.type = 'range';
-            qualitySlider.min = '10';
-            qualitySlider.max = '100';
-            qualitySlider.value = '80';
-            qualitySlider.id = 'image-quality-slider';
-            qualitySlider.style.flex = '1';
-            qualitySlider.style.height = '8px';
-            qualitySlider.style.cursor = 'pointer';
-
-            const qualityValue = document.createElement('span');
-            qualityValue.id = 'quality-value';
-            qualityValue.textContent = '80%';
-            qualityValue.style.fontWeight = 'bold';
-            qualityValue.style.fontSize = '16px';
-            qualityValue.style.color = '#1976d2';
-            qualityValue.style.minWidth = '50px';
-            qualityValue.style.textAlign = 'right';
-
-            qualitySliderContainer.appendChild(qualitySlider);
-            qualitySliderContainer.appendChild(qualityValue);
-            imageCompressionSection.appendChild(qualitySliderContainer);
-
-            // 质量说明
-            const qualityHint = document.createElement('div');
-            qualityHint.style.fontSize = '12px';
-            qualityHint.style.color = '#666';
-            qualityHint.style.marginBottom = '15px';
-            qualityHint.style.padding = '8px';
-            qualityHint.style.backgroundColor = 'rgba(255,255,255,0.5)';
-            qualityHint.style.borderRadius = '5px';
-            qualityHint.innerHTML = `
-                <div>💡 <strong>质量建议：</strong></div>
-                <div style="margin-top: 5px;">• 10-40%：极限压缩，适合大量图片</div>
-                <div>• 50-70%：平衡压缩，推荐日常使用</div>
-                <div>• 80-100%：高质量，文件较大</div>
-            `;
-            imageCompressionSection.appendChild(qualityHint);
-
-            // 一键压缩按钮
-            const compressAllBtn = document.createElement('button');
-            compressAllBtn.className = 'btn';
-            compressAllBtn.textContent = ' 一键压缩所有图片';
-            compressAllBtn.style.width = '100%';
-            compressAllBtn.style.backgroundColor = '#FF9800';
-            compressAllBtn.style.color = 'white';
-            compressAllBtn.style.fontWeight = 'bold';
-            compressAllBtn.style.marginBottom = '10px';
-            
-            compressAllBtn.addEventListener('click', async () => {
-                if (loadingBtn) return;
-                
-                const quality = parseInt(qualitySlider.value) / 100;
-                const qualityPercent = qualitySlider.value;
-                
-                if (!confirm(`⚠️ 即将压缩所有图片\n\n压缩质量：${qualityPercent}%\n\n此操作将：\n1. 压缩所有本地图片\n2. 大幅减少存储空间\n3. 防止闪退问题\n\n⚠️ 此操作不可逆，建议先备份数据！\n\n是否继续？`)) {
-                    return;
-                }
-                
-                loadingBtn = true;
-                const originalText = compressAllBtn.textContent;
-                compressAllBtn.disabled = true;
-                compressAllBtn.style.opacity = '0.6';
-                
-                try {
-                    showToast('正在扫描图片...');
-                    let compressedCount = 0;
-                    let totalOriginalSize = 0;
-                    let totalCompressedSize = 0;
-                    let skippedCount = 0;
-                    
-                    // 压缩函数
-                    const compressImageBlob = async (imageRef) => {
-                        try {
-                            // 获取原始图片
-                            let imageUrl;
-                            if (imageRef.startsWith('data:')) {
-                                imageUrl = imageRef;
-                            } else if (imageRef.startsWith('blob:') && !imageRef.startsWith('blob:http')) {
-                                const imageId = imageRef.replace('blob:', '');
-                                const record = await dataStorage.db.imageBlobs.get(imageId);
-                                if (record && record.blob) {
-                                    imageUrl = URL.createObjectURL(record.blob);
-                                } else {
-                                    return null;
-                                }
-                            } else if (imageRef.startsWith('http')) {
-                                // 跳过网络图片
-                                return null;
-                            } else {
-                                return null;
-                            }
-                            
-                            // 获取原始大小
-                            const response = await fetch(imageUrl);
-                            const originalBlob = await response.blob();
-                            const originalSize = originalBlob.size;
-                            
-                            // 如果是GIF，跳过压缩
-                            if (originalBlob.type === 'image/gif') {
-                                return null;
-                            }
-                            
-                            // 压缩图片
-                            const compressedBlob = await new Promise((resolve, reject) => {
-                                const img = new Image();
-                                img.onload = () => {
-                                    const canvas = document.createElement('canvas');
-                                    let width = img.width;
-                                    let height = img.height;
-                                    
-                                    // 限制最大尺寸
-                                    const maxSize = 1920;
-                                    if (width > height && width > maxSize) {
-                                        height = Math.round(height * (maxSize / width));
-                                        width = maxSize;
-                                    } else if (height > maxSize) {
-                                        width = Math.round(width * (maxSize / height));
-                                        height = maxSize;
-                                    }
-                                    
-                                    canvas.width = width;
-                                    canvas.height = height;
-                                    const ctx = canvas.getContext('2d');
-                                    ctx.fillStyle = '#FFFFFF';
-                                    ctx.fillRect(0, 0, width, height);
-                                    ctx.drawImage(img, 0, 0, width, height);
-                                    
-                                    canvas.toBlob((blob) => {
-                                        if (blob) {
-                                            resolve(blob);
-                                        } else {
-                                            reject(new Error('压缩失败'));
-                                        }
-                                    }, 'image/jpeg', quality);
-                                };
-                                img.onerror = reject;
-                                img.src = imageUrl;
-                            });
-                            
-                            const compressedSize = compressedBlob.size;
-                            
-                            // 如果压缩后反而更大，跳过
-                            if (compressedSize >= originalSize) {
-                                return null;
-                            }
-                            
-                            // 保存压缩后的图片
-                            const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                            await dataStorage.db.imageBlobs.put({
-                                id: imageId,
-                                blob: compressedBlob,
-                                timestamp: Date.now()
-                            });
-                            
-                            return {
-                                newRef: `blob:${imageId}`,
-                                originalSize,
-                                compressedSize
-                            };
-                            
-                        } catch (error) {
-                            console.error('压缩图片失败:', error);
-                            return null;
-                        }
-                    };
-                    
-                    compressAllBtn.textContent = '扫描中...';
-                    
-                    // 压缩角色头像
-                    for (const char of db.characters) {
-                        if (char.avatar) {
-                            const result = await compressImageBlob(char.avatar);
-                            if (result) {
-                                // 删除旧的blob
-                                if (char.avatar.startsWith('blob:') && !char.avatar.startsWith('blob:http')) {
-                                    const oldId = char.avatar.replace('blob:', '');
-                                    await dataStorage.db.imageBlobs.delete(oldId);
-                                }
-                                
-                                char.avatar = result.newRef;
-                                totalOriginalSize += result.originalSize;
-                                totalCompressedSize += result.compressedSize;
-                                compressedCount++;
-                                
-                                if (compressedCount % 5 === 0) {
-                                    compressAllBtn.textContent = `压缩中... ${compressedCount}`;
-                                    showToast(`已压缩 ${compressedCount} 张图片...`);
-                                }
-                            } else if (char.avatar) {
-                                skippedCount++;
-                            }
-                        }
-                        
-                        // 压缩头像库
-                        if (char.avatarLibrary) {
-                            for (const avatar of char.avatarLibrary) {
-                                if (avatar.url) {
-                                    const result = await compressImageBlob(avatar.url);
-                                    if (result) {
-                                        if (avatar.url.startsWith('blob:') && !avatar.url.startsWith('blob:http')) {
-                                            const oldId = avatar.url.replace('blob:', '');
-                                            await dataStorage.db.imageBlobs.delete(oldId);
-                                        }
-                                        
-                                        avatar.url = result.newRef;
-                                        totalOriginalSize += result.originalSize;
-                                        totalCompressedSize += result.compressedSize;
-                                        compressedCount++;
-                                        
-                                        if (compressedCount % 5 === 0) {
-                                            compressAllBtn.textContent = `压缩中... ${compressedCount}`;
-                                            showToast(`已压缩 ${compressedCount} 张图片...`);
-                                        }
-                                    } else if (avatar.url) {
-                                        skippedCount++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 压缩我的头像库
-                    if (db.myAvatarLibrary) {
-                        for (const avatar of db.myAvatarLibrary) {
-                            if (avatar.url) {
-                                const result = await compressImageBlob(avatar.url);
-                                if (result) {
-                                    if (avatar.url.startsWith('blob:') && !avatar.url.startsWith('blob:http')) {
-                                        const oldId = avatar.url.replace('blob:', '');
-                                        await dataStorage.db.imageBlobs.delete(oldId);
-                                    }
-                                    
-                                    avatar.url = result.newRef;
-                                    totalOriginalSize += result.originalSize;
-                                    totalCompressedSize += result.compressedSize;
-                                    compressedCount++;
-                                    
-                                    if (compressedCount % 5 === 0) {
-                                        compressAllBtn.textContent = `压缩中... ${compressedCount}`;
-                                        showToast(`已压缩 ${compressedCount} 张图片...`);
-                                    }
-                                } else if (avatar.url) {
-                                    skippedCount++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 压缩表情包
-                    if (db.myStickers) {
-                        for (const sticker of db.myStickers) {
-                            if (sticker.url) {
-                                const result = await compressImageBlob(sticker.url);
-                                if (result) {
-                                    if (sticker.url.startsWith('blob:') && !sticker.url.startsWith('blob:http')) {
-                                        const oldId = sticker.url.replace('blob:', '');
-                                        await dataStorage.db.imageBlobs.delete(oldId);
-                                    }
-                                    
-                                    sticker.url = result.newRef;
-                                    totalOriginalSize += result.originalSize;
-                                    totalCompressedSize += result.compressedSize;
-                                    compressedCount++;
-                                    
-                                    if (compressedCount % 5 === 0) {
-                                        compressAllBtn.textContent = `压缩中... ${compressedCount}`;
-                                        showToast(`已压缩 ${compressedCount} 张图片...`);
-                                    }
-                                } else if (sticker.url) {
-                                    skippedCount++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 保存数据
-                    compressAllBtn.textContent = '保存中...';
-                    await saveData();
-                    
-                    // 清理缓存
-                    dataStorage.cache.clear();
-                    
-                    const savedSize = totalOriginalSize - totalCompressedSize;
-                    const savedPercent = totalOriginalSize > 0 ? ((savedSize / totalOriginalSize) * 100).toFixed(1) : 0;
-                    
-                    showToast(`✅ 压缩完成！\n\n压缩图片：${compressedCount} 张\n跳过图片：${skippedCount} 张\n原始大小：${(totalOriginalSize / 1024 / 1024).toFixed(2)} MB\n压缩后：${(totalCompressedSize / 1024 / 1024).toFixed(2)} MB\n节省空间：${(savedSize / 1024 / 1024).toFixed(2)} MB (${savedPercent}%)\n\n建议刷新页面以完全生效`);
-                    
-                    // 更新显示
-                    await updateImageStats();
-                    
-                    // 询问是否刷新
-                    setTimeout(() => {
-                        if (confirm('压缩完成！是否立即刷新页面以应用更改？')) {
-                            window.location.reload();
-                        }
-                    }, 2000);
-                    
-                } catch (error) {
-                    showToast(`压缩失败: ${error.message}`);
-                    console.error('图片压缩错误:', error);
-                } finally {
-                    loadingBtn = false;
-                    compressAllBtn.disabled = false;
-                    compressAllBtn.style.opacity = '1';
-                    compressAllBtn.textContent = originalText;
-                }
-            });
-            
-            imageCompressionSection.appendChild(compressAllBtn);
-
-            // 滑动条实时更新
-            qualitySlider.addEventListener('input', (e) => {
-                qualityValue.textContent = e.target.value + '%';
-                
-                // 根据质量值改变颜色
-                const value = parseInt(e.target.value);
-                if (value < 40) {
-                    qualityValue.style.color = '#f44336';
-                } else if (value < 70) {
-                    qualityValue.style.color = '#FF9800';
-                } else {
-                    qualityValue.style.color = '#4CAF50';
-                }
-            });
-
-            // 更新图片统计信息
-            const updateImageStats = async () => {
-                try {
-                    let imageCount = 0;
-                    let totalSize = 0;
-                    
-                    // 统计角色头像
-                    for (const char of db.characters) {
-                        if (char.avatar) {
-                            imageCount++;
-                            if (char.avatar.startsWith('blob:') && !char.avatar.startsWith('blob:http')) {
-                                const imageId = char.avatar.replace('blob:', '');
-                                const record = await dataStorage.db.imageBlobs.get(imageId);
-                                if (record && record.blob) {
-                                    totalSize += record.blob.size;
-                                }
-                            } else if (char.avatar.startsWith('data:')) {
-                                totalSize += char.avatar.length * 0.75; // Base64估算
-                            }
-                        }
-                        
-                        if (char.avatarLibrary) {
-                            for (const avatar of char.avatarLibrary) {
-                                if (avatar.url) {
-                                    imageCount++;
-                                    if (avatar.url.startsWith('blob:') && !avatar.url.startsWith('blob:http')) {
-                                        const imageId = avatar.url.replace('blob:', '');
-                                        const record = await dataStorage.db.imageBlobs.get(imageId);
-                                        if (record && record.blob) {
-                                            totalSize += record.blob.size;
-                                        }
-                                    } else if (avatar.url.startsWith('data:')) {
-                                        totalSize += avatar.url.length * 0.75;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 统计我的头像库
-                    if (db.myAvatarLibrary) {
-                        for (const avatar of db.myAvatarLibrary) {
-                            if (avatar.url) {
-                                imageCount++;
-                                if (avatar.url.startsWith('blob:') && !avatar.url.startsWith('blob:http')) {
-                                    const imageId = avatar.url.replace('blob:', '');
-                                    const record = await dataStorage.db.imageBlobs.get(imageId);
-                                    if (record && record.blob) {
-                                        totalSize += record.blob.size;
-                                    }
-                                } else if (avatar.url.startsWith('data:')) {
-                                    totalSize += avatar.url.length * 0.75;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 统计表情包
-                    if (db.myStickers) {
-                        for (const sticker of db.myStickers) {
-                            if (sticker.url) {
-                                imageCount++;
-                                if (sticker.url.startsWith('blob:') && !sticker.url.startsWith('blob:http')) {
-                                    const imageId = sticker.url.replace('blob:', '');
-                                    const record = await dataStorage.db.imageBlobs.get(imageId);
-                                    if (record && record.blob) {
-                                        totalSize += record.blob.size;
-                                    }
-                                } else if (sticker.url.startsWith('data:')) {
-                                    totalSize += sticker.url.length * 0.75;
-                                }
-                            }
-                        }
-                    }
-                    
-                    document.getElementById('current-image-count').textContent = imageCount + ' 张';
-                    document.getElementById('current-image-size').textContent = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
-                    
-                } catch (error) {
-                    console.error('统计图片信息失败:', error);
-                    document.getElementById('current-image-count').textContent = '统计失败';
-                    document.getElementById('current-image-size').textContent = '统计失败';
-                }
-            };
-
-            // 初始化时更新统计
-            updateImageStats();
 
             tutorialContentArea.appendChild(backupDataBtn);
             tutorialContentArea.appendChild(viaBackupBtn);
@@ -9075,11 +8162,6 @@ ${contextSummary}
 
             gitSyncSection.appendChild(gitSyncSettingContainer);
             tutorialContentArea.appendChild(gitSyncSection);
-            
-            // 将转换图片存储格式、内存优化、图片压缩设置移到这里
-            tutorialContentArea.appendChild(convertBase64Btn);
-            tutorialContentArea.appendChild(memoryOptimizeBtn);
-            tutorialContentArea.appendChild(imageCompressionSection);
 
             // ========== Git仓库同步功能逻辑 ==========
             const GIT_SYNC_STORAGE_KEY = 'gitSyncSettings';
@@ -9465,6 +8547,409 @@ ${contextSummary}
 
             // 页面加载时恢复Git设置
             loadGitSyncSettings();
+
+            // ========== 内存优化功能区域 ==========
+            const memoryOptimizeSection = document.createElement('div');
+            memoryOptimizeSection.style.marginTop = '30px';
+            memoryOptimizeSection.style.padding = '20px';
+            memoryOptimizeSection.style.backgroundColor = '#f0f8ff';
+            memoryOptimizeSection.style.borderRadius = '12px';
+            memoryOptimizeSection.style.border = '2px solid #90caf9';
+
+            const memoryOptimizeTitle = document.createElement('h3');
+            memoryOptimizeTitle.textContent = '内存优化';
+            memoryOptimizeTitle.style.color = '#1976d2';
+            memoryOptimizeTitle.style.marginTop = '0';
+            memoryOptimizeTitle.style.marginBottom = '15px';
+            memoryOptimizeTitle.style.fontSize = '18px';
+            memoryOptimizeTitle.style.fontWeight = '600';
+            memoryOptimizeSection.appendChild(memoryOptimizeTitle);
+
+            const memoryOptimizeDesc = document.createElement('p');
+            memoryOptimizeDesc.innerHTML = `
+                <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>内存优化功能说明：</strong><br>
+                    • 清空所有缓存数据，释放内存空间<br>
+                    • 清理无效的数据引用，防止内存泄漏<br>
+                    • 优化数据库性能，提升运行速度<br>
+                    • 建议定期使用，特别是感觉卡顿时<br>
+                    <br>
+                    <strong style="color: #ff9800;">⚠️ 注意：</strong>内存优化不会删除任何聊天记录、角色或设置，只是清理缓存和临时数据。
+                </div>
+            `;
+            memoryOptimizeSection.appendChild(memoryOptimizeDesc);
+
+            const memoryOptimizeBtn = document.createElement('button');
+            memoryOptimizeBtn.className = 'btn';
+            memoryOptimizeBtn.innerHTML = '<span style="font-size: 16px;"></span> 立即优化内存';
+            memoryOptimizeBtn.style.width = '100%';
+            memoryOptimizeBtn.style.backgroundColor = '#2196F3';
+            memoryOptimizeBtn.style.color = 'white';
+            memoryOptimizeBtn.style.fontSize = '16px';
+            memoryOptimizeBtn.style.fontWeight = '600';
+            memoryOptimizeBtn.style.padding = '12px';
+
+            let isOptimizing = false;
+            memoryOptimizeBtn.addEventListener('click', async () => {
+                if (isOptimizing) return;
+                
+                isOptimizing = true;
+                const originalText = memoryOptimizeBtn.innerHTML;
+                memoryOptimizeBtn.innerHTML = '<span style="font-size: 16px;"></span> 正在优化...';
+                memoryOptimizeBtn.disabled = true;
+                
+                try {
+                    showToast('开始内存优化...');
+                    
+                    // 1. 清空所有缓存
+                    dataStorage.cache.clear();
+                    console.log('已清空缓存');
+                    
+                    // 2. 清理无效数据
+                    const cleanupResult = await dataStorage.clearCache();
+                    console.log(`已清理 ${cleanupResult.count} 个无效项目`);
+                    
+                    // 3. 强制垃圾回收（如果浏览器支持）
+                    if (window.gc) {
+                        window.gc();
+                        console.log('已触发垃圾回收');
+                    }
+                    
+                    // 4. 清理过期的临时数据
+                    const tempKeys = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && (key.startsWith('temp_') || key.startsWith('cache_'))) {
+                            tempKeys.push(key);
+                        }
+                    }
+                    tempKeys.forEach(key => localStorage.removeItem(key));
+                    console.log(`已清理 ${tempKeys.length} 个临时数据`);
+                    
+                    // 5. 优化IndexedDB（压缩数据库）
+                    try {
+                        // 获取数据库统计信息
+                        const chatsCount = await dataStorage.db.chats.count();
+                        const messagesCount = await dataStorage.db.messages.count();
+                        const chunksCount = await dataStorage.db.messageChunks.count();
+                        console.log(`数据库状态: ${chatsCount} 个聊天, ${messagesCount} 条消息, ${chunksCount} 个消息块`);
+                    } catch (e) {
+                        console.log('⚠️ 无法获取数据库统计信息');
+                    }
+                    
+                    const totalCleaned = cleanupResult.count + tempKeys.length;
+                    const sizeFreed = (cleanupResult.size / 1024).toFixed(2);
+                    
+                    showToast(`内存优化完成！\n清理了 ${totalCleaned} 项数据\n释放了约 ${sizeFreed} KB 空间`, 5000);
+                    
+                    // 更新状态显示
+                    memoryOptimizeDesc.innerHTML = `
+                        <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 15px;">
+                            <strong>内存优化功能说明：</strong><br>
+                            • 清空所有缓存数据，释放内存空间<br>
+                            • 清理无效的数据引用，防止内存泄漏<br>
+                            • 优化数据库性能，提升运行速度<br>
+                            • 建议定期使用，特别是感觉卡顿时<br>
+                            <br>
+                            <strong style="color: #4CAF50;">最近优化：</strong>${new Date().toLocaleString('zh-CN')}<br>
+                            <strong style="color: #4CAF50;">清理项目：</strong>${totalCleaned} 项<br>
+                            <strong style="color: #4CAF50;">释放空间：</strong>约 ${sizeFreed} KB
+                        </div>
+                    `;
+                    
+                } catch (error) {
+                    console.error('内存优化失败:', error);
+                    showToast(`❌ 内存优化失败: ${error.message}`);
+                } finally {
+                    isOptimizing = false;
+                    memoryOptimizeBtn.innerHTML = originalText;
+                    memoryOptimizeBtn.disabled = false;
+                }
+            });
+
+            memoryOptimizeSection.appendChild(memoryOptimizeBtn);
+            tutorialContentArea.appendChild(memoryOptimizeSection);
+
+            // 页面加载时自动进行一次轻量级内存优化（兼容旧数据）
+            (async function autoMemoryOptimize() {
+                try {
+                    // 静默清理过期缓存
+                    const now = Date.now();
+                    const cacheEntries = Array.from(dataStorage.cache.entries());
+                    let cleanedCount = 0;
+                    
+                    for (const [key, value] of cacheEntries) {
+                        // 清理超过1小时的缓存
+                        if (value && value.timestamp && (now - value.timestamp > 3600000)) {
+                            dataStorage.cache.delete(key);
+                            cleanedCount++;
+                        }
+                    }
+                    
+                    if (cleanedCount > 0) {
+                        console.log(`🧹 自动清理了 ${cleanedCount} 个过期缓存`);
+                    }
+                } catch (error) {
+                    console.error('自动内存优化失败:', error);
+                }
+            })();
+
+            // ========== 图片压缩功能区域 ==========
+            const imageCompressSection = document.createElement('div');
+            imageCompressSection.style.marginTop = '30px';
+            imageCompressSection.style.padding = '20px';
+            imageCompressSection.style.backgroundColor = '#fff3e0';
+            imageCompressSection.style.borderRadius = '12px';
+            imageCompressSection.style.border = '2px solid #ffb74d';
+
+            const imageCompressTitle = document.createElement('h3');
+            imageCompressTitle.textContent = '图片压缩';
+            imageCompressTitle.style.color = '#f57c00';
+            imageCompressTitle.style.marginTop = '0';
+            imageCompressTitle.style.marginBottom = '15px';
+            imageCompressTitle.style.fontSize = '18px';
+            imageCompressTitle.style.fontWeight = '600';
+            imageCompressSection.appendChild(imageCompressTitle);
+
+            const imageCompressDesc = document.createElement('div');
+            imageCompressDesc.innerHTML = `
+                <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>图片压缩功能说明：</strong><br>
+                    • 压缩所有图片以减少内存占用<br>
+                    • 不会删除图片，只是降低图片质量<br>
+                    • 压缩后图片仍然可以正常显示<br>
+                    • 建议压缩质量：60-80%<br>
+                    <br>
+                    <div id="image-stats" style="background: #fff; padding: 12px; border-radius: 8px; margin-top: 10px;">
+                        <strong style="color: #f57c00;">当前图片统计：</strong><br>
+                        <span id="image-count-display">正在统计...</span>
+                    </div>
+                </div>
+            `;
+            imageCompressSection.appendChild(imageCompressDesc);
+
+            // 压缩质量滑动条
+            const qualityControlDiv = document.createElement('div');
+            qualityControlDiv.style.marginBottom = '20px';
+            
+            const qualityLabel = document.createElement('label');
+            qualityLabel.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: #333;">压缩质量</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="compress-quality-value" style="color: #f57c00; font-weight: 600; font-size: 18px;">70%</span>
+                        <button type="button" id="reset-compress-quality-btn" style="background: #ff9800; color: white; border: none; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                    </div>
+                </div>
+            `;
+            qualityControlDiv.appendChild(qualityLabel);
+
+            const qualitySlider = document.createElement('input');
+            qualitySlider.type = 'range';
+            qualitySlider.id = 'compress-quality-slider';
+            qualitySlider.min = '10';
+            qualitySlider.max = '100';
+            qualitySlider.value = '70';
+            qualitySlider.step = '5';
+            qualitySlider.style.width = '100%';
+            qualitySlider.style.cursor = 'pointer';
+            qualityControlDiv.appendChild(qualitySlider);
+
+            const qualityHint = document.createElement('div');
+            qualityHint.style.fontSize = '12px';
+            qualityHint.style.color = '#999';
+            qualityHint.style.marginTop = '5px';
+            qualityHint.style.textAlign = 'center';
+            qualityHint.textContent = '← 更小体积 | 更高质量 →';
+            qualityControlDiv.appendChild(qualityHint);
+
+            imageCompressSection.appendChild(qualityControlDiv);
+
+            // 压缩按钮
+            const compressBtn = document.createElement('button');
+            compressBtn.className = 'btn';
+            compressBtn.innerHTML = '<span style="font-size: 16px;"></span> 开始压缩图片';
+            compressBtn.style.width = '100%';
+            compressBtn.style.backgroundColor = '#ff9800';
+            compressBtn.style.color = 'white';
+            compressBtn.style.fontSize = '16px';
+            compressBtn.style.fontWeight = '600';
+            compressBtn.style.padding = '12px';
+
+            imageCompressSection.appendChild(compressBtn);
+            tutorialContentArea.appendChild(imageCompressSection);
+
+            // 更新质量显示
+            const qualityValueDisplay = document.getElementById('compress-quality-value');
+            qualitySlider.addEventListener('input', () => {
+                qualityValueDisplay.textContent = qualitySlider.value + '%';
+            });
+
+            // 重置质量按钮
+            document.getElementById('reset-compress-quality-btn').addEventListener('click', () => {
+                qualitySlider.value = '70';
+                qualityValueDisplay.textContent = '70%';
+                showToast('已重置为默认质量 70%');
+            });
+
+            // 计算并显示图片统计信息
+            async function updateImageStats() {
+                try {
+                    const imageCountDisplay = document.getElementById('image-count-display');
+                    imageCountDisplay.textContent = '正在统计...';
+
+                    // 统计所有图片
+                    const allImages = await dataStorage.db.imageBlobs.toArray();
+                    const totalCount = allImages.length;
+                    
+                    // 估算总大小
+                    let totalSize = 0;
+                    for (const img of allImages) {
+                        if (img.blob) {
+                            totalSize += img.blob.size;
+                        }
+                    }
+
+                    const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+                    
+                    imageCountDisplay.innerHTML = `
+                        图片总数: <strong style="color: #f57c00;">${totalCount}</strong> 张<br>
+                        总大小: <strong style="color: #f57c00;">${sizeMB} MB</strong>
+                    `;
+                } catch (error) {
+                    console.error('统计图片失败:', error);
+                    document.getElementById('image-count-display').textContent = '统计失败';
+                }
+            }
+
+            // 页面加载时更新统计
+            updateImageStats();
+
+            // 压缩图片功能
+            let isCompressing = false;
+            compressBtn.addEventListener('click', async () => {
+                if (isCompressing) return;
+
+                const quality = parseInt(qualitySlider.value) / 100;
+                const confirmed = confirm(`确定要以 ${qualitySlider.value}% 的质量压缩所有图片吗？\n\n此操作不可撤销，但图片不会丢失。`);
+                
+                if (!confirmed) return;
+
+                isCompressing = true;
+                const originalText = compressBtn.innerHTML;
+                compressBtn.innerHTML = '<span style="font-size: 16px;"></span> 压缩中...';
+                compressBtn.disabled = true;
+
+                try {
+                    showToast('开始压缩图片，请稍候...');
+
+                    const allImages = await dataStorage.db.imageBlobs.toArray();
+                    let compressedCount = 0;
+                    let totalSizeBefore = 0;
+                    let totalSizeAfter = 0;
+                    let skippedCount = 0;
+
+                    for (let i = 0; i < allImages.length; i++) {
+                        const img = allImages[i];
+                        
+                        try {
+                            if (!img.blob) {
+                                skippedCount++;
+                                continue;
+                            }
+
+                            totalSizeBefore += img.blob.size;
+
+                            // 创建图片元素
+                            const imgElement = new Image();
+                            const blobUrl = URL.createObjectURL(img.blob);
+                            
+                            await new Promise((resolve, reject) => {
+                                imgElement.onload = resolve;
+                                imgElement.onerror = reject;
+                                imgElement.src = blobUrl;
+                            });
+
+                            // 压缩图片
+                            const canvas = document.createElement('canvas');
+                            canvas.width = imgElement.width;
+                            canvas.height = imgElement.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(imgElement, 0, 0);
+
+                            // 转换为Blob
+                            const compressedBlob = await new Promise(resolve => {
+                                canvas.toBlob(resolve, 'image/jpeg', quality);
+                            });
+
+                            URL.revokeObjectURL(blobUrl);
+
+                            if (compressedBlob) {
+                                totalSizeAfter += compressedBlob.size;
+                                
+                                // 更新数据库
+                                await dataStorage.db.imageBlobs.update(img.id, {
+                                    blob: compressedBlob,
+                                    mimeType: 'image/jpeg'
+                                });
+                                
+                                compressedCount++;
+                            } else {
+                                skippedCount++;
+                            }
+
+                            // 更新进度
+                            if ((i + 1) % 10 === 0 || i === allImages.length - 1) {
+                                compressBtn.innerHTML = `<span style="font-size: 16px;"></span> 压缩中... ${i + 1}/${allImages.length}`;
+                            }
+
+                        } catch (error) {
+                            console.error(`压缩图片 ${img.id} 失败:`, error);
+                            skippedCount++;
+                        }
+                    }
+
+                    const sizeSavedMB = ((totalSizeBefore - totalSizeAfter) / (1024 * 1024)).toFixed(2);
+                    const percentSaved = totalSizeBefore > 0 ? ((1 - totalSizeAfter / totalSizeBefore) * 100).toFixed(1) : 0;
+
+                    showToast(` 压缩完成！\n成功: ${compressedCount} 张\n跳过: ${skippedCount} 张\n节省: ${sizeSavedMB} MB (${percentSaved}%)`, 6000);
+
+                    // 更新统计信息
+                    await updateImageStats();
+
+                    // 更新描述区域
+                    imageCompressDesc.innerHTML = `
+                        <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 15px;">
+                            <strong>图片压缩功能说明：</strong><br>
+                            • 压缩所有图片以减少内存占用<br>
+                            • 不会删除图片，只是降低图片质量<br>
+                            • 压缩后图片仍然可以正常显示<br>
+                            • 建议压缩质量：60-80%<br>
+                            <br>
+                            <div id="image-stats" style="background: #fff; padding: 12px; border-radius: 8px; margin-top: 10px;">
+                                <strong style="color: #f57c00;">当前图片统计：</strong><br>
+                                <span id="image-count-display">正在统计...</span>
+                            </div>
+                            <br>
+                            <strong style="color: #4CAF50;"> 最近压缩：</strong>${new Date().toLocaleString('zh-CN')}<br>
+                            <strong style="color: #4CAF50;">压缩质量：</strong>${qualitySlider.value}%<br>
+                            <strong style="color: #4CAF50;">成功压缩：</strong>${compressedCount} 张<br>
+                            <strong style="color: #4CAF50;">节省空间：</strong>${sizeSavedMB} MB (${percentSaved}%)
+                        </div>
+                    `;
+                    
+                    // 重新获取统计元素
+                    await updateImageStats();
+
+                } catch (error) {
+                    console.error('压缩图片失败:', error);
+                    showToast(`❌ 压缩失败: ${error.message}`);
+                } finally {
+                    isCompressing = false;
+                    compressBtn.innerHTML = originalText;
+                    compressBtn.disabled = false;
+                }
+            });
 
             // ========== 自动导出功能逻辑 ==========
             let exportInterval = null;
@@ -11064,6 +10549,12 @@ ${contextSummary}
                         } else {
                             const textMatch = lastMsg.content.match(/\[.*?的消息：([\s\S]+)\]/);
                             let text = textMatch ? textMatch[1].trim() : lastMsg.content.trim();
+                            // 如果是文本消息，应用Markdown格式化（但移除HTML标签用于预览）
+                            if (!urlRegex.test(text)) {
+                                text = formatMarkdown(text);
+                                // 移除HTML标签，只保留纯文本用于预览
+                                text = text.replace(/<[^>]+>/g, '');
+                            }
                             lastMessageText = urlRegex.test(text) ? '[图片]' : text;
                         }
                         }
@@ -11422,8 +10913,7 @@ ${contextSummary}
             const isInvisibleMessage = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/.test(message.content);
 
             let menuItems = [];
-            // 优化：编辑功能对所有类型的消息都可以使用（除了隐藏的系统消息）
-            if (!isInvisibleMessage && message.type !== 'recalled_message') {
+            if (!isImageRecognitionMsg && !isVoiceMessage && !isStickerMessage && !isPhotoVideoMessage && !isTransferMessage && !isGiftMessage && !isInvisibleMessage) {
                 menuItems.push({label: '编辑', action: () => startMessageEdit(messageId)});
             }
             
@@ -12568,14 +12058,9 @@ ${contextSummary}
                 bubbleElement.innerHTML = `<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg><span class="duration">${calculateVoiceDuration(voiceMatch[1].trim())}"</span>`;
                 const transcriptDiv = document.createElement('div');
                 transcriptDiv.className = 'voice-transcript';
-                // 应用 Markdown 格式化（加粗和斜体）
-                const voiceText = voiceMatch[1].trim();
-                let formattedVoiceText = voiceText;
-                // 处理加粗 **text**
-                formattedVoiceText = formattedVoiceText.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
-                // 处理斜体 *text*
-                formattedVoiceText = formattedVoiceText.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
-                transcriptDiv.innerHTML = formattedVoiceText;
+                // 应用Markdown格式化，支持 *斜体* 和 **粗体**
+                const formattedTranscript = formatMarkdown(voiceMatch[1].trim());
+                transcriptDiv.innerHTML = formattedTranscript;
                 wrapper.appendChild(transcriptDiv);
             } else if (photoVideoMatch) {
                 bubbleElement = document.createElement('div');
@@ -12877,25 +12362,9 @@ ${contextSummary}
                 if (message.quote) {
                     const quotedContent = String(message.quote.content || '');
                     const quotedId = message.quote.id || '';
-                    
-                    // 检查原始消息是否是语音消息
-                    const originalMessage = chat.history.find(m => m.id === quotedId);
-                    let displayContent = quotedContent;
-                    
-                    if (originalMessage && /\[.*?的语音：.*?\]/.test(originalMessage.content)) {
-                        // 如果是语音消息，只显示 [语音] 和时长
-                        const voiceMatch = originalMessage.content.match(/\[.*?的语音：([\s\S]+?)\]/);
-                        if (voiceMatch) {
-                            const duration = calculateVoiceDuration(voiceMatch[1].trim());
-                            displayContent = ` 语音 ${duration}"`;
-                        } else {
-                            displayContent = ' 语音';
-                        }
-                    }
-                    
                     quoteHtml = `<div class="quoted-message" data-quote-id="${quotedId}">
                         <div class="quoted-sender">回复 ${message.quote.senderName}:</div>
-                        <div class="quoted-content">${displayContent}</div>
+                        <div class="quoted-content">${quotedContent}</div>
                     </div>`;
                 }
                 
@@ -14127,23 +13596,21 @@ ${contextSummary}
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
 `;
             prompt += `10. 你拥有发送表情包的能力。这是一个可选功能，你可以根据对话氛围和内容，自行判断是否需要发送表情包来辅助表达。你不必在每次回复中都包含表情包。格式为：[${character.realName}发送的表情包：图片URL]。\n`;
-            prompt += `11. 你可以引用之前的消息来回复，这样可以让对话更有针对性。引用格式为：[${character.realName}引用了消息(ID:{消息ID})][${character.realName}的消息：{回复内容}]。你可以引用${character.myName}的消息，也可以引用你自己之前的消息。消息ID可以从对话历史中获取（每条消息都有唯一的ID）。这是一个可选功能，只在需要明确回应某条特定消息时使用。\n`;
-            prompt += `12. 你的输出格式必须严格遵循以下几种之一，可以组合使用：
+            prompt += `11. 你的输出格式必须严格遵循以下几种之一，可以组合使用：
     a) 普通消息: [${character.realName}的消息：{消息内容}]
-    b) 引用回复: [${character.realName}引用了消息(ID:{消息ID})][${character.realName}的消息：{回复内容}]
-    c) 送我的礼物: [${character.realName}送来的礼物：{礼物描述}]
-    d) 语音消息: [${character.realName}的语音：{语音内容}]
-    e) 照片/视频: [${character.realName}发来的照片/视频：{描述}]
-    f) 给我的转账: [${character.realName}的转账：{金额}元；备注：{备注}]
-    g) 表情包/图片: [${character.realName}发送的表情包：{表情包路径}]。注意：这里的路径不需要包含"https://i.postimg.cc/"，只需要提供后面的部分，例如 "害羞vHLfrV3K/1.jpg"。
-    h) 对我礼物的回应(此条不显示): [${character.realName}已接收礼物]
-    i) 对我转账的回应(此条不显示): [${character.realName}接收${character.myName}的转账] 或 [${character.realName}退回${character.myName}的转账]
-    j) 更新状态(此条不显示): [${character.realName}更新状态为：{新状态}]
+    b) 送我的礼物: [${character.realName}送来的礼物：{礼物描述}]
+    c) 语音消息: [${character.realName}的语音：{语音内容}]
+    d) 照片/视频: [${character.realName}发来的照片/视频：{描述}]
+    e) 给我的转账: [${character.realName}的转账：{金额}元；备注：{备注}]
+    f) 表情包/图片: [${character.realName}发送的表情包：{表情包路径}]。注意：这里的路径不需要包含"https://i.postimg.cc/"，只需要提供后面的部分，例如 "害羞vHLfrV3K/1.jpg"。
+    g) 对我礼物的回应(此条不显示): [${character.realName}已接收礼物]
+    h) 对我转账的回应(此条不显示): [${character.realName}接收${character.myName}的转账] 或 [${character.realName}退回${character.myName}的转账]
+    i) 更新状态(此条不显示): [${character.realName}更新状态为：{新状态}]
 `;
             // 使用全局设置的消息数量限制
             const minCount = db.messageCountMin || 1;
             const maxCount = db.messageCountMax || 20;
-            prompt += `12. ✨重要✨ 你的每次回复必须严格控制在${minCount}到${maxCount}条消息之间，绝对不能超过${maxCount}条。这些消息应以普通文本消息为主，可以偶尔、选择性地穿插多条特殊消息（如礼物、语音、图片、表情包等），特殊消息的位置应随机。大部分回复应该只包含文本消息。\n`;
+            prompt += `12. 你的每次回复可以生成${minCount}到${maxCount}条消息。这些消息应以普通文本消息为主，可以偶尔、选择性地穿插多条特殊消息（如礼物、语音、图片、表情包等），特殊消息的位置应随机。大部分回复应该只包含文本消息。\n`;
             prompt += `13. 不要主动结束对话，除非我明确提出。保持你的人设，自然地进行对话。`;
             return prompt;
         }
@@ -14209,6 +13676,7 @@ ${contextSummary}
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
     - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
     - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
+    - (回复 xxx): 当你在历史消息中看到这个标记时，表示该消息是在回复/引用某人的消息。这意味着发送者是在针对那条特定的消息进行回应，而不是随意发送的。你应该理解这种上下文关系。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 `;
             ruleNum++;
@@ -14258,26 +13726,23 @@ ${contextSummary}
                 avatarContext += `\n注意：换头像指令不会显示为聊天消息，但会实际更换头像。你可以在发送指令后，用普通消息告诉${character.myName}你换了头像。\n`;
             }
             
-            prompt += `${ruleNum}. 你可以引用之前的消息来回复，这样可以让对话更有针对性。引用格式为：[${character.realName}引用了消息(ID:{消息ID})][${character.realName}的消息：{回复内容}]。你可以引用${character.myName}的消息，也可以引用你自己之前的消息。消息ID可以从对话历史中获取（每条消息都有唯一的ID）。这是一个可选功能，只在需要明确回应某条特定消息时使用。\n`;
-            ruleNum++;
             prompt += `${ruleNum}. 你的输出格式必须严格遵循以下几种之一，可以组合使用：
     a) 普通消息: [${character.realName}的消息：{消息内容}]
-    b) 引用回复: [${character.realName}引用了消息(ID:{消息ID})][${character.realName}的消息：{回复内容}]
-    c) 送我的礼物: [${character.realName}送来的礼物：{礼物描述}]
-    d) 语音消息: [${character.realName}的语音：{语音内容}]
-    e) 照片/视频: [${character.realName}发来的照片/视频：{描述}]
-    f) 给我的转账: [${character.realName}的转账：{金额}元；备注：{备注}]
-    g) 表情包/图片: [${character.realName}发送的表情包：{表情包路径}]。注意：这里的路径不需要包含"https://i.postimg.cc/"，只需要提供后面的部分，例如 "害羞vHLfrV3K/1.jpg"。
-    h) 对我礼物的回应(此条不显示): [${character.realName}已接收礼物]
-    i) 对我转账的回应(此条不显示): [${character.realName}接收${character.myName}的转账] 或 [${character.realName}退回${character.myName}的转账]
-    j) 更新状态(此条不显示): [${character.realName}更新状态为：{新状态}]
-    k) 换头像指令(此条不显示): [${character.realName}换头像：为${character.myName}换上{头像名称或ID}] 或 [${character.realName}换头像：自己换上{头像名称或ID}] 或 [${character.realName}换头像：换情头{情头对编号}]
+    b) 送我的礼物: [${character.realName}送来的礼物：{礼物描述}]
+    c) 语音消息: [${character.realName}的语音：{语音内容}]
+    d) 照片/视频: [${character.realName}发来的照片/视频：{描述}]
+    e) 给我的转账: [${character.realName}的转账：{金额}元；备注：{备注}]
+    f) 表情包/图片: [${character.realName}发送的表情包：{表情包路径}]。注意：这里的路径不需要包含"https://i.postimg.cc/"，只需要提供后面的部分，例如 "害羞vHLfrV3K/1.jpg"。
+    g) 对我礼物的回应(此条不显示): [${character.realName}已接收礼物]
+    h) 对我转账的回应(此条不显示): [${character.realName}接收${character.myName}的转账] 或 [${character.realName}退回${character.myName}的转账]
+    i) 更新状态(此条不显示): [${character.realName}更新状态为：{新状态}]
+    j) 换头像指令(此条不显示): [${character.realName}换头像：为${character.myName}换上{头像名称或ID}] 或 [${character.realName}换头像：自己换上{头像名称或ID}] 或 [${character.realName}换头像：换情头{情头对编号}]
 `;
             ruleNum++;
-            // 使用全局设置的消息数量限制
-            const minCount = db.messageCountMin || 1;
-            const maxCount = db.messageCountMax || 20;
-            prompt += `${ruleNum}. ✨重要✨ 你的每次回复必须严格控制在${minCount}到${maxCount}条消息之间，绝对不能超过${maxCount}条。这些消息应以普通文本消息为主，你可以根据对话情境自由选择穿插多条特殊消息（如礼物、语音、图片、表情包等），特殊消息的数量和位置由你自行决定，可以是0条、1条或多条。\n`;
+            // 使用全局设置的消息数量限制，但用严格的表述方式
+            const minCount = db.messageCountMin || 3;
+            const maxCount = db.messageCountMax || 8;
+            prompt += `${ruleNum}. 你的每次回复必须生成${minCount}到${maxCount}条消息。这些消息应以普通文本消息为主，可以偶尔、选择性地穿插多条特殊消息（如礼物、语音、图片、表情包等），特殊消息的位置应随机。大部分回复应该只包含文本消息。\n`;
             ruleNum++;
             prompt += `${ruleNum}. 不要主动结束对话，除非我明确提出。保持你的人设，自然地进行对话。`;
             
@@ -14591,6 +14056,7 @@ ${contextSummary}
             prompt += `   - \`[${group.me.nickname} 向 {某个成员真名} 转账：...]\`: 我给某个特定成员转账了。\n`;
             prompt += `   - \`[${group.me.nickname} 向 {某个成员真名} 送来了礼物：...]\`: 我给某个特定成员送了礼物。\n`;
             prompt += `   - \`[${group.me.nickname}的表情包：...]\`, \`[${group.me.nickname}的语音：...]\`, \`[${group.me.nickname}发来的照片/视频：...]\`: 我发送了特殊类型的消息，群成员可以对此发表评论。\n`;
+            prompt += `   - \`(回复 xxx)\`: 当你在历史消息中看到这个标记时，表示该消息是在回复/引用某人的消息。这意味着发送者是在针对那条特定的消息进行回应，而不是随意发送的。你应该理解这种上下文关系，并让相关角色做出合适的反应。\n`;
             prompt += `   - \`[system: ...]\`, \`[...邀请...加入了群聊]\`, \`[...修改群名为...]\`, \`[群主已转让给...]\`, \`[...设置...为管理员]\`, \`[...取消了...的管理员身份]\`, \`[...被移出群聊]\`, \`[...被拉回群聊]\`: 系统通知或事件，群成员应据此作出反应。例如：\n`;
             prompt += `     - 欢迎新人加入\n`;
             prompt += `     - 讨论新群名\n`;
@@ -14755,12 +14221,12 @@ ${contextSummary}
             
             ruleNum++;
             prompt += `${ruleNum}. **模拟群聊氛围**: 为了让群聊看起来真实、活跃且混乱，你的每一次回复都必须遵循以下随机性要求：\n`;
-            const numMembers = group.members.length;
-            const minMessages = numMembers * 2;
-            const maxMessages = numMembers * 4;
-            prompt += `   - **消息数量**: 你的回复需要包含 **${minMessages}到${maxMessages}条** 消息 (即平均每个成员回复1-10条)。确保有足够多的互动。\n`;
+            // 使用全局设置的消息数量限制
+            const minCount = db.messageCountMin || 3;
+            const maxCount = db.messageCountMax || 8;
+            prompt += `   - **消息数量**: 你的回复必须包含 **${minCount}到${maxCount}条** 消息。确保有足够多的互动。\n`;
             prompt += `   - **发言者与顺序随机**: 随机选择群成员发言，顺序也必须是随机的，不要按固定顺序轮流。\n`;
-            prompt += `   - **内容多样性**: 你的回复应以普通文本消息为主，但可以根据对话情境让成员们自由发送特殊消息（表情包、语音、照片/视频），特殊消息的数量和发送者由你自行决定，可以是0条、1条或多条，以增加真实感和趣味性。\n`;
+            prompt += `   - **内容多样性**: 你的回复应以普通文本消息为主，但可以偶尔、选择性地让某个成员发送多条特殊消息（表情包、语音、照片/视频），以增加真实感。不要滥用特殊消息。\n`;
             prompt += `   - **对话连贯性**: 尽管发言是随机的，但对话内容应整体围绕我和其他成员的发言展开，保持一定的逻辑连贯性。\n\n`;
             
             ruleNum++;
@@ -14953,9 +14419,9 @@ ${contextSummary}
             ruleNum++;
             prompt += `${ruleNum}. **对话规则**:\n`;
             // 使用全局设置的消息数量限制
-            const minCount = db.messageCountMin || 1;
-            const maxCount = db.messageCountMax || 20;
-            prompt += `   - ✨重要✨ 每次调用时，你必须严格生成 **${minCount}-${maxCount}条** 不同角色的消息，绝对不能超过${maxCount}条，模拟自然的群聊对话\n`;
+            const minCount = db.messageCountMin || 3;
+            const maxCount = db.messageCountMax || 8;
+            prompt += `   - 每次调用时，你必须生成 **${minCount}到${maxCount}条** 不同角色的消息，模拟自然的群聊对话\n`;
             prompt += `   - 角色们应该根据自己的性格和当前话题进行互动\n`;
             prompt += `   - 如果某个角色记忆中有USER，他们可能会在对话中提及USER，其他角色可能会好奇地询问\n`;
             prompt += `   - 对话应该自然流畅，符合各个角色的人设\n`;
@@ -15046,11 +14512,17 @@ ${contextSummary}
                         if (msg.parts && msg.parts.length > 0) {
                             parts = msg.parts.map(p => {
                                 if (p.type === 'text' || p.type === 'html') {
-                                    return {text: p.text};
+                                    // 如果有引用信息，在文本前添加引用标记
+                                    let text = p.text;
+                                    if (msg.quote) {
+                                        text = `(回复 ${msg.quote.senderName}): ${text}`;
+                                    }
+                                    return {text: text};
                                 } else if (p.type === 'image') {
                                     const match = p.data.match(/^data:(image\/(.+));base64,(.*)$/);
                                     if (match) {
-                                        return {inline_data: {mime_type: match[1], data: match[3]}};
+                                        return {inline_data
+                                            : {mime_type: match[1], data: match[3]}};
                                     }
                                 }
                                 return null;
@@ -15063,7 +14535,12 @@ ${contextSummary}
                             parts = [{text: pollText}];
                             // ▲▲▲ 【群投票功能】结束 ▲▲▲
                         } else {
-                            parts = [{text: msg.content}];
+                            // 如果有引用信息，在内容前添加引用标记
+                            let text = msg.content;
+                            if (msg.quote) {
+                                text = `(回复 ${msg.quote.senderName}): ${text}`;
+                            }
+                            parts = [{text: text}];
                         }
                         return {role, parts};
                     });
@@ -15079,7 +14556,12 @@ ${contextSummary}
                         if (msg.parts && msg.parts.length > 0) {
                             content = msg.parts.map(p => {
                                 if (p.type === 'text' || p.type === 'html') {
-                                    return {type: 'text', text: p.text};
+                                    // 如果有引用信息，在文本前添加引用标记
+                                    let text = p.text;
+                                    if (msg.quote) {
+                                        text = `(回复 ${msg.quote.senderName}): ${text}`;
+                                    }
+                                    return {type: 'text', text: text};
                                 } else if (p.type === 'image') {
                                     return {type: 'image_url', image_url: {url: p.data}};
                                 }
@@ -15092,7 +14574,11 @@ ${contextSummary}
                             content = `[${msg.senderName}发起了一个投票(${pollStatus})：问题是"${msg.question}"，选项有：${msg.options.join('、')}。目前投票的人有：${whoVoted}]`;
                             // ▲▲▲ 【群投票功能】结束 ▲▲▲
                         } else {
+                            // 如果有引用信息，在内容前添加引用标记
                             content = msg.content;
+                            if (msg.quote) {
+                                content = `(回复 ${msg.quote.senderName}): ${content}`;
+                            }
                         }
                         messages.push({role: msg.role, content: content});
                     });
@@ -16111,11 +15597,19 @@ ${contextSummary}
                                          currentChatId === chat.id;
                 
                 if (!isViewingThisChat) {
-                    // 计算本次新增的消息数量
-                    const newMessageCount = chat.history.filter(m => 
-                        m.role === 'assistant' && 
-                        m.timestamp > (Date.now() - 5000) // 5秒内的消息
-                    ).length;
+                    // 计算本次新增的消息数量（直接从fullResponse中解析）
+                    let newMessageCount = 0;
+                    if (currentChatType === 'private') {
+                        // 私聊：计算实际添加的消息数
+                        const messageRegex = new RegExp(`\\[${chat.realName}(?:的(?:消息|语音|转账|表情包)|发送的表情包|发来的照片\\/视频|送来的礼物|切歌|换头像)[:：][\\s\\S]+?\\]|\\[${chat.realName}(?:接收|退回)${chat.myName}的转账\\]|\\[${chat.realName}已接收礼物\\]|\\[${chat.realName}更新状态为：.*?\\]`, "g");
+                        const matches = fullResponse.match(messageRegex);
+                        newMessageCount = matches ? matches.length : 1; // 如果没有匹配到格式，说明是简单消息，计为1条
+                    } else {
+                        // 群聊：计算实际添加的消息数
+                        const messageRegex = /\[(.+?)(?:的(?:消息|语音|转账|表情包)|发送的表情包|发来的照片\/视频|送来的礼物)[:：][\s\S]+?\]/g;
+                        const matches = fullResponse.match(messageRegex);
+                        newMessageCount = matches ? matches.length : 0;
+                    }
                     
                     // 增加未读消息数
                     chat.unreadCount = (chat.unreadCount || 0) + newMessageCount;
@@ -17256,19 +16750,9 @@ ${contextSummary}
                 const character = db.characters.find(c => c.id === currentChatId);
                 const message = character.history.find(m => m.id === currentTransferMessageId);
                 if (message) {
-                    // 提取转账备注 - 支持多种格式
-                    const transferRegexes = [
-                        /\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/,  // USER发给AI的转账
-                        /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/,     // AI发给USER的转账
-                        /\[.*?向.*?转账：([\d.]+)元；备注：(.*?)\]/   // 群聊转账
-                    ];
-                    
-                    let match = null;
-                    for (const regex of transferRegexes) {
-                        match = message.content.match(regex);
-                        if (match) break;
-                    }
-                    
+                    // 提取转账备注
+                    const transferRegex = /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/;
+                    const match = message.content.match(transferRegex);
                     if (match) {
                         const amount = match[1];
                         const remark = match[2] || '无备注';
@@ -17311,6 +16795,7 @@ ${contextSummary}
                     cardOnScreen.querySelector('.transfer-status').textContent = action === 'received' ? '已收款' : '已退回';
                     cardOnScreen.style.cursor = 'default';
                 }
+                // 添加上下文消息，让AI知道用户的操作
                 let contextMessageContent = (action === 'received') ? `[${character.myName}接收${character.realName}的转账]` : `[${character.myName}退回${character.realName}的转账]`;
                 const contextMessage = {
                     id: `msg_${Date.now()}`,
@@ -17326,7 +16811,6 @@ ${contextSummary}
             receiveTransferActionSheet.classList.remove('visible');
             currentTransferMessageId = null;
         }
-
         function setupGiftSystem() {
             giftBtn.addEventListener('click', () => {
                 if (currentChatType === 'private') {
@@ -18561,6 +18045,13 @@ JSON格式示例：
                 document.querySelector('input[name="world-book-position"][value="before"]').checked = true;
                 worldBookIsGlobalInput.checked = false;
                 updateWbGroupSelects();
+                
+                // 隐藏精简总结按钮（新建世界书时）
+                const summaryCompressSection = document.getElementById('summary-compress-section');
+                if (summaryCompressSection) {
+                    summaryCompressSection.style.display = 'none';
+                }
+                
                 switchScreen('edit-world-book-screen');
             });
             editWorldBookForm.addEventListener('submit', async (e) => {
@@ -18652,6 +18143,17 @@ JSON格式示例：
                         worldBookIsGlobalInput.checked = book.isGlobal || false;
                         updateWbGroupSelects();
                         worldBookGroupInput.value = book.groupId || '';
+                        
+                        // 显示/隐藏精简总结按钮（仅总结类型世界书显示）
+                        const summaryCompressSection = document.getElementById('summary-compress-section');
+                        if (summaryCompressSection) {
+                            if (book.isSummaryBook) {
+                                summaryCompressSection.style.display = 'block';
+                            } else {
+                                summaryCompressSection.style.display = 'none';
+                            }
+                        }
+                        
                         switchScreen('edit-world-book-screen');
                     }
                 }
@@ -18862,6 +18364,141 @@ JSON格式示例：
                     wbDeleteModal.classList.remove('visible');
                 }
             });
+
+            // ===== 精简总结功能 =====
+            const compressSummaryBtn = document.getElementById('compress-summary-btn');
+            
+            if (compressSummaryBtn) {
+                compressSummaryBtn.addEventListener('click', async () => {
+                    const bookId = worldBookIdInput.value;
+                    if (!bookId) {
+                        showToast('请先保存世界书');
+                        return;
+                    }
+                    
+                    const book = db.worldBooks.find(wb => wb.id === bookId);
+                    if (!book || !book.isSummaryBook) {
+                        showToast('此功能仅适用于总结类型世界书');
+                        return;
+                    }
+                    
+                    const currentContent = worldBookContentInput.value.trim();
+                    if (!currentContent) {
+                        showToast('总结内容为空，无需精简');
+                        return;
+                    }
+                    
+                    const confirmed = confirm('确定要精简当前总结内容吗？\n\n精简后会替换原有内容，建议先备份。');
+                    if (!confirmed) return;
+                    
+                    const btnText = compressSummaryBtn.querySelector('.btn-text');
+                    const spinner = compressSummaryBtn.querySelector('.spinner');
+                    
+                    // 显示加载状态
+                    btnText.textContent = '正在精简...';
+                    spinner.style.display = 'inline-block';
+                    compressSummaryBtn.disabled = true;
+                    
+                    try {
+                        // 获取API设置
+                        const apiSettings = db.apiSettings;
+                        if (!apiSettings || !apiSettings.url || !apiSettings.key) {
+                            throw new Error('请先配置API设置');
+                        }
+                        
+                        const apiUrl = apiSettings.url.replace(/\/+$/, '');
+                        const apiKey = getRandomValue(apiSettings.key);
+                        const model = apiSettings.model;
+                        
+                        if (!model) {
+                            throw new Error('请先在API设置中选择模型');
+                        }
+                        
+                        // 获取总结提示词（从聊天设置中获取，如果没有则使用默认值）
+                        const summaryPrompt = db.summaryPrompt || '请总结以下对话内容，提取关键信息和重要细节：';
+                        
+                        // 构建精简请求
+                        const systemPrompt = `你是一个专业的文本精简助手。你的任务是将冗长的总结内容精简为更简洁的版本，同时保留所有关键信息和重要细节。
+
+要求：
+1. 保留所有重要的人物、事件、时间、地点等关键信息
+2. 删除重复和冗余的描述
+3. 使用更简洁的语言表达
+4. 保持逻辑清晰，条理分明
+5. 尽可能减少字数，但不能丢失重要信息
+
+${summaryPrompt}`;
+                        
+                        const userPrompt = `请精简以下总结内容：\n\n${currentContent}`;
+                        
+                        showToast('正在调用API精简总结...');
+                        
+                        const response = await fetch(`${apiUrl}/v1/chat/completions`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: model,
+                                messages: [
+                                    { role: 'system', content: systemPrompt },
+                                    { role: 'user', content: userPrompt }
+                                ],
+                                temperature: 0.7,
+                                max_tokens: 4000
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            let errorMessage = '精简失败';
+                            try {
+                                const errorData = await response.json();
+                                errorMessage = errorData.error?.message || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+                            } catch (e) {
+                                errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                            }
+                            throw new Error(errorMessage);
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                            throw new Error('API返回数据格式错误');
+                        }
+                        
+                        const compressedContent = data.choices[0].message.content.trim();
+                        
+                        if (!compressedContent) {
+                            throw new Error('API返回的精简内容为空');
+                        }
+                        
+                        // 更新文本框内容
+                        worldBookContentInput.value = compressedContent;
+                        
+                        // 计算压缩比例
+                        const originalLength = currentContent.length;
+                        const compressedLength = compressedContent.length;
+                        const compressionRatio = ((1 - compressedLength / originalLength) * 100).toFixed(1);
+                        
+                        showToast(`✅ 精简完成！\n原长度: ${originalLength} 字\n精简后: ${compressedLength} 字\n压缩率: ${compressionRatio}%`, 5000);
+                        
+                    } catch (error) {
+                        console.error('精简总结失败:', error);
+                        
+                        // 使用alert弹窗显示错误信息
+                        alert(`❌ 精简失败\n\n错误信息：\n${error.message}\n\n请检查：\n1. API设置是否正确\n2. API密钥是否有效\n3. 网络连接是否正常\n4. 模型是否支持该功能`);
+                        
+                        // 同时显示toast提示
+                        showToast(`❌ 精简失败: ${error.message}`);
+                    } finally {
+                        // 恢复按钮状态
+                        btnText.textContent = '🗜️ 精简目前总结';
+                        spinner.style.display = 'none';
+                        compressSummaryBtn.disabled = false;
+                    }
+                });
+            }
 
             // 分组管理功能
             const wbGroupManageBtn = document.getElementById('wb-group-manage-btn');
@@ -19576,6 +19213,10 @@ JSON格式示例：
                 return;
             }
             
+            // 先暂停当前播放
+            audioPlayer.pause();
+            
+            // 设置新的音频源
             audioPlayer.src = track.src;
             audioPlayer.currentTime = 0;
             
@@ -19583,10 +19224,41 @@ JSON格式示例：
             db.lastMusicPosition = 0;
             saveData();
             
-            audioPlayer.play().catch(err => {
-                console.error('播放失败:', err);
-                showToast('播放失败，请检查音频链接');
-            });
+            // 等待音频元数据加载完成后再播放
+            const onLoadedMetadata = () => {
+                console.log('音频元数据已加载，准备播放:', track.title, '时长:', audioPlayer.duration);
+                audioPlayer.removeEventListener('loadedmetadata', onLoadedMetadata);
+                
+                const playPromise = audioPlayer.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('开始播放:', track.title);
+                    }).catch(err => {
+                        console.error('播放失败:', err);
+                        showToast('播放失败，请检查音频链接');
+                    });
+                }
+            };
+            
+            // 如果元数据已经加载，直接播放
+            if (audioPlayer.readyState >= 1) {
+                onLoadedMetadata();
+            } else {
+                // 否则等待元数据加载
+                audioPlayer.addEventListener('loadedmetadata', onLoadedMetadata);
+                
+                // 设置超时，防止一直等待
+                setTimeout(() => {
+                    audioPlayer.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    if (audioPlayer.readyState < 1) {
+                        console.warn('音频元数据加载超时，尝试直接播放');
+                        audioPlayer.play().catch(err => {
+                            console.error('播放失败:', err);
+                            showToast('播放失败，请检查音频链接');
+                        });
+                    }
+                }, 5000);
+            }
             
             updatePlaylistUI();
             updatePlayerUI();
@@ -20829,18 +20501,24 @@ JSON格式示例：
             const totalTimeEl = document.getElementById('music-total-time');
             const progressFillEl = document.getElementById('music-progress-fill');
             
-            if (!audioPlayer.duration) {
+            // 更严格的duration检查
+            if (!audioPlayer.duration || isNaN(audioPlayer.duration) || !isFinite(audioPlayer.duration)) {
                 currentTimeEl.textContent = "0:00";
                 totalTimeEl.textContent = "0:00";
                 progressFillEl.style.width = '0%';
                 return;
             }
             
-            const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            // 确保currentTime有效
+            const currentTime = audioPlayer.currentTime || 0;
+            const duration = audioPlayer.duration;
+            
+            // 防止进度超过100%
+            const progressPercent = Math.min(100, (currentTime / duration) * 100);
             progressFillEl.style.width = `${progressPercent}%`;
-            currentTimeEl.textContent = formatMusicTime(audioPlayer.currentTime);
-            totalTimeEl.textContent = formatMusicTime(audioPlayer.duration);
-            updateActiveLyric(audioPlayer.currentTime);
+            currentTimeEl.textContent = formatMusicTime(currentTime);
+            totalTimeEl.textContent = formatMusicTime(duration);
+            updateActiveLyric(currentTime);
         }
         
         // === 音乐播放器函数结束 ===
@@ -23132,61 +22810,23 @@ JSON格式示例：
                         second: '2-digit'
                     });
                     
-                    // 优化：检测消息类型并添加类型徽章，确保特殊类别的消息使用特殊类别的样式
+                    // Detect message type and add type badge
                     let typeBadge = '';
-                    let displayContent = result.content;
                     const originalContent = result.originalContent || result.content;
-                    
-                    // 表情包消息
                     if (/\[(?:.+?)发送的表情包[：:]/.test(originalContent) || /\[(?:.+?)的表情包[：:]/.test(originalContent)) {
                         typeBadge = '<span style="display: inline-block; background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">表情包</span>';
-                        // 提取表情包内容
-                        const stickerMatch = originalContent.match(/\[(?:.+?)(?:发送的)?表情包[：:]([\s\S]+?)\]/);
-                        if (stickerMatch) {
-                            displayContent = stickerMatch[1].trim();
-                        }
-                    } 
-                    // 语音消息
-                    else if (/\[(?:.+?)的语音[：:]/.test(originalContent)) {
-                        typeBadge = '<span style="display: inline-block; background: #4caf50; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">🎤 语音</span>';
-                        // 提取语音时长
-                        const voiceMatch = originalContent.match(/\[(?:.+?)的语音[：:]([\s\S]+?)\]/);
-                        if (voiceMatch) {
-                            displayContent = voiceMatch[1].trim();
-                        }
-                    } 
-                    // 图片/视频消息
-                    else if (/\[(?:.+?)发来的照片\/视频[：:]/.test(originalContent) || /^https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)/i.test(originalContent)) {
+                    } else if (/\[(?:.+?)的语音[：:]/.test(originalContent)) {
+                        typeBadge = '<span style="display: inline-block; background: #4caf50; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">语音</span>';
+                    } else if (/\[(?:.+?)发来的照片\/视频[：:]/.test(originalContent) || /^https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)/i.test(originalContent)) {
                         typeBadge = '<span style="display: inline-block; background: #2196f3; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">图片</span>';
-                        // 提取图片描述或显示[图片]
-                        const imageMatch = originalContent.match(/\[(?:.+?)发来的照片\/视频[：:]([\s\S]+?)\]/);
-                        if (imageMatch) {
-                            displayContent = imageMatch[1].trim() || '[图片]';
-                        } else if (/^https?:\/\//.test(originalContent)) {
-                            displayContent = '[图片]';
-                        }
-                    } 
-                    // 转账消息
-                    else if (/\[(?:.+?)(?:给你)?转账[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*转账[：:]/.test(originalContent)) {
+                    } else if (/\[(?:.+?)(?:给你)?转账[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*转账[：:]/.test(originalContent)) {
                         typeBadge = '<span style="display: inline-block; background: #f44336; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">转账</span>';
-                        // 提取转账金额和备注
-                        const transferMatch = originalContent.match(/转账[：:]([\d.]+)元[；;]备注[：:](.+?)\]/);
-                        if (transferMatch) {
-                            displayContent = `${transferMatch[1]}元 - ${transferMatch[2]}`;
-                        }
-                    } 
-                    // 礼物消息
-                    else if (/\[(?:.+?)送来的礼物[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*送来了礼物[：:]/.test(originalContent)) {
+                    } else if (/\[(?:.+?)送来的礼物[：:]/.test(originalContent) || /\[(?:.+?)\s*向\s*(?:.+?)\s*送来了礼物[：:]/.test(originalContent)) {
                         typeBadge = '<span style="display: inline-block; background: #e91e63; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">礼物</span>';
-                        // 提取礼物名称
-                        const giftMatch = originalContent.match(/礼物[：:](.+?)\]/);
-                        if (giftMatch) {
-                            displayContent = giftMatch[1].trim();
-                        }
                     }
                     
                     // Highlight keyword in content
-                    let highlightedContent = displayContent;
+                    let highlightedContent = result.content;
                     if (keyword) {
                         const regex = new RegExp(`(${keyword})`, 'gi');
                         highlightedContent = highlightedContent.replace(regex, '<mark style="background: #ffeb3b; padding: 2px 4px; border-radius: 3px;">$1</mark>');
@@ -24968,6 +24608,19 @@ JSON格式示例：
                 const currentCount = e.history ? e.history.length : 0;
                 document.getElementById('current-message-count').textContent = currentCount;
                 
+                // Update last summary position
+                const lastSummaryIndex = e.lastSummaryIndex || 0;
+                const lastSummaryPositionEl = document.getElementById('last-summary-position');
+                if (lastSummaryIndex > 0) {
+                    lastSummaryPositionEl.textContent = `第 ${lastSummaryIndex} 条`;
+                    lastSummaryPositionEl.style.color = '#2e7d32';
+                    lastSummaryPositionEl.style.fontWeight = 'bold';
+                } else {
+                    lastSummaryPositionEl.textContent = '未总结';
+                    lastSummaryPositionEl.style.color = '#999';
+                    lastSummaryPositionEl.style.fontWeight = 'normal';
+                }
+                
                 // Update current token count
                 updateTokenDisplay();
                 
@@ -26203,7 +25856,7 @@ JSON格式示例：
                 await saveData();
                 showToast('Minimax 语音设置已保存！');
             });
-            
+
             // ===== Minimax 语音API预设 =====
             // 动态添加语音API预设HTML
             const minimaxSection = document.querySelector('#api-settings-screen .content');
@@ -29799,6 +29452,19 @@ JSON格式示例：
             const groupCurrentCount = group.history ? group.history.length : 0;
             document.getElementById('group-current-message-count').textContent = groupCurrentCount;
             
+            // Update last summary position for group
+            const groupLastSummaryIndex = group.lastSummaryIndex || 0;
+            const groupLastSummaryPositionEl = document.getElementById('group-last-summary-position');
+            if (groupLastSummaryIndex > 0) {
+                groupLastSummaryPositionEl.textContent = `第 ${groupLastSummaryIndex} 条`;
+                groupLastSummaryPositionEl.style.color = '#2e7d32';
+                groupLastSummaryPositionEl.style.fontWeight = 'bold';
+            } else {
+                groupLastSummaryPositionEl.textContent = '未总结';
+                groupLastSummaryPositionEl.style.color = '#999';
+                groupLastSummaryPositionEl.style.fontWeight = 'normal';
+            }
+            
             // Update current token count for group
             updateTokenDisplay();
             
@@ -31053,7 +30719,7 @@ ${summaryPrompt}`;
         
         // Quick summary (from start to set count)
         document.getElementById('quick-summary-btn').addEventListener('click', async () => {
-            const chat = currentManualSummaryChatType === 'private'
+            let chat = currentManualSummaryChatType === 'private'
                 ? db.characters.find(c => c.id === currentManualSummaryChatId)
                 : db.groups.find(g => g.id === currentManualSummaryChatId);
             
@@ -31078,6 +30744,15 @@ ${summaryPrompt}`;
             document.getElementById('manual-summary-modal').classList.remove('visible');
             
             await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            
+            // Update last summary index (reuse chat variable)
+            chat = currentManualSummaryChatType === 'private'
+                ? db.characters.find(c => c.id === currentManualSummaryChatId)
+                : db.groups.find(g => g.id === currentManualSummaryChatId);
+            if (chat) {
+                chat.lastSummaryIndex = messagesToSummarize.length;
+                await saveData();
+            }
             
             // Remove summarized messages
             const remainingMessages = messages.slice(messagesToSummarize.length);
@@ -31129,6 +30804,15 @@ ${summaryPrompt}`;
             document.getElementById('custom-range-summary-modal').classList.remove('visible');
             
             await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            
+            // Update last summary index
+            const chat = currentManualSummaryChatType === 'private'
+                ? db.characters.find(c => c.id === currentManualSummaryChatId)
+                : db.groups.find(g => g.id === currentManualSummaryChatId);
+            if (chat) {
+                chat.lastSummaryIndex = actualEnd;
+                await saveData();
+            }
             
             // Remove summarized messages
             const remainingMessages = [...messages.slice(0, start - 1), ...messages.slice(actualEnd)];
@@ -31842,6 +31526,10 @@ ${memoriesText}
                 if (summary) {
                     // 记录已总结的楼层
                     chat.autoSummarizedFloors.push(currentFloor);
+                    
+                    // Update last summary index
+                    chat.lastSummaryIndex = messages.length;
+                    
                     await saveData();
                     
                     const summarizedCount = messagesToSummarize.length;
@@ -33240,8 +32928,38 @@ ${memoriesText}
             audioPlayer.currentTime = (clickX / barWidth) * audioPlayer.duration;
         });
         
+        // 用于跟踪音频是否真正播放过
+        let hasPlayedSignificantTime = false;
+        let lastValidTime = 0;
+        let audioLoadedDuration = 0; // 记录音频加载完成时的真实时长
+        
         // 音频播放器事件
-        audioPlayer.addEventListener('timeupdate', updateMusicProgressBar);
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            // 当音频元数据加载完成时，记录真实的时长
+            if (audioPlayer.duration && !isNaN(audioPlayer.duration) && isFinite(audioPlayer.duration)) {
+                audioLoadedDuration = audioPlayer.duration;
+                console.log('音频元数据已加载，时长:', audioLoadedDuration);
+            }
+        });
+        
+        audioPlayer.addEventListener('durationchange', () => {
+            // 当duration改变时，更新记录的时长
+            if (audioPlayer.duration && !isNaN(audioPlayer.duration) && isFinite(audioPlayer.duration)) {
+                audioLoadedDuration = audioPlayer.duration;
+                console.log('音频时长已更新:', audioLoadedDuration);
+            }
+        });
+        
+        audioPlayer.addEventListener('timeupdate', () => {
+            updateMusicProgressBar();
+            
+            // 记录播放进度，用于判断是否真正播放过
+            if (audioPlayer.currentTime > 3) {
+                hasPlayedSignificantTime = true;
+                lastValidTime = audioPlayer.currentTime;
+            }
+        });
+        
         audioPlayer.addEventListener('pause', () => {
             if(musicState.isActive) {
                 musicState.isPlaying = false;
@@ -33250,6 +32968,7 @@ ${memoriesText}
                 document.getElementById('vinyl-view').classList.remove('spinning');
             }
         });
+        
         audioPlayer.addEventListener('play', () => {
             if(musicState.isActive) {
                 musicState.isPlaying = true;
@@ -33258,12 +32977,86 @@ ${memoriesText}
                 document.getElementById('vinyl-view').classList.add('spinning');
             }
         });
+        
+        audioPlayer.addEventListener('loadstart', () => {
+            // 每次开始加载新音频时重置标记
+            hasPlayedSignificantTime = false;
+            lastValidTime = 0;
+            audioLoadedDuration = 0;
+        });
+        
         audioPlayer.addEventListener('ended', () => {
             if(musicState.isActive) {
-                // 歌曲播放结束时，移除胶片旋转样式
-                document.getElementById('vinyl-view').classList.remove('spinning');
-                playNext();
+                const duration = audioLoadedDuration || audioPlayer.duration;
+                const currentTime = audioPlayer.currentTime;
+                
+                // 更严格的检查：
+                // 1. duration必须有效且大于10秒（排除异常短的音频）
+                // 2. 必须播放过至少5秒
+                // 3. currentTime必须接近duration（允许3秒误差）
+                // 4. currentTime必须大于duration的80%（防止误判）
+                const isValidDuration = duration && !isNaN(duration) && isFinite(duration) && duration > 10;
+                const hasPlayedEnough = hasPlayedSignificantTime && lastValidTime > 5;
+                const isNearEnd = currentTime >= duration - 3;
+                const isOverEightyPercent = currentTime >= duration * 0.8;
+                
+                if (isValidDuration && hasPlayedEnough && isNearEnd && isOverEightyPercent) {
+                    console.log('歌曲正常播放结束，切换下一首', {
+                        duration, 
+                        currentTime, 
+                        lastValidTime,
+                        percentage: ((currentTime / duration) * 100).toFixed(1) + '%'
+                    });
+                    // 歌曲播放结束时，移除胶片旋转样式
+                    document.getElementById('vinyl-view').classList.remove('spinning');
+                    playNext();
+                } else {
+                    console.warn('检测到异常的ended事件，忽略切歌', {
+                        duration, 
+                        currentTime, 
+                        hasPlayedSignificantTime,
+                        lastValidTime,
+                        isValidDuration,
+                        hasPlayedEnough,
+                        isNearEnd,
+                        isOverEightyPercent,
+                        percentage: duration > 0 ? ((currentTime / duration) * 100).toFixed(1) + '%' : 'N/A'
+                    });
+                    // 如果是误触发，尝试恢复播放
+                    if (hasPlayedSignificantTime && currentTime < duration - 5) {
+                        console.log('尝试恢复播放...');
+                        audioPlayer.play().catch(err => console.error('恢复播放失败:', err));
+                    }
+                }
             }
+        });
+        
+        // 添加错误处理
+        audioPlayer.addEventListener('error', (e) => {
+            console.error('音频播放错误:', e);
+            if (musicState.isActive && audioPlayer.error) {
+                const errorCode = audioPlayer.error.code;
+                const errorMessages = {
+                    1: '音频加载被中止',
+                    2: '网络错误',
+                    3: '音频解码失败',
+                    4: '音频格式不支持或音频源无效'
+                };
+                console.error('错误代码:', errorCode, errorMessages[errorCode] || '未知错误');
+                showToast(errorMessages[errorCode] || '播放出错，尝试下一首');
+                // 出错时自动跳到下一首
+                setTimeout(() => playNext(), 1000);
+            }
+        });
+        
+        // 添加stalled事件处理（网络卡顿）
+        audioPlayer.addEventListener('stalled', () => {
+            console.warn('音频加载停滞');
+        });
+        
+        // 添加waiting事件处理（缓冲中）
+        audioPlayer.addEventListener('waiting', () => {
+            console.log('音频缓冲中...', {currentTime: audioPlayer.currentTime, duration: audioPlayer.duration});
         });
         
         // 胶片/歌词切换功能
