@@ -670,8 +670,8 @@
                 // 创建数据库
                 this.db = new Dexie('章鱼喷墨机DB_V2');
 
-                // 定义数据库结构
-                this.db.version(2).stores({
+                // 定义数据库结构 - 升级到版本3，添加通用资源存储
+                this.db.version(3).stores({
                     // 基础数据存储
                     storage: 'key, value, timestamp',
                     // 消息分块存储
@@ -682,17 +682,22 @@
                     memorySummaries: 'id, chatId, chatType, name, content, messageCount, timestamp',
                     // 记忆快照存储
                     memorySnapshots: 'id, chatId, chatType, name, data, timestamp',
-                    // 图片Blob存储（新增）
-                    imageBlobs: 'id, data, mimeType, timestamp'
+                    // 图片Blob存储（消息中的图片）
+                    imageBlobs: 'id, data, mimeType, timestamp',
+                    // 通用资源Blob存储（头像、图标、壁纸、表情等）
+                    assetBlobs: 'id, data, mimeType, category, timestamp'
                 }).upgrade(trans => {
-                    // 数据库升级时的迁移逻辑
-                    console.log('数据库升级到版本2，添加图片Blob存储');
+                    console.log('数据库升级到版本3，添加通用资源Blob存储');
                 });
 
                 // LRU缓存配置
                 this.cache = new Map();
                 this.maxCacheSize = 50; // 最大缓存50个数据块
                 this.chunkSize = 100; // 每个数据块100条消息
+                
+                // 资源Blob缓存
+                this.assetBlobCache = new Map();
+                this.assetBlobCacheMaxSize = 100; // 缓存100个资源
 
                 // 性能监控
                 this.performanceMetrics = {
@@ -735,7 +740,516 @@
                 return null;
             }
 
-            // ===== 新增：图片Blob存储方法 =====
+            // ===== 新增：通用资源Blob存储方法 =====
+            
+            /**
+             * 保存资源Blob（头像、图标、表情、壁纸、字体等）
+             * @param {string} base64Data - Base64数据或URL
+             * @param {string} category - 资源类别：'avatar', 'icon', 'sticker', 'wallpaper', 'font'
+             * @returns {string} - 返回blob引用ID (格式: asset:id) 或原URL
+             */
+            async saveAssetBlob(base64Data, category = 'general') {
+                try {
+                    if (!base64Data || !base64Data.startsWith('data:')) {
+                        return base64Data; // 不是Base64，直接返回（可能是URL）
+                    }
+
+                    // 生成唯一ID
+                    const assetId = `${category}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    // 解析Base64数据
+                    const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!matches) {
+                        console.warn('Base64格式不正确');
+                        return base64Data;
+                    }
+
+                    const mimeType = matches[1];
+                    const base64String = matches[2];
+                    
+                    // 转换为Blob
+                    const byteCharacters = atob(base64String);
+                    const byteArray = new Uint8Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteArray[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const blob = new Blob([byteArray], { type: mimeType });
+
+                    // 存储到IndexedDB
+                    await this.db.assetBlobs.put({
+                        id: assetId,
+                        data: blob,
+                        mimeType: mimeType,
+                        category: category,
+                        timestamp: Date.now()
+                    });
+
+                    console.log(`✓ 资源Blob已保存: ${category}/${assetId}, 大小: ${(blob.size / 1024).toFixed(2)}KB`);
+                    
+                    return `asset:${assetId}`;
+                } catch (error) {
+                    console.error('保存资源Blob失败:', error);
+                    return base64Data;
+                }
+            }
+
+            /**
+             * 加载资源Blob
+             * @param {string} assetRef - 资源引用 (格式: asset:id) 或URL
+             * @returns {string} - 返回Base64数据URL或原URL
+             */
+            async loadAssetBlob(assetRef) {
+                try {
+                    if (!assetRef || !assetRef.startsWith('asset:')) {
+                        return assetRef; // 不是asset引用，直接返回
+                    }
+
+                    // 检查缓存
+                    if (this.assetBlobCache.has(assetRef)) {
+                        return this.assetBlobCache.get(assetRef);
+                    }
+
+                    // 提取ID
+                    const assetId = assetRef.replace('asset:', '');
+
+                    // 从IndexedDB获取
+                    const record = await this.db.assetBlobs.get(assetId);
+                    if (!record) {
+                        console.warn(`未找到资源Blob: ${assetId}`);
+                        return assetRef;
+                    }
+
+                    // 转换Blob为Base64
+                    const base64Data = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(record.data);
+                    });
+
+                    // 缓存结果
+                    this.assetBlobCache.set(assetRef, base64Data);
+                    
+                    // 限制缓存大小
+                    if (this.assetBlobCache.size > this.assetBlobCacheMaxSize) {
+                        const firstKey = this.assetBlobCache.keys().next().value;
+                        this.assetBlobCache.delete(firstKey);
+                    }
+
+                    return base64Data;
+                } catch (error) {
+                    console.error('加载资源Blob失败:', error);
+                    return assetRef;
+                }
+            }
+
+            /**
+             * 自动转换数据中的所有Base64资源为Blob存储
+             * 包括：角色头像、我的头像、头像库、表情、壁纸、图标等
+             */
+            async convertAllBase64ToBlob(data) {
+                try {
+                    console.log('🚀 开始自动转换所有Base64资源为Blob存储...');
+                    
+                    let convertedCount = 0;
+                    let totalSizeBefore = 0;
+                    
+                    // 1. 转换角色头像
+                    if (data.characters && Array.isArray(data.characters)) {
+                        console.log(`📝 处理 ${data.characters.length} 个角色的头像...`);
+                        for (const char of data.characters) {
+                            // 角色头像
+                            if (char.avatar && char.avatar.startsWith('data:')) {
+                                totalSizeBefore += char.avatar.length;
+                                char.avatar = await this.saveAssetBlob(char.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 我的头像
+                            if (char.myAvatar && char.myAvatar.startsWith('data:')) {
+                                totalSizeBefore += char.myAvatar.length;
+                                char.myAvatar = await this.saveAssetBlob(char.myAvatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 角色头像库
+                            if (char.avatarLibrary && Array.isArray(char.avatarLibrary)) {
+                                for (const avatar of char.avatarLibrary) {
+                                    if (avatar.url && avatar.url.startsWith('data:')) {
+                                        totalSizeBefore += avatar.url.length;
+                                        avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                        convertedCount++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. 转换群组头像
+                    if (data.groups && Array.isArray(data.groups)) {
+                        console.log(`📝 处理 ${data.groups.length} 个群组的头像...`);
+                        for (const group of data.groups) {
+                            if (group.avatar && group.avatar.startsWith('data:')) {
+                                totalSizeBefore += group.avatar.length;
+                                group.avatar = await this.saveAssetBlob(group.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 群成员头像
+                            if (group.members && Array.isArray(group.members)) {
+                                for (const member of group.members) {
+                                    if (member.avatar && member.avatar.startsWith('data:')) {
+                                        totalSizeBefore += member.avatar.length;
+                                        member.avatar = await this.saveAssetBlob(member.avatar, 'avatar');
+                                        convertedCount++;
+                                    }
+                                }
+                            }
+                            
+                            // 我的头像
+                            if (group.me && group.me.avatar && group.me.avatar.startsWith('data:')) {
+                                totalSizeBefore += group.me.avatar.length;
+                                group.me.avatar = await this.saveAssetBlob(group.me.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 3. 转换头像库
+                    if (data.avatarLibrary && Array.isArray(data.avatarLibrary)) {
+                        console.log(`📝 处理 ${data.avatarLibrary.length} 个头像库项目...`);
+                        for (const avatar of data.avatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 4. 转换我的头像库
+                    if (data.myAvatarLibrary && Array.isArray(data.myAvatarLibrary)) {
+                        console.log(`📝 处理 ${data.myAvatarLibrary.length} 个我的头像库项目...`);
+                        for (const avatar of data.myAvatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 5. 转换情头绑定
+                    if (data.avatarBindings && Array.isArray(data.avatarBindings)) {
+                        console.log(`📝 处理 ${data.avatarBindings.length} 个情头绑定...`);
+                        for (const binding of data.avatarBindings) {
+                            if (binding.charAvatarUrl && binding.charAvatarUrl.startsWith('data:')) {
+                                totalSizeBefore += binding.charAvatarUrl.length;
+                                binding.charAvatarUrl = await this.saveAssetBlob(binding.charAvatarUrl, 'avatar');
+                                convertedCount++;
+                            }
+                            if (binding.myAvatarUrl && binding.myAvatarUrl.startsWith('data:')) {
+                                totalSizeBefore += binding.myAvatarUrl.length;
+                                binding.myAvatarUrl = await this.saveAssetBlob(binding.myAvatarUrl, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 6. 转换表情包
+                    if (data.myStickers && Array.isArray(data.myStickers)) {
+                        console.log(`📝 处理 ${data.myStickers.length} 个表情包...`);
+                        for (const sticker of data.myStickers) {
+                            if (sticker.url && sticker.url.startsWith('data:')) {
+                                totalSizeBefore += sticker.url.length;
+                                sticker.url = await this.saveAssetBlob(sticker.url, 'sticker');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 7. 转换壁纸
+                    if (data.wallpaperUrl && data.wallpaperUrl.startsWith('data:')) {
+                        console.log('📝 处理主屏幕壁纸...');
+                        totalSizeBefore += data.wallpaperUrl.length;
+                        data.wallpaperUrl = await this.saveAssetBlob(data.wallpaperUrl, 'wallpaper');
+                        convertedCount++;
+                    }
+
+                    if (data.lockWallpaperUrl && data.lockWallpaperUrl.startsWith('data:')) {
+                        console.log('📝 处理锁屏壁纸...');
+                        totalSizeBefore += data.lockWallpaperUrl.length;
+                        data.lockWallpaperUrl = await this.saveAssetBlob(data.lockWallpaperUrl, 'wallpaper');
+                        convertedCount++;
+                    }
+
+                    // 8. 转换壁纸库
+                    if (data.wallpaperLibrary && Array.isArray(data.wallpaperLibrary)) {
+                        console.log(`📝 处理 ${data.wallpaperLibrary.length} 个壁纸库项目...`);
+                        for (const wallpaper of data.wallpaperLibrary) {
+                            if (wallpaper.url && wallpaper.url.startsWith('data:')) {
+                                totalSizeBefore += wallpaper.url.length;
+                                wallpaper.url = await this.saveAssetBlob(wallpaper.url, 'wallpaper');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 9. 转换自定义图标
+                    if (data.customIcons) {
+                        console.log('📝 处理自定义图标...');
+                        for (const key in data.customIcons) {
+                            const icon = data.customIcons[key];
+                            if (icon && icon.url && icon.url.startsWith('data:')) {
+                                totalSizeBefore += icon.url.length;
+                                icon.url = await this.saveAssetBlob(icon.url, 'icon');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 10. 转换NPC头像
+                    if (data.npcLibrary && Array.isArray(data.npcLibrary)) {
+                        console.log(`📝 处理 ${data.npcLibrary.length} 个NPC头像...`);
+                        for (const npc of data.npcLibrary) {
+                            if (npc.avatar && npc.avatar.startsWith('data:')) {
+                                totalSizeBefore += npc.avatar.length;
+                                npc.avatar = await this.saveAssetBlob(npc.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 11. 转换头像框
+                    if (data.avatarFrames && Array.isArray(data.avatarFrames)) {
+                        console.log(`📝 处理 ${data.avatarFrames.length} 个头像框...`);
+                        for (const frame of data.avatarFrames) {
+                            if (frame.url && frame.url.startsWith('data:')) {
+                                totalSizeBefore += frame.url.length;
+                                frame.url = await this.saveAssetBlob(frame.url, 'icon');
+                                convertedCount++;
+                            }
+                        }
+                    }
+                    
+                    const totalSizeAfter = convertedCount * 50; // 每个引用约50字节
+                    const savedSize = totalSizeBefore - totalSizeAfter;
+                    const savedPercent = totalSizeBefore > 0 ? ((savedSize / totalSizeBefore) * 100).toFixed(1) : 0;
+                    
+                    console.log('✅ 转换完成！');
+                    console.log(`📊 统计信息：`);
+                    console.log(`  - 转换项目数: ${convertedCount}`);
+                    console.log(`  - 转换前大小: ${(totalSizeBefore / 1024 / 1024).toFixed(2)} MB`);
+                    console.log(`  - 转换后大小: ${(totalSizeAfter / 1024).toFixed(2)} KB`);
+                    console.log(`  - 节省空间: ${(savedSize / 1024 / 1024).toFixed(2)} MB (${savedPercent}%)`);
+                    
+                    return {
+                        convertedCount,
+                        totalSizeBefore,
+                        totalSizeAfter,
+                        savedSize,
+                        savedPercent
+                    };
+                } catch (error) {
+                    console.error('❌ 转换失败:', error);
+                    throw error;
+                }
+            }
+
+            /**
+             * 加载数据时自动恢复Blob引用为Base64
+             */
+            async loadDataWithAssets(data) {
+                try {
+                    if (!data) return null;
+
+                    // 恢复角色头像
+                    if (data.characters && Array.isArray(data.characters)) {
+                        for (const char of data.characters) {
+                            if (char.avatar && char.avatar.startsWith('asset:')) {
+                                char.avatar = await this.loadAssetBlob(char.avatar);
+                            }
+                            if (char.myAvatar && char.myAvatar.startsWith('asset:')) {
+                                char.myAvatar = await this.loadAssetBlob(char.myAvatar);
+                            }
+                            // 恢复角色头像库
+                            if (char.avatarLibrary && Array.isArray(char.avatarLibrary)) {
+                                for (const avatar of char.avatarLibrary) {
+                                    if (avatar.url && avatar.url.startsWith('asset:')) {
+                                        avatar.url = await this.loadAssetBlob(avatar.url);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 恢复群组头像
+                    if (data.groups && Array.isArray(data.groups)) {
+                        for (const group of data.groups) {
+                            if (group.avatar && group.avatar.startsWith('asset:')) {
+                                group.avatar = await this.loadAssetBlob(group.avatar);
+                            }
+                            if (group.members && Array.isArray(group.members)) {
+                                for (const member of group.members) {
+                                    if (member.avatar && member.avatar.startsWith('asset:')) {
+                                        member.avatar = await this.loadAssetBlob(member.avatar);
+                                    }
+                                }
+                            }
+                            if (group.me && group.me.avatar && group.me.avatar.startsWith('asset:')) {
+                                group.me.avatar = await this.loadAssetBlob(group.me.avatar);
+                            }
+                        }
+                    }
+
+                    // 恢复头像库
+                    if (data.avatarLibrary && Array.isArray(data.avatarLibrary)) {
+                        for (const avatar of data.avatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('asset:')) {
+                                avatar.url = await this.loadAssetBlob(avatar.url);
+                            }
+                        }
+                    }
+
+                    // 恢复我的头像库
+                    if (data.myAvatarLibrary && Array.isArray(data.myAvatarLibrary)) {
+                        for (const avatar of data.myAvatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('asset:')) {
+                                avatar.url = await this.loadAssetBlob(avatar.url);
+                            }
+                        }
+                    }
+
+                    // 恢复情头绑定
+                    if (data.avatarBindings && Array.isArray(data.avatarBindings)) {
+                        for (const binding of data.avatarBindings) {
+                            if (binding.charAvatarUrl && binding.charAvatarUrl.startsWith('asset:')) {
+                                binding.charAvatarUrl = await this.loadAssetBlob(binding.charAvatarUrl);
+                            }
+                            if (binding.myAvatarUrl && binding.myAvatarUrl.startsWith('asset:')) {
+                                binding.myAvatarUrl = await this.loadAssetBlob(binding.myAvatarUrl);
+                            }
+                        }
+                    }
+
+                    // 恢复表情包
+                    if (data.myStickers && Array.isArray(data.myStickers)) {
+                        for (const sticker of data.myStickers) {
+                            if (sticker.url && sticker.url.startsWith('asset:')) {
+                                sticker.url = await this.loadAssetBlob(sticker.url);
+                            }
+                        }
+                    }
+
+                    // 恢复壁纸
+                    if (data.wallpaperUrl && data.wallpaperUrl.startsWith('asset:')) {
+                        data.wallpaperUrl = await this.loadAssetBlob(data.wallpaperUrl);
+                    }
+                    if (data.lockWallpaperUrl && data.lockWallpaperUrl.startsWith('asset:')) {
+                        data.lockWallpaperUrl = await this.loadAssetBlob(data.lockWallpaperUrl);
+                    }
+
+                    // 恢复壁纸库
+                    if (data.wallpaperLibrary && Array.isArray(data.wallpaperLibrary)) {
+                        for (const wallpaper of data.wallpaperLibrary) {
+                            if (wallpaper.url && wallpaper.url.startsWith('asset:')) {
+                                wallpaper.url = await this.loadAssetBlob(wallpaper.url);
+                            }
+                        }
+                    }
+
+                    // 恢复自定义图标
+                    if (data.customIcons) {
+                        for (const key in data.customIcons) {
+                            const icon = data.customIcons[key];
+                            if (icon && icon.url && icon.url.startsWith('asset:')) {
+                                icon.url = await this.loadAssetBlob(icon.url);
+                            }
+                        }
+                    }
+
+                    // 恢复NPC头像
+                    if (data.npcLibrary && Array.isArray(data.npcLibrary)) {
+                        for (const npc of data.npcLibrary) {
+                            if (npc.avatar && npc.avatar.startsWith('asset:')) {
+                                npc.avatar = await this.loadAssetBlob(npc.avatar);
+                            }
+                        }
+                    }
+
+                    // 恢复头像框
+                    if (data.avatarFrames && Array.isArray(data.avatarFrames)) {
+                        for (const frame of data.avatarFrames) {
+                            if (frame.url && frame.url.startsWith('asset:')) {
+                                frame.url = await this.loadAssetBlob(frame.url);
+                            }
+                        }
+                    }
+
+                    return data;
+                } catch (error) {
+                    console.error('恢复资源数据失败:', error);
+                    return data;
+                }
+            }
+
+            /**
+             * 清理未使用的资源Blob
+             */
+            async cleanupUnusedAssets() {
+                try {
+                    console.log('🧹 开始清理未使用的资源Blob...');
+                    
+                    // 获取所有资源Blob
+                    const allAssets = await this.db.assetBlobs.toArray();
+                    const allAssetIds = new Set(allAssets.map(asset => asset.id));
+                    
+                    // 获取使用中的资源ID
+                    const usedAssetIds = new Set();
+                    const data = await this.getData('章鱼喷墨机');
+                    
+                    if (data) {
+                        // 收集所有asset:引用
+                        const collectAssetRefs = (obj) => {
+                            if (!obj) return;
+                            
+                            if (typeof obj === 'string' && obj.startsWith('asset:')) {
+                                usedAssetIds.add(obj.replace('asset:', ''));
+                            } else if (Array.isArray(obj)) {
+                                obj.forEach(item => collectAssetRefs(item));
+                            } else if (typeof obj === 'object') {
+                                Object.values(obj).forEach(value => collectAssetRefs(value));
+                            }
+                        };
+                        
+                        collectAssetRefs(data);
+                    }
+                    
+                    // 找出未使用的资源
+                    const unusedAssetIds = [...allAssetIds].filter(id => !usedAssetIds.has(id));
+                    
+                    // 删除未使用的资源
+                    if (unusedAssetIds.length > 0) {
+                        await this.db.assetBlobs.bulkDelete(unusedAssetIds);
+                        console.log(`✅ 已清理 ${unusedAssetIds.length} 个未使用的资源`);
+                    } else {
+                        console.log('✅ 没有需要清理的资源');
+                    }
+                    
+                    return {
+                        total: allAssetIds.size,
+                        used: usedAssetIds.size,
+                        cleaned: unusedAssetIds.length
+                    };
+                } catch (error) {
+                    console.error('清理资源失败:', error);
+                    throw error;
+                }
+            }
+
+            // ===== 通用资源Blob存储方法结束 =====
+
+            // ===== 原有的图片Blob存储方法（用于消息中的图片） =====
             
             // 将Base64图片数据存储为Blob
             async saveImageBlob(imageData) {
@@ -953,14 +1467,21 @@
             async saveData(key, data) {
                 const startTime = Date.now();
                 try {
+                    // 如果是主数据，自动转换所有Base64资源为Blob
+                    let processedData = data;
+                    if (key === '章鱼喷墨机') {
+                        processedData = JSON.parse(JSON.stringify(data)); // 深拷贝
+                        await this.convertAllBase64ToBlob(processedData);
+                    }
+                    
                     const item = {
                         key: key,
-                        value: JSON.stringify(data),
+                        value: JSON.stringify(processedData),
                         timestamp: Date.now()
                     };
 
                     await this.db.storage.put(item);
-                    this.updateCache(key, data);
+                    this.updateCache(key, data); // 缓存原始数据
                     console.log(`数据已保存: ${key}`);
                     return true;
                 } catch (error) {
@@ -981,7 +1502,13 @@
 
                     const item = await this.db.storage.get(key);
                     if (item) {
-                        const data = JSON.parse(item.value);
+                        let data = JSON.parse(item.value);
+                        
+                        // 如果是主数据，自动恢复Blob引用为Base64
+                        if (key === '章鱼喷墨机') {
+                            data = await this.loadDataWithAssets(data);
+                        }
+                        
                         this.updateCache(key, data);
                         return data;
                     } else {
@@ -1218,21 +1745,29 @@
             async getStorageInfo() {
                 const startTime = Date.now();
                 try {
-                    const [storageItems, messageChunks] = await Promise.all([
+                    const [storageItems, messageChunks, imageBlobs, assetBlobs] = await Promise.all([
                         this.db.storage.toArray(),
-                        this.db.messageChunks.toArray()
+                        this.db.messageChunks.toArray(),
+                        this.db.imageBlobs.toArray(),
+                        this.db.assetBlobs.toArray()
                     ]);
 
                     const storageSize = storageItems.reduce((sum, item) => sum + item.value.length, 0);
                     const messageSize = messageChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk.messages).length, 0);
-                    const totalSize = storageSize + messageSize;
+                    const imageBlobSize = imageBlobs.reduce((sum, blob) => sum + blob.data.size, 0);
+                    const assetBlobSize = assetBlobs.reduce((sum, blob) => sum + blob.data.size, 0);
+                    const totalSize = storageSize + messageSize + imageBlobSize + assetBlobSize;
 
                     const info = {
                         itemCount: storageItems.length,
                         chunkCount: messageChunks.length,
+                        imageBlobCount: imageBlobs.length,
+                        assetBlobCount: assetBlobs.length,
                         totalSize: totalSize,
                         storageSize: storageSize,
                         messageSize: messageSize,
+                        imageBlobSize: imageBlobSize,
+                        assetBlobSize: assetBlobSize,
                         cacheSize: this.cache.size,
                         items: storageItems.map(item => ({
                             key: item.key,
@@ -1257,14 +1792,14 @@
                 const monitor = document.getElementById('performance-monitor');
                 if (!monitor) return;
 
-                document.getElementById('storage-size').textContent = `${(info.totalSize / 1024).toFixed(1)} KB`;
+                document.getElementById('storage-size').textContent = `${(info.totalSize / 1024 / 1024).toFixed(2)} MB`;
                 document.getElementById('chunk-count').textContent = info.chunkCount.toString();
 
                 // 设置存储大小颜色指示器
                 const sizeElement = document.getElementById('storage-size');
-                const sizeKB = info.totalSize / 1024;
-                if (sizeKB < 1000) sizeElement.className = 'metric-value good';
-                else if (sizeKB < 5000) sizeElement.className = 'metric-value warning';
+                const sizeMB = info.totalSize / 1024 / 1024;
+                if (sizeMB < 10) sizeElement.className = 'metric-value good';
+                else if (sizeMB < 50) sizeElement.className = 'metric-value warning';
                 else sizeElement.className = 'metric-value error';
             }
 
