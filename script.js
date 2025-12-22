@@ -17764,16 +17764,40 @@ ${contextSummary}
                     cardOnScreen.querySelector('.transfer-status').textContent = action === 'received' ? '已收款' : '已退回';
                     cardOnScreen.style.cursor = 'default';
                 }
-                // 添加上下文消息，让AI知道用户的操作
-                let contextMessageContent = (action === 'received') ? `[${character.myName}接收${character.realName}的转账]` : `[${character.myName}退回${character.realName}的转账]`;
-                const contextMessage = {
-                    id: `msg_${Date.now()}`,
-                    role: 'user',
-                    content: contextMessageContent,
-                    parts: [{type: 'text', text: contextMessageContent}],
-                    timestamp: Date.now()
-                };
-                character.history.push(contextMessage);
+                
+                // 提取原转账消息的金额和备注
+                const transferMatch = message.content.match(/\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/);
+                if (transferMatch) {
+                    const amount = transferMatch[1];
+                    const remark = transferMatch[2];
+                    
+                    // 添加上下文消息，让AI知道用户的操作（不显示）
+                    let contextMessageContent = (action === 'received') ? `[${character.myName}接收${character.realName}的转账]` : `[${character.myName}退回${character.realName}的转账]`;
+                    const contextMessage = {
+                        id: `msg_${Date.now()}`,
+                        role: 'user',
+                        content: contextMessageContent,
+                        parts: [{type: 'text', text: contextMessageContent}],
+                        timestamp: Date.now()
+                    };
+                    character.history.push(contextMessage);
+                    
+                    // 添加可见的转账结果卡片消息
+                    const actionText = (action === 'received') ? '收取了' : '退回了';
+                    const visibleMessageContent = `[你${actionText}${character.realName}的转账：${amount}元；备注：${remark}]`;
+                    const visibleMessage = {
+                        id: `msg_${Date.now()}_visible`,
+                        role: 'user',
+                        content: visibleMessageContent,
+                        parts: [{type: 'text', text: visibleMessageContent}],
+                        timestamp: Date.now()
+                    };
+                    character.history.push(visibleMessage);
+                    
+                    // 立即显示新的转账结果卡片
+                    addMessageBubble(visibleMessage);
+                }
+                
                 await saveData();
                 renderChatList();
             }
