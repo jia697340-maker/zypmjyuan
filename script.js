@@ -477,7 +477,7 @@
         let selectedMessageIds = new Set();
         let activeMessageId = null;
         let currentReplyContext = null;
-        const MESSAGES_PER_PAGE = 50;
+        const MESSAGES_PER_PAGE = 20; // 【性能优化】从50减少到20，避免一次性渲染过多消息导致闪退
         let waimaiTimers = {}; // 用于存储外卖倒计时
         let simulationIntervalId = null; // 后台活动定时器ID
         
@@ -2366,8 +2366,8 @@
                 const charId = key.replace('character_', '');
                 const charData = await dataStorage.getData(key);
                 if (charData) {
-                    // 按需加载消息历史
-                    charData.history = await dataStorage.getChatMessages(charId, 'private');
+                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
+                    charData.history = await dataStorage.getChatMessages(charId, 'private', 10);
 
                     // 设置默认值
                     if (charData.isPinned === undefined) charData.isPinned = false;
@@ -2386,8 +2386,8 @@
                 const groupId = key.replace('group_', '');
                 const groupData = await dataStorage.getData(key);
                 if (groupData) {
-                    // 按需加载消息历史
-                    groupData.history = await dataStorage.getChatMessages(groupId, 'group');
+                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
+                    groupData.history = await dataStorage.getChatMessages(groupId, 'group', 10);
 
                     // 设置默认值
                     if (groupData.isPinned === undefined) groupData.isPinned = false;
@@ -3476,10 +3476,16 @@
 
                 // 如果有消息要发送
                 if (messagesToSend.length > 0) {
-                    // 一次性保存所有消息
-                    const existingMessages = await dataStorage.getChatMessages(characterId, 'private');
-                    existingMessages.push(...messagesToSend);
-                    await dataStorage.saveChatMessages(characterId, 'private', existingMessages);
+                    // 【性能优化】如果当前聊天室已打开且已加载完整历史，直接操作内存
+                    if (currentChatId === characterId && currentChatType === 'private' && character._fullHistoryLoaded) {
+                        character.history.push(...messagesToSend);
+                        await dataStorage.saveChatMessages(characterId, 'private', character.history);
+                    } else {
+                        // 否则使用增量保存，避免加载完整历史
+                        const existingMessages = await dataStorage.getChatMessages(characterId, 'private');
+                        existingMessages.push(...messagesToSend);
+                        await dataStorage.saveChatMessages(characterId, 'private', existingMessages);
+                    }
 
                     // 更新未读计数
                     character.unreadCount = (character.unreadCount || 0) + messagesToSend.length;
@@ -3784,10 +3790,13 @@ ${npcListInfo}
                     type: 'system_notification'
                 };
 
-                await dataStorage.saveChatMessages(groupId, 'group', [systemMessage]);
-
-                // 让CHAR和NPC主动发言
-                await triggerGroupInitialMessages(groupId, character, selectedNPCs, decision.reason, includeUser);
+                // 【性能优化】先获取现有消息，追加系统消息，然后调用群组初始化
+                // 群组初始化函数会继续追加并一次性保存所有消息
+                const existingMessages = await dataStorage.getChatMessages(groupId, 'group');
+                existingMessages.push(systemMessage);
+                
+                // 让CHAR和NPC主动发言（会在内部追加消息并保存）
+                await triggerGroupInitialMessages(groupId, character, selectedNPCs, decision.reason, includeUser, existingMessages);
 
                 // 更新未读计数
                 newGroup.unreadCount = selectedNPCs.length + 1; // CHAR + 每个NPC至少一条消息
@@ -3811,7 +3820,7 @@ ${npcListInfo}
         /**
          * 触发群聊初始消息（CHAR和NPC主动发言）
          */
-        async function triggerGroupInitialMessages(groupId, character, npcs, reason, includeUser) {
+        async function triggerGroupInitialMessages(groupId, character, npcs, reason, includeUser, existingMessages = null) {
             const apiUrl = db.apiSettings?.url;
             const apiKey = db.apiSettings?.key;
             const model = db.apiSettings?.model;
@@ -3822,6 +3831,9 @@ ${npcListInfo}
                 const characterName = character.remarkName || character.realName;
                 const userNickname = character.myName || '用户';
                 const npcNames = npcs.map(n => n.name).join('、');
+
+                // 【性能优化】使用传入的消息数组，如果没有则获取
+                let allMessages = existingMessages || await dataStorage.getChatMessages(groupId, 'group');
 
                 // 1. CHAR先发言
                 const membersInfo = npcs.length > 0 
@@ -3849,7 +3861,7 @@ ${npcListInfo}
                 const charResponse = await callAIAPI(apiUrl, apiKey, model, charPrompt);
                 const charMessages = charResponse.split('\n').filter(m => m.trim()).slice(0, 3);
 
-                // 保存CHAR的消息
+                // 保存CHAR的消息到内存数组
                 const charMessageObjects = charMessages.map((content, index) => ({
                     id: `msg_${Date.now()}_${index}`,
                     role: 'assistant',
@@ -3861,16 +3873,14 @@ ${npcListInfo}
                         avatar: character.avatar
                     }
                 }));
-
-                await dataStorage.saveChatMessages(groupId, 'group', charMessageObjects);
+                allMessages.push(...charMessageObjects);
 
                 // 2. 让每个NPC依次发言
                 for (let i = 0; i < npcs.length; i++) {
                     const npc = npcs[i];
                     
-                    // 获取之前的消息作为上下文
-                    const previousMessages = await dataStorage.getChatMessages(groupId, 'group', 20);
-                    const contextSummary = previousMessages.slice(-5).map(m => 
+                    // 使用内存中的消息作为上下文
+                    const contextSummary = allMessages.slice(-5).map(m => 
                         `${m.sender?.name || '系统'}: ${m.content}`
                     ).join('\n');
 
@@ -3893,7 +3903,7 @@ ${contextSummary}
                     const npcResponse = await callAIAPI(apiUrl, apiKey, model, npcPrompt);
                     const npcMessages = npcResponse.split('\n').filter(m => m.trim()).slice(0, 2);
 
-                    // 保存NPC的消息
+                    // 保存NPC的消息到内存数组
                     const npcMessageObjects = npcMessages.map((content, index) => ({
                         id: `msg_${Date.now()}_${i}_${index}`,
                         role: 'assistant',
@@ -3905,12 +3915,14 @@ ${contextSummary}
                             avatar: npc.avatar || 'https://i.postimg.cc/fTLCngk1/image.jpg'
                         }
                     }));
-
-                    await dataStorage.saveChatMessages(groupId, 'group', npcMessageObjects);
+                    allMessages.push(...npcMessageObjects);
 
                     // 延迟一下，让消息看起来更自然
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
+
+                // 【性能优化】一次性保存所有消息
+                await dataStorage.saveChatMessages(groupId, 'group', allMessages);
 
                 console.log(`群聊初始消息生成完成`);
 
@@ -11400,134 +11412,144 @@ ${contextSummary}
         }
 
         function renderChatList() {
-            chatListContainer.innerHTML = '';
-            // 过滤掉NPC角色，只显示普通角色和群聊
-            const normalCharacters = db.characters.filter(c => !c.isNPC);
-            const allChats = [...normalCharacters.map(c => ({...c, type: 'private'})), ...db.groups.map(g => ({...g, type: 'group'}))];
-            noChatsPlaceholder.style.display = (normalCharacters.length + db.groups.length) === 0 ? 'block' : 'none';
-            const sortedChats = allChats.sort((a, b) => {
-                if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-                const lastMsgTimeA = a.history && a.history.length > 0 ? a.history[a.history.length - 1].timestamp : 0;
-                const lastMsgTimeB = b.history && b.history.length > 0 ? b.history[b.history.length - 1].timestamp : 0;
-                return lastMsgTimeB - lastMsgTimeA;
-            });
-            sortedChats.forEach(chat => {
-                let lastMessageText = '开始聊天吧...';
+            // 【性能优化】使用 requestAnimationFrame 批量更新DOM
+            requestAnimationFrame(() => {
+                chatListContainer.innerHTML = '';
+                // 过滤掉NPC角色，只显示普通角色和群聊
+                const normalCharacters = db.characters.filter(c => !c.isNPC);
+                const allChats = [...normalCharacters.map(c => ({...c, type: 'private'})), ...db.groups.map(g => ({...g, type: 'group'}))];
+                noChatsPlaceholder.style.display = (normalCharacters.length + db.groups.length) === 0 ? 'block' : 'none';
+                const sortedChats = allChats.sort((a, b) => {
+                    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+                    const lastMsgTimeA = a.history && a.history.length > 0 ? a.history[a.history.length - 1].timestamp : 0;
+                    const lastMsgTimeB = b.history && b.history.length > 0 ? b.history[b.history.length - 1].timestamp : 0;
+                    return lastMsgTimeB - lastMsgTimeA;
+                });
                 
-                // 【全新】检查拉黑状态并显示相应的提示
-                if (chat.type === 'private' && chat.relationship) {
-                    if (chat.relationship.status === 'blocked_by_user') {
-                        lastMessageText = '<span style="color: #ff3b30;">[你已拉黑对方]</span>';
-                    } else if (chat.relationship.status === 'blocked_by_ai') {
-                        lastMessageText = '<span style="color: #dc3545;">[你已被对方拉黑]</span>';
-                    } else if (chat.relationship.status === 'pending_user_approval') {
-                        lastMessageText = '<span style="color: #007bff;">[好友申请]</span>';
-                    } else if (chat.relationship.status === 'pending_ai_approval') {
-                        lastMessageText = '<span style="color: #6c757d;">[等待对方通过]</span>';
+                // 【性能优化】使用 DocumentFragment 批量插入DOM
+                const fragment = document.createDocumentFragment();
+                
+                sortedChats.forEach(chat => {
+                    let lastMessageText = '开始聊天吧...';
+                    
+                    // 【全新】检查拉黑状态并显示相应的提示
+                    if (chat.type === 'private' && chat.relationship) {
+                        if (chat.relationship.status === 'blocked_by_user') {
+                            lastMessageText = '<span style="color: #ff3b30;">[你已拉黑对方]</span>';
+                        } else if (chat.relationship.status === 'blocked_by_ai') {
+                            lastMessageText = '<span style="color: #dc3545;">[你已被对方拉黑]</span>';
+                        } else if (chat.relationship.status === 'pending_user_approval') {
+                            lastMessageText = '<span style="color: #007bff;">[好友申请]</span>';
+                        } else if (chat.relationship.status === 'pending_ai_approval') {
+                            lastMessageText = '<span style="color: #6c757d;">[等待对方通过]</span>';
+                        }
                     }
-                }
-                
-                // 如果不是拉黑状态，显示正常的最后消息
-                if (chat.history && chat.history.length > 0 && (!chat.relationship || chat.relationship.status === 'friend')) {
-                    const invisibleRegex = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[系统提示：.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/;
-                    const visibleHistory = chat.history.filter(msg => !invisibleRegex.test(msg.content));
-                    if (visibleHistory.length > 0) {
-                        const lastMsg = visibleHistory[visibleHistory.length - 1];
-                        
-                        // 检查是否有人@了USER（仅群聊）
-                        let hasMentionedUser = false;
-                        if (chat.type === 'group' && lastMsg.mentions && lastMsg.senderId !== 'user_me') {
-                            // 检查是否@了全员或@了USER
-                            if (lastMsg.mentionedAll) {
-                                hasMentionedUser = true;
+                    
+                    // 如果不是拉黑状态，显示正常的最后消息
+                    if (chat.history && chat.history.length > 0 && (!chat.relationship || chat.relationship.status === 'friend')) {
+                        const invisibleRegex = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[系统提示：.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/;
+                        const visibleHistory = chat.history.filter(msg => !invisibleRegex.test(msg.content));
+                        if (visibleHistory.length > 0) {
+                            const lastMsg = visibleHistory[visibleHistory.length - 1];
+                            
+                            // 检查是否有人@了USER（仅群聊）
+                            let hasMentionedUser = false;
+                            if (chat.type === 'group' && lastMsg.mentions && lastMsg.senderId !== 'user_me') {
+                                // 检查是否@了全员或@了USER
+                                if (lastMsg.mentionedAll) {
+                                    hasMentionedUser = true;
+                                }
+                            }
+                            
+                            // 如果被@了，显示特殊提示
+                            if (hasMentionedUser) {
+                                lastMessageText = '<span style="color: #ff3b30; font-weight: 600;">[有人艾特你]</span>';
+                            } else {
+                            const urlRegex = /^(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)|data:image\/[a-z]+;base64,)/i;
+                            const imageRecogRegex = /\[.*?发来了一张图片：\]/
+                            const voiceRegex = /\[.*?的语音：.*?\]/;
+                            const photoVideoRegex = /\[.*?发来的照片\/视频：.*?\]/;
+                            const transferRegex = /\[.*?的转账：.*?元.*?\]|\[.*?给你转账：.*?元.*?\]|\[.*?向.*?转账：.*?元.*?\]|\[你收取了.*?的转账：.*?元.*?\]|\[你退回了.*?的转账：.*?元.*?\]/;
+                            const stickerRegex = /\[.*?的表情包：.*?\]|\[.*?发送的表情包：.*?\]/;
+                            const giftRegex = /\[.*?送来的礼物：.*?\]|\[.*?向.*?送来了礼物：.*?\]/;
+
+
+
+                            if (giftRegex.test(lastMsg.content)) {
+                                lastMessageText = '[礼物]';
+                            } else if (stickerRegex.test(lastMsg.content)) {
+                                lastMessageText = '[表情包]';
+                            } else if (voiceRegex.test(lastMsg.content)) {
+                                lastMessageText = '[语音]';
+                            } else if (photoVideoRegex.test(lastMsg.content)) {
+                                lastMessageText = '[照片/视频]';
+                            } else if (transferRegex.test(lastMsg.content)) {
+                                lastMessageText = '[转账]';
+                            } else if (imageRecogRegex.test(lastMsg.content) || (lastMsg.parts && lastMsg.parts.some(p => p.type === 'image'))) {
+                                lastMessageText = '[图片]';
+                            }else if ((lastMsg.parts && lastMsg.parts.some(p => p.type === 'html'))) {
+                                lastMessageText = '[互动]';
+                            } else {
+                                const textMatch = lastMsg.content.match(/\[.*?的消息：([\s\S]+)\]/);
+                                let text = textMatch ? textMatch[1].trim() : lastMsg.content.trim();
+                                // 如果是文本消息，应用Markdown格式化（但移除HTML标签用于预览）
+                                if (!urlRegex.test(text)) {
+                                    text = formatMarkdown(text);
+                                    // 移除HTML标签，只保留纯文本用于预览
+                                    text = text.replace(/<[^>]+>/g, '');
+                                }
+                                lastMessageText = urlRegex.test(text) ? '[图片]' : text;
+                            }
+                            }
+                        } else {
+                            const lastEverMsg = chat.history[chat.history.length - 1];
+                            const inviteRegex = /\[(.*?)邀请(.*?)加入了群聊\]/;
+                            const renameRegex = /\[.*?修改群名为：.*?\]/;
+                            const timeSkipRegex = /\[system-display:([\s\S]+?)\]/;
+                            const timeSkipMatch = lastEverMsg.content.match(timeSkipRegex);
+
+                            if (timeSkipMatch) {
+                                lastMessageText = timeSkipMatch[1];
+                            } else if (inviteRegex.test(lastEverMsg.content)) {
+                                lastMessageText = '新成员加入了群聊';
+                            } else if (renameRegex.test(lastEverMsg.content)) {
+                                lastMessageText = '群聊名称已修改';
                             }
                         }
-                        
-                        // 如果被@了，显示特殊提示
-                        if (hasMentionedUser) {
-                            lastMessageText = '<span style="color: #ff3b30; font-weight: 600;">[有人艾特你]</span>';
-                        } else {
-                        const urlRegex = /^(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)|data:image\/[a-z]+;base64,)/i;
-                        const imageRecogRegex = /\[.*?发来了一张图片：\]/
-                        const voiceRegex = /\[.*?的语音：.*?\]/;
-                        const photoVideoRegex = /\[.*?发来的照片\/视频：.*?\]/;
-                        const transferRegex = /\[.*?的转账：.*?元.*?\]|\[.*?给你转账：.*?元.*?\]|\[.*?向.*?转账：.*?元.*?\]|\[你收取了.*?的转账：.*?元.*?\]|\[你退回了.*?的转账：.*?元.*?\]/;
-                        const stickerRegex = /\[.*?的表情包：.*?\]|\[.*?发送的表情包：.*?\]/;
-                        const giftRegex = /\[.*?送来的礼物：.*?\]|\[.*?向.*?送来了礼物：.*?\]/;
-
-
-
-                        if (giftRegex.test(lastMsg.content)) {
-                            lastMessageText = '[礼物]';
-                        } else if (stickerRegex.test(lastMsg.content)) {
-                            lastMessageText = '[表情包]';
-                        } else if (voiceRegex.test(lastMsg.content)) {
-                            lastMessageText = '[语音]';
-                        } else if (photoVideoRegex.test(lastMsg.content)) {
-                            lastMessageText = '[照片/视频]';
-                        } else if (transferRegex.test(lastMsg.content)) {
-                            lastMessageText = '[转账]';
-                        } else if (imageRecogRegex.test(lastMsg.content) || (lastMsg.parts && lastMsg.parts.some(p => p.type === 'image'))) {
-                            lastMessageText = '[图片]';
-                        }else if ((lastMsg.parts && lastMsg.parts.some(p => p.type === 'html'))) {
-                            lastMessageText = '[互动]';
-                        } else {
-                            const textMatch = lastMsg.content.match(/\[.*?的消息：([\s\S]+)\]/);
-                            let text = textMatch ? textMatch[1].trim() : lastMsg.content.trim();
-                            // 如果是文本消息，应用Markdown格式化（但移除HTML标签用于预览）
-                            if (!urlRegex.test(text)) {
-                                text = formatMarkdown(text);
-                                // 移除HTML标签，只保留纯文本用于预览
-                                text = text.replace(/<[^>]+>/g, '');
-                            }
-                            lastMessageText = urlRegex.test(text) ? '[图片]' : text;
-                        }
-                        }
+                    }
+                    const li = document.createElement('li');
+                    li.className = 'list-item chat-item';
+                    if (chat.isPinned) li.classList.add('pinned');
+                    li.dataset.id = chat.id;
+                    li.dataset.type = chat.type;
+                    const avatarClass = chat.type === 'group' ? 'group-avatar' : '';
+                    const itemName = chat.type === 'private' ? chat.remarkName : chat.name;
+                    const pinBadgeHTML = chat.isPinned ? '<span class="pin-badge">置顶</span>' : '';
+                    li.innerHTML = `
+                    <img src="${chat.avatar}" alt="${itemName}" class="chat-avatar ${avatarClass}">
+                    <div class="item-details">
+                        <div class="item-details-row"><div class="item-name">${itemName}</div></div>
+                        <div class="item-preview-wrapper"><div class="item-preview">${lastMessageText}</div>${pinBadgeHTML}</div>
+                    </div>
+                    <div class="unread-count-wrapper">
+                        <span class="unread-count" style="display: none;">0</span>
+                    </div>`;
+                    
+                    // 控制未读消息小红点的显示
+                    const unreadCount = chat.unreadCount || 0;
+                    const unreadEl = li.querySelector('.unread-count');
+                    if (unreadCount > 0) {
+                        unreadEl.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                        unreadEl.style.display = 'inline-flex';
                     } else {
-                        const lastEverMsg = chat.history[chat.history.length - 1];
-                        const inviteRegex = /\[(.*?)邀请(.*?)加入了群聊\]/;
-                        const renameRegex = /\[.*?修改群名为：.*?\]/;
-                        const timeSkipRegex = /\[system-display:([\s\S]+?)\]/;
-                        const timeSkipMatch = lastEverMsg.content.match(timeSkipRegex);
-
-                        if (timeSkipMatch) {
-                            lastMessageText = timeSkipMatch[1];
-                        } else if (inviteRegex.test(lastEverMsg.content)) {
-                            lastMessageText = '新成员加入了群聊';
-                        } else if (renameRegex.test(lastEverMsg.content)) {
-                            lastMessageText = '群聊名称已修改';
-                        }
+                        unreadEl.style.display = 'none';
                     }
-                }
-                const li = document.createElement('li');
-                li.className = 'list-item chat-item';
-                if (chat.isPinned) li.classList.add('pinned');
-                li.dataset.id = chat.id;
-                li.dataset.type = chat.type;
-                const avatarClass = chat.type === 'group' ? 'group-avatar' : '';
-                const itemName = chat.type === 'private' ? chat.remarkName : chat.name;
-                const pinBadgeHTML = chat.isPinned ? '<span class="pin-badge">置顶</span>' : '';
-                li.innerHTML = `
-                <img src="${chat.avatar}" alt="${itemName}" class="chat-avatar ${avatarClass}">
-                <div class="item-details">
-                    <div class="item-details-row"><div class="item-name">${itemName}</div></div>
-                    <div class="item-preview-wrapper"><div class="item-preview">${lastMessageText}</div>${pinBadgeHTML}</div>
-                </div>
-                <div class="unread-count-wrapper">
-                    <span class="unread-count" style="display: none;">0</span>
-                </div>`;
+                    
+                    fragment.appendChild(li);
+                });
                 
-                // 控制未读消息小红点的显示
-                const unreadCount = chat.unreadCount || 0;
-                const unreadEl = li.querySelector('.unread-count');
-                if (unreadCount > 0) {
-                    unreadEl.textContent = unreadCount > 99 ? '99+' : unreadCount;
-                    unreadEl.style.display = 'inline-flex';
-                } else {
-                    unreadEl.style.display = 'none';
-                }
-                
-                chatListContainer.appendChild(li);
+                // 【性能优化】一次性插入所有元素
+                chatListContainer.appendChild(fragment);
             });
         }
 
@@ -12537,6 +12559,13 @@ ${contextSummary}
             const chat = (type === 'private') ? db.characters.find(c => c.id === chatId) : db.groups.find(g => g.id === chatId);
             if (!chat) return;
             
+            // 【性能优化】标记是否已加载完整历史，避免重复加载
+            if (!chat._fullHistoryLoaded) {
+                const fullHistory = await dataStorage.getChatMessages(chatId, type);
+                chat.history = fullHistory;
+                chat._fullHistoryLoaded = true;
+            }
+            
             // 如果是群聊，初始化用户权限（兼容旧数据）
             if (type === 'group') {
                 // 旁观者模式下，chat.me 为 null，跳过权限初始化
@@ -12689,13 +12718,21 @@ ${contextSummary}
         function renderMessages(isLoadMore = false, forceScrollToBottom = false) {
             const chat = (currentChatType === 'private') ? db.characters.find(c => c.id === currentChatId) : db.groups.find(g => g.id === currentChatId);
             if (!chat || !chat.history) return;
-            const oldScrollHeight = messageArea.scrollHeight;
-            const totalMessages = chat.history.length;
-            const end = totalMessages - (currentPage - 1) * MESSAGES_PER_PAGE;
-            const start = Math.max(0, end - MESSAGES_PER_PAGE);
-            const messagesToRender = chat.history.slice(start, end);
-            if (!isLoadMore) messageArea.innerHTML = '';
-            const fragment = document.createDocumentFragment();
+            
+            // 【性能优化】使用 requestAnimationFrame 批量更新DOM
+            requestAnimationFrame(() => {
+                const oldScrollHeight = messageArea.scrollHeight;
+                const totalMessages = chat.history.length;
+                const end = totalMessages - (currentPage - 1) * MESSAGES_PER_PAGE;
+                const start = Math.max(0, end - MESSAGES_PER_PAGE);
+                const messagesToRender = chat.history.slice(start, end);
+                
+                if (!isLoadMore) {
+                    // 【关键修复】清空时使用 textContent 而不是 innerHTML，性能更好
+                    messageArea.textContent = '';
+                }
+                
+                const fragment = document.createDocumentFragment();
             
             // 添加时间间隔显示逻辑
             let lastTimestamp = 0;
@@ -12706,44 +12743,51 @@ ${contextSummary}
                     lastTimestamp = prevMsg.timestamp;
                 }
             }
-            
-            messagesToRender.forEach(msg => {
-                // 判断时间间隔，超过5分钟显示时间戳
-                if (lastTimestamp > 0 && msg.timestamp && (msg.timestamp - lastTimestamp > 300000)) {
-                    const timestampEl = createSystemTimestampElement(msg.timestamp);
-                    fragment.appendChild(timestampEl);
+                
+                // 【性能优化】批量处理消息，减少DOM操作
+                messagesToRender.forEach(msg => {
+                    // 判断时间间隔，超过5分钟显示时间戳
+                    if (lastTimestamp > 0 && msg.timestamp && (msg.timestamp - lastTimestamp > 300000)) {
+                        const timestampEl = createSystemTimestampElement(msg.timestamp);
+                        fragment.appendChild(timestampEl);
+                    }
+                    
+                    const bubble = createMessageBubbleElement(msg);
+                    if (bubble) {
+                        fragment.appendChild(bubble);
+                        // 更新lastTimestamp，用于下一条消息的判断
+                        if (msg.timestamp) {
+                            lastTimestamp = msg.timestamp;
+                        }
+                    }
+                });
+                
+                const existingLoadBtn = document.getElementById('load-more-btn');
+                if (existingLoadBtn) existingLoadBtn.remove();
+                
+                // 【关键修复】一次性插入所有消息，避免多次重排
+                messageArea.prepend(fragment);
+                
+                if (totalMessages > currentPage * MESSAGES_PER_PAGE) {
+                    const loadMoreButton = document.createElement('button');
+                    loadMoreButton.id = 'load-more-btn';
+                    loadMoreButton.className = 'load-more-btn';
+                    loadMoreButton.textContent = '加载更早的消息';
+                    messageArea.prepend(loadMoreButton);
                 }
                 
-                const bubble = createMessageBubbleElement(msg);
-                if (bubble) {
-                    fragment.appendChild(bubble);
-                    // 更新lastTimestamp，用于下一条消息的判断
-                    if (msg.timestamp) {
-                        lastTimestamp = msg.timestamp;
-                    }
+                if (forceScrollToBottom) {
+                    // 【性能优化】使用 requestAnimationFrame 确保DOM更新完成后再滚动
+                    requestAnimationFrame(() => {
+                        messageArea.scrollTop = messageArea.scrollHeight;
+                    });
+                } else if (isLoadMore) {
+                    messageArea.scrollTop = messageArea.scrollHeight - oldScrollHeight;
                 }
+                
+                // Update token display when rendering messages
+                updateTokenDisplay();
             });
-            
-            const existingLoadBtn = document.getElementById('load-more-btn');
-            if (existingLoadBtn) existingLoadBtn.remove();
-            messageArea.prepend(fragment);
-            if (totalMessages > currentPage * MESSAGES_PER_PAGE) {
-                const loadMoreButton = document.createElement('button');
-                loadMoreButton.id = 'load-more-btn';
-                loadMoreButton.className = 'load-more-btn';
-                loadMoreButton.textContent = '加载更早的消息';
-                messageArea.prepend(loadMoreButton);
-            }
-            if (forceScrollToBottom) {
-                setTimeout(() => {
-                    messageArea.scrollTop = messageArea.scrollHeight;
-                }, 0);
-            } else if (isLoadMore) {
-                messageArea.scrollTop = messageArea.scrollHeight - oldScrollHeight;
-            }
-            
-            // Update token display when rendering messages
-            updateTokenDisplay();
         }
 
         function loadMoreMessages() {
@@ -12942,7 +12986,7 @@ ${contextSummary}
                     stickerSrc = `https://i.postimg.cc/${finalPath}`;
                 }
 
-                bubbleElement.innerHTML = `<img src="${stickerSrc}" alt="表情包">`;
+                bubbleElement.innerHTML = `<img src="${stickerSrc}" alt="表情包" loading="lazy">`;
             } else if (privateGiftMatch || groupGiftMatch) {
                 const match = privateGiftMatch || groupGiftMatch;
                 bubbleElement = document.createElement('div');
@@ -12959,7 +13003,7 @@ ${contextSummary}
                 } else {
                     giftText = isSent ? '您有一份礼物～' : '您有一份礼物～';
                 }
-                bubbleElement.innerHTML = `<img src="https://i.postimg.cc/rp0Yg31K/chan-75.png" alt="gift" class="gift-card-icon"><div class="gift-card-text">${giftText}</div><div class="gift-card-received-stamp">已查收</div>`;
+                bubbleElement.innerHTML = `<img src="https://i.postimg.cc/rp0Yg31K/chan-75.png" alt="gift" class="gift-card-icon" loading="lazy"><div class="gift-card-text">${giftText}</div><div class="gift-card-received-stamp">已查收</div>`;
 
                 const description = groupGiftMatch ? groupGiftMatch[3].trim() : match[1].trim();
                 const descriptionDiv = document.createElement('div');
@@ -13277,7 +13321,7 @@ ${contextSummary}
             } else if (imageRecogMatch || urlRegex.test(content)) {
                 bubbleElement = document.createElement('div');
                 bubbleElement.className = 'image-bubble';
-                bubbleElement.innerHTML = `<img src="${content}" alt="图片消息">`;
+                bubbleElement.innerHTML = `<img src="${content}" alt="图片消息" loading="lazy">`;
             } else if (textMatch) {
                 bubbleElement = document.createElement('div');
                 bubbleElement.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
@@ -17278,7 +17322,7 @@ ${contextSummary}
             filteredStickers.forEach(sticker => {
                 const item = document.createElement('div');
                 item.className = 'sticker-item';
-                item.innerHTML = `<img src="${sticker.data}" alt="${sticker.name}"><span>${sticker.name}</span>`;
+                item.innerHTML = `<img src="${sticker.data}" alt="${sticker.name}" loading="lazy"><span>${sticker.name}</span>`;
                 item.addEventListener('click', () => sendSticker(sticker));
                 item.addEventListener('mousedown', (e) => {
                     if (e.button !== 0) return;
