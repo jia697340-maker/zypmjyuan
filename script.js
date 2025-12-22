@@ -162,14 +162,21 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
+        // 图片压缩函数 - 优化版，防止内存溢出
         async function compressImage(file, options = {}) {
             const {
-                quality = 0.8, maxWidth = 800, maxHeight = 800
+                quality = 0.7,  // 降低默认质量
+                maxWidth = 600,  // 降低最大宽度
+                maxHeight = 600,  // 降低最大高度
+                maxSizeKB = 200  // 新增：最大文件大小限制（KB）
             } = options;
 
-            // --- 新增：处理GIF动图 ---
-            // 如果文件是GIF，则不经过canvas压缩，直接返回原始文件数据以保留动画
+            // 如果文件是GIF动图
             if (file.type === 'image/gif') {
+                // 检查GIF大小，如果太大则拒绝
+                if (file.size > maxSizeKB * 1024 * 2) {  // GIF允许2倍大小
+                    throw new Error(`GIF文件过大（${(file.size / 1024).toFixed(0)}KB），请选择小于${maxSizeKB * 2}KB的文件`);
+                }
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.readAsDataURL(file);
@@ -178,7 +185,7 @@
                 });
             }
 
-            // --- 对其他静态图片（如PNG, JPG）进行压缩 ---
+            // 对其他静态图片进行压缩
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
@@ -191,6 +198,7 @@
                         let width = img.width;
                         let height = img.height;
 
+                        // 计算缩放比例
                         if (width > height) {
                             if (width > maxWidth) {
                                 height = Math.round(height * (maxWidth / width));
@@ -208,18 +216,29 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
 
-                        // 对于有透明背景的PNG图片，先填充一个白色背景
-                        // 这样可以防止透明区域在转换成JPEG时变黑
+                        // PNG图片填充白色背景
                         if (file.type === 'image/png') {
-                            ctx.fillStyle = '#FFFFFF'; // 白色背景
+                            ctx.fillStyle = '#FFFFFF';
                             ctx.fillRect(0, 0, width, height);
                         }
 
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // --- 关键修正：将输出格式改为 'image/jpeg' ---
-                        // JPEG格式可以显著减小文件大小，避免浏览器处理超大Base64字符串时崩溃
-                        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                        // 转换为JPEG格式，多次尝试压缩直到满足大小要求
+                        let currentQuality = quality;
+                        let compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+                        
+                        // 如果压缩后仍然太大，继续降低质量
+                        while (compressedDataUrl.length > maxSizeKB * 1024 * 1.37 && currentQuality > 0.3) {
+                            currentQuality -= 0.1;
+                            compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+                        }
+                        
+                        // 最终检查
+                        if (compressedDataUrl.length > maxSizeKB * 1024 * 1.37) {
+                            console.warn(`图片压缩后仍然较大: ${(compressedDataUrl.length / 1024).toFixed(0)}KB`);
+                        }
+                        
                         resolve(compressedDataUrl);
                     };
                 };
@@ -1517,6 +1536,96 @@
         }
 
         const dataStorage = new OptimizedDataStorage();
+
+        // ===== 存储监控系统（只监控，不删除数据）=====
+        class StorageMonitor {
+            constructor(dataStorage) {
+                this.dataStorage = dataStorage;
+            }
+
+            // 计算当前存储大小
+            async calculateStorageSize() {
+                try {
+                    const estimate = await navigator.storage.estimate();
+                    const usage = estimate.usage || 0;
+                    const quota = estimate.quota || 0;
+                    
+                    console.log(`📊 存储使用: ${(usage / 1024 / 1024).toFixed(2)}MB / ${(quota / 1024 / 1024).toFixed(2)}MB (${(usage / quota * 100).toFixed(1)}%)`);
+                    
+                    return { usage, quota, percentage: usage / quota };
+                } catch (error) {
+                    console.warn('无法获取存储信息:', error);
+                    return { usage: 0, quota: 0, percentage: 0 };
+                }
+            }
+
+            // 统计各类数据的大小
+            async analyzeStorage() {
+                try {
+                    console.log('📊 开始分析存储使用情况...');
+                    
+                    // 统计图片Blob
+                    const allImages = await this.dataStorage.db.imageBlobs.toArray();
+                    let imageTotalSize = 0;
+                    allImages.forEach(img => {
+                        if (img.data && img.data.size) {
+                            imageTotalSize += img.data.size;
+                        }
+                    });
+                    
+                    // 统计消息数量
+                    const baseData = await this.dataStorage.getData('章鱼喷墨机');
+                    let totalMessages = 0;
+                    let totalCharacters = 0;
+                    let totalGroups = 0;
+                    
+                    if (baseData) {
+                        if (baseData.characters) {
+                            totalCharacters = baseData.characters.length;
+                            for (const char of baseData.characters) {
+                                const messages = await this.dataStorage.getChatMessages(char.id, 'private');
+                                totalMessages += messages.length;
+                            }
+                        }
+                        
+                        if (baseData.groups) {
+                            totalGroups = baseData.groups.length;
+                            for (const group of baseData.groups) {
+                                const messages = await this.dataStorage.getChatMessages(group.id, 'group');
+                                totalMessages += messages.length;
+                            }
+                        }
+                    }
+                    
+                    console.log('📊 存储分析结果:');
+                    console.log(`   - 图片数量: ${allImages.length} 张`);
+                    console.log(`   - 图片大小: ${(imageTotalSize / 1024 / 1024).toFixed(2)}MB`);
+                    console.log(`   - 角色数量: ${totalCharacters} 个`);
+                    console.log(`   - 群组数量: ${totalGroups} 个`);
+                    console.log(`   - 消息总数: ${totalMessages} 条`);
+                    
+                    return {
+                        imageCount: allImages.length,
+                        imageSize: imageTotalSize,
+                        characterCount: totalCharacters,
+                        groupCount: totalGroups,
+                        messageCount: totalMessages
+                    };
+                } catch (error) {
+                    console.error('分析存储时出错:', error);
+                    return null;
+                }
+            }
+        }
+
+        // 初始化存储监控（只监控，不自动清理）
+        const storageMonitor = new StorageMonitor(dataStorage);
+
+        // 启动时显示存储信息
+        setTimeout(() => {
+            storageMonitor.calculateStorageSize().catch(err => console.error('存储检查失败:', err));
+            storageMonitor.analyzeStorage().catch(err => console.error('存储分析失败:', err));
+        }, 3000);
 
         // 兼容性适配器 - 保持原有API接口
         const saveData = async (data) => {
@@ -8547,6 +8656,287 @@ ${contextSummary}
 
             // 页面加载时恢复Git设置
             loadGitSyncSettings();
+
+            // ========== 转换旧数据功能区域 ==========
+            
+            const convertOldDataSection = document.createElement('div');
+            convertOldDataSection.style.marginTop = '30px';
+            convertOldDataSection.style.padding = '20px';
+            convertOldDataSection.style.backgroundColor = '#fff3cd';
+            convertOldDataSection.style.borderRadius = '12px';
+            convertOldDataSection.style.border = '2px solid #ffc107';
+
+            const convertOldDataTitle = document.createElement('h3');
+            convertOldDataTitle.textContent = '转换旧数据存储方式';
+            convertOldDataTitle.style.fontSize = '18px';
+            convertOldDataTitle.style.color = '#ff6f00';
+            convertOldDataTitle.style.marginTop = '0';
+            convertOldDataTitle.style.marginBottom = '15px';
+            convertOldDataSection.appendChild(convertOldDataTitle);
+
+            const convertOldDataDesc = document.createElement('div');
+            convertOldDataDesc.innerHTML = `
+                <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>功能说明：</strong><br>
+                    • 将旧版本的 Base64 图片转换为高效的 Blob 存储<br>
+                    • 大幅减少数据库大小，防止闪退<br>
+                    • 兼容旧导出数据和旧版本存储<br>
+                    • 不会删除任何消息、角色或设置<br>
+                    <br>
+                    <strong style="color: #ff6f00;">⚠️ 适用场景：</strong><br>
+                    • 从旧版本升级后<br>
+                    • 导入了旧的备份数据<br>
+                    • 应用经常闪退或卡顿<br>
+                    • 存储空间占用过大<br>
+                    <br>
+                    <div id="old-data-stats" style="background: white; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                        <strong>正在检测旧数据...</strong>
+                    </div>
+                </div>
+            `;
+            convertOldDataSection.appendChild(convertOldDataDesc);
+
+            const convertOldDataBtn = document.createElement('button');
+            convertOldDataBtn.className = 'btn btn-primary';
+            convertOldDataBtn.innerHTML = '<span style="font-size: 16px;"></span> 开始转换旧数据';
+            convertOldDataBtn.style.width = '100%';
+            convertOldDataBtn.style.backgroundColor = '#ff9800';
+            convertOldDataBtn.style.color = 'white';
+            convertOldDataBtn.style.marginTop = '10px';
+            convertOldDataSection.appendChild(convertOldDataBtn);
+
+            tutorialContentArea.appendChild(convertOldDataSection);
+
+            // 检测旧数据
+            async function detectOldData() {
+                try {
+                    const data = await dataStorage.getData('章鱼喷墨机');
+                    let base64Count = 0;
+                    let base64Size = 0;
+                    const details = [];
+
+                    // 检测角色头像
+                    if (data && data.characters) {
+                        data.characters.forEach(char => {
+                            if (char.avatar && char.avatar.startsWith('data:')) {
+                                base64Count++;
+                                base64Size += char.avatar.length;
+                                details.push(`角色 "${char.remarkName}" 的头像`);
+                            }
+                            if (char.myAvatar && char.myAvatar.startsWith('data:')) {
+                                base64Count++;
+                                base64Size += char.myAvatar.length;
+                                details.push(`角色 "${char.remarkName}" 的我的头像`);
+                            }
+                        });
+                    }
+
+                    // 检测表情
+                    if (data && data.myStickers) {
+                        data.myStickers.forEach(sticker => {
+                            if (sticker.url && sticker.url.startsWith('data:')) {
+                                base64Count++;
+                                base64Size += sticker.url.length;
+                                details.push(`表情 "${sticker.name}"`);
+                            }
+                        });
+                    }
+
+                    // 检测头像库
+                    if (data && data.avatarLibrary) {
+                        data.avatarLibrary.forEach(avatar => {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                base64Count++;
+                                base64Size += avatar.url.length;
+                                details.push(`头像库 "${avatar.name}"`);
+                            }
+                        });
+                    }
+
+                    if (data && data.myAvatarLibrary) {
+                        data.myAvatarLibrary.forEach(avatar => {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                base64Count++;
+                                base64Size += avatar.url.length;
+                                details.push(`我的头像库 "${avatar.name}"`);
+                            }
+                        });
+                    }
+
+                    // 更新显示
+                    const statsDiv = document.getElementById('old-data-stats');
+                    if (base64Count === 0) {
+                        statsDiv.innerHTML = `
+                            <div style="color: #4caf50;">
+                                <strong>未检测到旧数据</strong><br>
+                                <span style="font-size: 13px;">您的数据已经是最新的存储格式，无需转换。</span>
+                            </div>
+                        `;
+                        convertOldDataBtn.disabled = true;
+                        convertOldDataBtn.style.opacity = '0.5';
+                        convertOldDataBtn.style.cursor = 'not-allowed';
+                    } else {
+                        statsDiv.innerHTML = `
+                            <div style="color: #ff6f00;">
+                                <strong>检测到旧数据</strong><br>
+                                <div style="margin-top: 8px; font-size: 13px;">
+                                    • Base64 图片数量: <strong>${base64Count}</strong> 个<br>
+                                    • 占用空间: <strong>${(base64Size / 1024 / 1024).toFixed(2)} MB</strong><br>
+                                    • 转换后预计释放: <strong>${(base64Size * 0.7 / 1024 / 1024).toFixed(2)} MB</strong>
+                                </div>
+                                <div style="margin-top: 10px; padding: 8px; background: #fff; border-radius: 4px; max-height: 150px; overflow-y: auto; font-size: 12px;">
+                                    <strong>包含以下项目：</strong><br>
+                                    ${details.slice(0, 10).map(d => `• ${d}`).join('<br>')}
+                                    ${details.length > 10 ? `<br>• ... 还有 ${details.length - 10} 项` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('检测旧数据失败:', error);
+                    document.getElementById('old-data-stats').innerHTML = `
+                        <div style="color: #f44336;">
+                            <strong>检测失败</strong><br>
+                            <span style="font-size: 13px;">${error.message}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // 页面加载时检测
+            detectOldData();
+
+            // 转换旧数据
+            let isConvertingOldData = false;
+            convertOldDataBtn.addEventListener('click', async () => {
+                if (isConvertingOldData) return;
+
+                const confirmed = confirm(
+                    '转换旧数据\n\n' +
+                    '此操作将：\n' +
+                    '✓ 将 Base64 图片转换为 Blob 存储\n' +
+                    '✓ 大幅减少数据库大小\n' +
+                    '✓ 提升应用性能\n' +
+                    '✓ 防止闪退\n\n' +
+                    '✓ 不会删除任何消息或角色\n' +
+                    '✓ 会自动备份数据\n\n' +
+                    '是否继续？'
+                );
+
+                if (!confirmed) return;
+
+                isConvertingOldData = true;
+                convertOldDataBtn.disabled = true;
+                convertOldDataBtn.innerHTML = '<span class="spinner"></span> 转换中...';
+
+                try {
+                    showToast('开始转换旧数据，请稍候...');
+
+                    // 1. 备份数据
+                    console.log('正在备份数据...');
+                    const data = await dataStorage.getData('章鱼喷墨机');
+                    const backup = JSON.stringify(data);
+                    localStorage.setItem('convert_backup_' + Date.now(), backup);
+                    console.log('备份完成');
+
+                    let convertedCount = 0;
+                    let totalSizeBefore = 0;
+
+                    // 2. 转换角色头像
+                    if (data.characters) {
+                        for (const char of data.characters) {
+                            // 转换角色头像
+                            if (char.avatar && char.avatar.startsWith('data:')) {
+                                totalSizeBefore += char.avatar.length;
+                                const blobRef = await dataStorage.saveImageBlob(char.avatar);
+                                char.avatar = blobRef;
+                                convertedCount++;
+                                console.log(`✓ 转换角色 "${char.remarkName}" 的头像`);
+                            }
+
+                            // 转换我的头像
+                            if (char.myAvatar && char.myAvatar.startsWith('data:')) {
+                                totalSizeBefore += char.myAvatar.length;
+                                const blobRef = await dataStorage.saveImageBlob(char.myAvatar);
+                                char.myAvatar = blobRef;
+                                convertedCount++;
+                                console.log(`✓ 转换角色 "${char.remarkName}" 的我的头像`);
+                            }
+                        }
+                    }
+
+                    // 3. 转换表情
+                    if (data.myStickers) {
+                        for (const sticker of data.myStickers) {
+                            if (sticker.url && sticker.url.startsWith('data:')) {
+                                totalSizeBefore += sticker.url.length;
+                                const blobRef = await dataStorage.saveImageBlob(sticker.url);
+                                sticker.url = blobRef;
+                                convertedCount++;
+                                console.log(`转换表情 "${sticker.name}"`);
+                            }
+                        }
+                    }
+
+                    // 4. 转换头像库
+                    if (data.avatarLibrary) {
+                        for (const avatar of data.avatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                const blobRef = await dataStorage.saveImageBlob(avatar.url);
+                                avatar.url = blobRef;
+                                convertedCount++;
+                                console.log(`转换头像库 "${avatar.name}"`);
+                            }
+                        }
+                    }
+
+                    if (data.myAvatarLibrary) {
+                        for (const avatar of data.myAvatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                const blobRef = await dataStorage.saveImageBlob(avatar.url);
+                                avatar.url = blobRef;
+                                convertedCount++;
+                                console.log(`转换我的头像库 "${avatar.name}"`);
+                            }
+                        }
+                    }
+
+                    // 5. 保存转换后的数据
+                    console.log(' 正在保存转换后的数据...');
+                    await saveData(data);
+                    console.log('数据已保存');
+
+                    // 6. 计算释放的空间
+                    const savedSpace = totalSizeBefore;
+
+                    showToast(
+                        ` 转换完成！\n\n` +
+                        ` 转换了 ${convertedCount} 个项目\n` +
+                        ` 释放了约 ${(savedSpace / 1024 / 1024).toFixed(2)} MB 空间\n\n` +
+                        `3秒后自动刷新页面...`,
+                        5000
+                    );
+
+                    console.log(' 转换完成！');
+                    console.log(`   转换项目: ${convertedCount} 个`);
+                    console.log(`   释放空间: ${(savedSpace / 1024 / 1024).toFixed(2)} MB`);
+
+                    // 7. 刷新页面
+                    setTimeout(() => {
+                        location.reload();
+                    }, 3000);
+
+                } catch (error) {
+                    console.error(' 转换失败:', error);
+                    showToast(` 转换失败: ${error.message}`);
+                    convertOldDataBtn.disabled = false;
+                    convertOldDataBtn.innerHTML = '<span style="font-size: 16px;"></span> 开始转换旧数据';
+                } finally {
+                    isConvertingOldData = false;
+                }
+            });
 
             // ========== 内存优化功能区域 ==========
             const memoryOptimizeSection = document.createElement('div');
