@@ -6908,7 +6908,8 @@ ${contextSummary}
                     
                     // 导出世界书数据
                     showToast('正在导出世界书数据...');
-                    await compressedWriter.write(encoder.encode('"worldBooks":' + JSON.stringify(db.worldBooks || []) + '}'));
+                    await compressedWriter.write(encoder.encode('"worldBooks":' + JSON.stringify(db.worldBooks || []) + ','));
+                    await compressedWriter.write(encoder.encode('"worldBookGroups":' + JSON.stringify(db.worldBookGroups || []) + '}'));
                     
                     // 关闭写入流
                     await compressedWriter.close();
@@ -7282,6 +7283,11 @@ ${contextSummary}
                     if (data.worldBooks && data.worldBooks.length > 0) {
                         showToast(`正在导入 ${data.worldBooks.length} 个世界书...`);
                         await db.worldBooks.bulkAdd(data.worldBooks);
+                    }
+                    
+                    if (data.worldBookGroups && data.worldBookGroups.length > 0) {
+                        showToast(`正在导入 ${data.worldBookGroups.length} 个世界书分组...`);
+                        db.worldBookGroups = data.worldBookGroups;
                     }
                     
                     if (data.qzonePosts && data.qzonePosts.length > 0) {
@@ -9134,6 +9140,11 @@ ${contextSummary}
                 if (backupData.worldBooks) {
                     await db.worldBooks.clear();
                     await db.worldBooks.bulkAdd(backupData.worldBooks);
+                }
+
+                // 导入世界书分组数据
+                if (backupData.worldBookGroups) {
+                    db.worldBookGroups = backupData.worldBookGroups;
                 }
 
                 // 导入其他localStorage数据
@@ -31316,6 +31327,7 @@ ${summaryPrompt}`;
                     stickerCategories: data.stickerCategories || [],
                     homeScreenMode: data.homeScreenMode || 'night',
                     worldBooks: data.worldBooks || [],
+                    worldBookGroups: data.worldBookGroups || [],
                     fontUrl: data.fontUrl || '',
                     fontLibrary: data.fontLibrary || [],
                     fontSize: data.fontSize || 16,
