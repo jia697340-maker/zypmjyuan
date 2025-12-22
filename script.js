@@ -6319,28 +6319,36 @@ ${contextSummary}
                 },
                 {
                     title: '二传说明',
-                    content: `<div style="padding: 20px; line-height: 1.8; font-size: 15px; color: #333;">
-                        <div style="margin-bottom: 20px; padding: 15px; background-color: #8b7ab8; border-radius: 8px; color: white;">
+                    content: `<div style="position: relative; padding: 20px; line-height: 1.8; font-size: 15px; color: #333;">
+                        <!-- 锁定遮罩层 -->
+                        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a1a1a; backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px;">
+                            <div style="text-align: center; color: white;">
+                                <div style="font-size: 80px; margin-bottom: 20px;">🔒</div>
+                                <div style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">目前不允许二传哦！</div>
+                                <div style="font-size: 16px; color: #cccccc;">请遵守相关规定</div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #8b7ab8; border-radius: 8px; color: white; filter: blur(20px);">
                             <p style="margin: 0; font-size: 17px; font-weight: 600; text-align: center;">
                                 粘包狗版本二传许可说明
                             </p>
                         </div>
                         
-                        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px; filter: blur(20px);">
                             <p style="margin: 0 0 10px 0; font-weight: 600; color: #2e7d32;">【允许二传范围】</p>
                             <p style="margin: 0; text-indent: 2em; color: #1b5e20;">
                                 这个小手机是允许二传的，<strong>仅限粘包狗改的这个版本</strong>。其他老师改的版本需要你去征求其他老师的意见之后才可以。
                             </p>
                         </div>
                         
-                        <div style="margin-bottom: 20px; padding: 15px; background-color: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px;">
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px; filter: blur(20px);">
                             <p style="margin: 0 0 10px 0; font-weight: 600; color: #e65100;">【重要前提】</p>
                             <p style="margin: 0; text-indent: 2em; color: #bf360c;">
                                 粘包狗版本是在<strong>尊重源代码和各位二改老师</strong>的前提下，暂时允许二传的。如果其中有任何一个老师跟我说不希望二传，那么将<strong>不允许二传</strong>。
                             </p>
                         </div>
                         
-                        <div style="margin-bottom: 20px; padding: 15px; background-color: #ffebee; border-left: 4px solid #f44336; border-radius: 4px;">
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #ffebee; border-left: 4px solid #f44336; border-radius: 4px; filter: blur(20px);">
                             <p style="margin: 0 0 10px 0; font-weight: 600; color: #c62828;">【严格禁止事项】</p>
                             <ul style="margin: 10px 0 0 20px; padding: 0; color: #b71c1c;">
                                 <li style="margin-bottom: 8px;"><strong>禁止商用：</strong>不允许任何买卖行为、盈利行为、打包出售等商业化操作</li>
@@ -6349,14 +6357,14 @@ ${contextSummary}
                             </ul>
                         </div>
                         
-                        <div style="margin-bottom: 20px; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px;">
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px; filter: blur(20px);">
                             <p style="margin: 0 0 10px 0; font-weight: 600; color: #0d47a1;">【正确的二传方式】</p>
                             <p style="margin: 0; text-indent: 2em; color: #01579b;">
                                 你可以给<strong>没有在尾巴镇的同好或者群友</strong>私下发送这个链接，但请保持低调，<strong>最好不要大面积传播</strong>。
                             </p>
                         </div>
                         
-                        <div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; text-align: center;">
+                        <div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; text-align: center; filter: blur(20px);">
                             <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.6;">
                                 感谢你的理解与配合<br>
                                 让我们一起维护良好的分享环境
@@ -11550,6 +11558,19 @@ ${contextSummary}
                 
                 // 【性能优化】一次性插入所有元素
                 chatListContainer.appendChild(fragment);
+                
+                // 应用头像形状到聊天列表
+                sortedChats.forEach(chat => {
+                    if (chat.type === 'private' && chat.avatarShapes && chat.avatarShapes.char) {
+                        const chatItem = chatListContainer.querySelector(`[data-id="${chat.id}"]`);
+                        if (chatItem) {
+                            const avatar = chatItem.querySelector('.chat-avatar');
+                            if (avatar) {
+                                applyShapeToElement(avatar, chat.avatarShapes.char);
+                            }
+                        }
+                    }
+                });
             });
         }
 
@@ -12715,6 +12736,130 @@ ${contextSummary}
             chatRoomStatusText.title = '点击修改状态';
         }
 
+        // ===== 头像形状功能 - 核心函数 =====
+        
+        // 应用头像形状到角色
+        function applyAvatarShape(charId, type, shapeData) {
+            const char = db.characters.find(c => c.id === charId);
+            if (!char) return;
+            
+            if (!char.avatarShapes) {
+                char.avatarShapes = {};
+            }
+            
+            char.avatarShapes[type] = shapeData;
+            saveData();
+            updateAvatarShapeDisplay();
+            showToast(`${type === 'char' ? '角色' : '我的'}头像形状已更新`);
+        }
+        
+        // 更新头像形状显示
+        function updateAvatarShapeDisplay() {
+            if (!currentChatId) return;
+            const char = db.characters.find(c => c.id === currentChatId);
+            if (!char || !char.avatarShapes) return;
+            
+            const messageArea = document.getElementById('message-area');
+            const chatList = document.getElementById('chat-list-container');
+            
+            // 移除所有形状类 - 从所有可能的元素上移除
+            messageArea.querySelectorAll('.message-info, .message-avatar, .avatar-img').forEach(el => {
+                el.classList.remove('avatar-shape-circle', 'avatar-shape-square', 'avatar-shape-custom');
+            });
+            
+            // 应用角色头像形状
+            if (char.avatarShapes.char) {
+                // 应用到消息中的角色头像（无头像框）
+                const charAvatars = messageArea.querySelectorAll('.message-wrapper.received .message-avatar');
+                charAvatars.forEach(el => {
+                    applyShapeToElement(el, char.avatarShapes.char);
+                });
+                
+                // 应用到消息中的角色头像（有头像框）
+                const charAvatarImgs = messageArea.querySelectorAll('.message-wrapper.received .avatar-img');
+                charAvatarImgs.forEach(el => {
+                    applyShapeToElement(el, char.avatarShapes.char);
+                });
+                
+                // 应用到聊天列表中的头像
+                const chatItem = chatList.querySelector(`[data-chat-id="${currentChatId}"]`);
+                if (chatItem) {
+                    const avatar = chatItem.querySelector('.chat-avatar');
+                    if (avatar) {
+                        applyShapeToElement(avatar, char.avatarShapes.char);
+                    }
+                }
+            }
+            
+            // 应用USER头像形状
+            if (char.avatarShapes.my) {
+                // 应用到消息中的USER头像（无头像框）
+                const myAvatars = messageArea.querySelectorAll('.message-wrapper.sent .message-avatar');
+                myAvatars.forEach(el => {
+                    applyShapeToElement(el, char.avatarShapes.my);
+                });
+                
+                // 应用到消息中的USER头像（有头像框）
+                const myAvatarImgs = messageArea.querySelectorAll('.message-wrapper.sent .avatar-img');
+                myAvatarImgs.forEach(el => {
+                    applyShapeToElement(el, char.avatarShapes.my);
+                });
+            }
+        }
+        
+        // 应用形状到元素
+        function applyShapeToElement(element, shapeData) {
+            if (!element || !shapeData) return;
+            
+            // 移除旧的形状类
+            element.classList.remove('avatar-shape-circle', 'avatar-shape-square', 'avatar-shape-custom');
+            
+            if (shapeData.preset) {
+                // 预设形状
+                element.classList.add(`avatar-shape-${shapeData.preset}`);
+            } else if (shapeData.custom) {
+                // 自定义形状
+                element.classList.add('avatar-shape-custom');
+                element.style.setProperty('--custom-avatar-shape', shapeData.custom);
+            }
+        }
+        
+        // 加载头像形状设置到UI
+        function loadAvatarShapeSettings(char) {
+            if (!char || !char.avatarShapes) return;
+            
+            // 重置所有按钮
+            document.querySelectorAll('.avatar-shape-preset-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            // 清空自定义输入框
+            const charInput = document.getElementById('char-custom-shape-input');
+            const myInput = document.getElementById('my-custom-shape-input');
+            if (charInput) charInput.value = '';
+            if (myInput) myInput.value = '';
+            
+            // 加载角色形状
+            if (char.avatarShapes.char) {
+                if (char.avatarShapes.char.preset) {
+                    const btn = document.querySelector(`.avatar-shape-preset-btn[data-type="char"][data-shape="${char.avatarShapes.char.preset}"]`);
+                    if (btn) btn.classList.add('selected');
+                } else if (char.avatarShapes.char.custom && charInput) {
+                    charInput.value = char.avatarShapes.char.custom;
+                }
+            }
+            
+            // 加载USER形状
+            if (char.avatarShapes.my) {
+                if (char.avatarShapes.my.preset) {
+                    const btn = document.querySelector(`.avatar-shape-preset-btn[data-type="my"][data-shape="${char.avatarShapes.my.preset}"]`);
+                    if (btn) btn.classList.add('selected');
+                } else if (char.avatarShapes.my.custom && myInput) {
+                    myInput.value = char.avatarShapes.my.custom;
+                }
+            }
+        }
+
         function renderMessages(isLoadMore = false, forceScrollToBottom = false) {
             const chat = (currentChatType === 'private') ? db.characters.find(c => c.id === currentChatId) : db.groups.find(g => g.id === currentChatId);
             if (!chat || !chat.history) return;
@@ -12787,6 +12932,9 @@ ${contextSummary}
                 
                 // Update token display when rendering messages
                 updateTokenDisplay();
+                
+                // 应用头像形状
+                updateAvatarShapeDisplay();
             });
         }
 
@@ -13395,6 +13543,18 @@ ${contextSummary}
             }
             
             bubbleRow.innerHTML = `<div class="message-info">${avatarHTML}<span class="message-time">${timeString}</span></div>`;
+            
+            // 应用头像形状
+            if (chat.avatarShapes) {
+                const avatarElement = bubbleRow.querySelector('.message-avatar, .avatar-img');
+                if (avatarElement) {
+                    if (isSent && chat.avatarShapes.my) {
+                        applyShapeToElement(avatarElement, chat.avatarShapes.my);
+                    } else if (!isSent && chat.avatarShapes.char) {
+                        applyShapeToElement(avatarElement, chat.avatarShapes.char);
+                    }
+                }
+            }
             
             if (bubbleElement) {
                 // 检查是否需要显示开场白切换箭头
@@ -14551,16 +14711,27 @@ ${contextSummary}
     - [${character.myName}送来的礼物：xxx]：我给你送了一个礼物，xxx是礼物的描述。
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
-    - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
-    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
+    - [${character.myName}给你转账：xxx元；备注：xxx]：我主动给你转了一笔钱，你需要决定是接收还是退回。
+    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账（这是对你之前给我转账的回应）。
+    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账（这是对你之前给我转账的回应）。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 5. ✨重要✨ 当我给你送礼物时，你必须通过发送一条指令来表示你已接收礼物。格式必须为：[${character.realName}已接收礼物]。这条指令消息本身不会显示给用户，但会触发礼物状态的变化。你可以在发送这条指令后，再附带一条普通的聊天消息来表达你的感谢和想法。
-6. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
+6. ✨重要✨ 当我给你转账时（格式为 [${character.myName}给你转账：xxx元；备注：xxx]），你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
+    
+    ⚠️ 重要区分：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账（你之前主动给我转的钱），你不需要再次回应这些指令，只需要通过普通消息表达你的想法即可。
 7. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
+
+📌 转账流程示例说明：
+   场景1 - 我给你转账：
+   ① 我发送：[${character.myName}给你转账：100元；备注：请你吃饭]
+   ② 你回应：[${character.realName}接收${character.myName}的转账] + 普通消息表达感谢
+   
+   场景2 - 你给我转账：
+   ① 你发送：[${character.realName}的转账：100元；备注：请你吃饭]
+   ② 我处理后会显示：[${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账]
+   ③ 你看到后只需用普通消息回应，不要再发接收/退回指令
 8. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
 `;
@@ -14642,22 +14813,34 @@ ${contextSummary}
     - [${character.myName}送来的礼物：xxx]：我给你送了一个礼物，xxx是礼物的描述。
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
-    - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
-    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
+    - [${character.myName}给你转账：xxx元；备注：xxx]：我主动给你转了一笔钱，你需要决定是接收还是退回。
+    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账（这是对你之前给我转账的回应，你不需要再次回应）。
+    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账（这是对你之前给我转账的回应，你不需要再次回应）。
     - (回复 xxx): 当你在历史消息中看到这个标记时，表示该消息是在回复/引用某人的消息。这意味着发送者是在针对那条特定的消息进行回应，而不是随意发送的。你应该理解这种上下文关系。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 `;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 当我给你送礼物时，你必须通过发送一条指令来表示你已接收礼物。格式必须为：[${character.realName}已接收礼物]。这条指令消息本身不会显示给用户，但会触发礼物状态的变化。你可以在发送这条指令后，再附带一条普通的聊天消息来表达你的感谢和想法。\n`;
             ruleNum++;
-            prompt += `${ruleNum}. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
+            prompt += `${ruleNum}. ✨重要✨ 当我给你转账时（格式为 [${character.myName}给你转账：xxx元；备注：xxx]），你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
+    
+    ⚠️ 重要区分：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账（你之前主动给我转的钱），你不需要再次回应这些指令，只需要通过普通消息表达你的想法即可。
 `;
             ruleNum++;
-            prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。\n`;
+            prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
+
+📌 转账流程示例说明：
+   场景1 - 我给你转账：
+   ① 我发送：[${character.myName}给你转账：100元；备注：请你吃饭]
+   ② 你回应：[${character.realName}接收${character.myName}的转账] + 普通消息表达感谢
+   
+   场景2 - 你给我转账：
+   ① 你发送：[${character.realName}的转账：100元；备注：请你吃饭]
+   ② 我处理后会显示：[${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账]
+   ③ 你看到后只需用普通消息回应，不要再发接收/退回指令
+`;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。\n`;
             ruleNum++;
@@ -23398,6 +23581,88 @@ ${summaryPrompt}`;
                     }
                 }
             });
+            
+            // ===== 头像形状功能 - 事件监听器 =====
+            
+            // 预设形状按钮事件
+            document.querySelectorAll('.avatar-shape-preset-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const type = this.dataset.type;
+                    const shape = this.dataset.shape;
+                    
+                    if (!currentChatId) {
+                        showToast('请先选择一个聊天');
+                        return;
+                    }
+                    
+                    // 更新按钮选中状态
+                    document.querySelectorAll(`.avatar-shape-preset-btn[data-type="${type}"]`).forEach(b => {
+                        b.classList.remove('selected');
+                    });
+                    this.classList.add('selected');
+                    
+                    // 应用形状
+                    applyAvatarShape(currentChatId, type, {
+                        preset: shape,
+                        custom: null
+                    });
+                });
+            });
+            
+            // 角色自定义形状应用
+            document.getElementById('apply-char-custom-shape-btn').addEventListener('click', () => {
+                const input = document.getElementById('char-custom-shape-input');
+                const customShape = input.value.trim();
+                
+                if (!currentChatId) {
+                    showToast('请先选择一个聊天');
+                    return;
+                }
+                
+                if (!customShape) {
+                    showToast('请输入形状代码');
+                    return;
+                }
+                
+                // 取消预设按钮选中
+                document.querySelectorAll('.avatar-shape-preset-btn[data-type="char"]').forEach(b => {
+                    b.classList.remove('selected');
+                });
+                
+                // 应用自定义形状
+                applyAvatarShape(currentChatId, 'char', {
+                    preset: null,
+                    custom: customShape
+                });
+            });
+            
+            // USER自定义形状应用
+            document.getElementById('apply-my-custom-shape-btn').addEventListener('click', () => {
+                const input = document.getElementById('my-custom-shape-input');
+                const customShape = input.value.trim();
+                
+                if (!currentChatId) {
+                    showToast('请先选择一个聊天');
+                    return;
+                }
+                
+                if (!customShape) {
+                    showToast('请输入形状代码');
+                    return;
+                }
+                
+                // 取消预设按钮选中
+                document.querySelectorAll('.avatar-shape-preset-btn[data-type="my"]').forEach(b => {
+                    b.classList.remove('selected');
+                });
+                
+                // 应用自定义形状
+                applyAvatarShape(currentChatId, 'my', {
+                    preset: null,
+                    custom: customShape
+                });
+            });
+            
             document.getElementById('setting-chat-bg-upload').addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -25726,6 +25991,9 @@ ${summaryPrompt}`;
                 
                 // 加载记忆快照列表
                 renderMemorySnapshots();
+                
+                // 加载头像形状设置
+                loadAvatarShapeSettings(e);
             }
         }
 

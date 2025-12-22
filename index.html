@@ -1240,6 +1240,26 @@
                     </button>
                 </div>
                 
+                <!-- 角色头像形状选择 -->
+                <div class="form-group">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">角色头像形状</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button type="button" class="avatar-shape-preset-btn" data-type="char" data-shape="circle" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px; background: white; cursor: pointer;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-color); margin: 0 auto 5px;"></div>
+                            <div style="font-size: 12px;">圆形</div>
+                        </button>
+                        <button type="button" class="avatar-shape-preset-btn" data-type="char" data-shape="square" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px; background: white; cursor: pointer;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--primary-color); margin: 0 auto 5px;"></div>
+                            <div style="font-size: 12px;">方形</div>
+                        </button>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="char-custom-shape-input" style="font-size: 13px; color: #666; margin-bottom: 5px; display: block;">自定义形状代码（CSS clip-path）</label>
+                        <input type="text" id="char-custom-shape-input" placeholder="例如: circle(50%)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; margin-bottom: 8px;">
+                        <button type="button" class="btn btn-secondary" id="apply-char-custom-shape-btn" style="width: 100%; padding: 8px; font-size: 13px;">应用自定义形状</button>
+                    </div>
+                </div>
+                
                 <div class="form-group"><label for="setting-char-realname">角色真名</label><input type="text"
                                                                                                     id="setting-char-realname"
                                                                                                     placeholder="角色的真实姓名">
@@ -1341,6 +1361,26 @@
                     <button type="button" class="btn btn-secondary change-frame-btn" data-type="my">
                         更换头像框
                     </button>
+                </div>
+                
+                <!-- 我的头像形状选择 -->
+                <div class="form-group">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">我的头像形状</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button type="button" class="avatar-shape-preset-btn" data-type="my" data-shape="circle" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px; background: white; cursor: pointer;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--secondary-color); margin: 0 auto 5px;"></div>
+                            <div style="font-size: 12px;">圆形</div>
+                        </button>
+                        <button type="button" class="avatar-shape-preset-btn" data-type="my" data-shape="square" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px; background: white; cursor: pointer;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--secondary-color); margin: 0 auto 5px;"></div>
+                            <div style="font-size: 12px;">方形</div>
+                        </button>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="my-custom-shape-input" style="font-size: 13px; color: #666; margin-bottom: 5px; display: block;">自定义形状代码（CSS clip-path）</label>
+                        <input type="text" id="my-custom-shape-input" placeholder="例如: circle(50%)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; margin-bottom: 8px;">
+                        <button type="button" class="btn btn-secondary" id="apply-my-custom-shape-btn" style="width: 100%; padding: 8px; font-size: 13px;">应用自定义形状</button>
+                    </div>
                 </div>
                 
                 <div class="form-group"><label for="setting-my-name">我的姓名</label><input type="text"

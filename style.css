@@ -2176,6 +2176,46 @@
             opacity: 0.8;
         }
 
+        /* 转账操作类型标识 */
+        .transfer-action-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-shadow: none;
+            letter-spacing: 0.5px;
+        }
+
+        /* 收款标识 - 绿色 */
+        .transfer-action-badge.received-badge {
+            background-color: rgba(76, 175, 80, 0.9);
+            color: white;
+            box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+        }
+
+        /* 退回标识 - 灰色 */
+        .transfer-action-badge.returned-badge {
+            background-color: rgba(158, 158, 158, 0.9);
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 用户转出标识 - 蓝色 */
+        .transfer-action-badge.user-sent-badge {
+            background-color: rgba(33, 150, 243, 0.9);
+            color: white;
+            box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+        }
+
+        /* CHAR转入标识 - 橙色 */
+        .transfer-action-badge.char-sent-badge {
+            background-color: rgba(255, 152, 0, 0.9);
+            color: white;
+            box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+        }
+
         .gift-card {
             width: 230px;
             background-color: #fff;
@@ -6103,3 +6143,47 @@
         }
 
         /* ▲▲▲ 【群投票功能】样式结束 ▲▲▲ */
+
+/* ===== 头像形状功能样式 ===== */
+.avatar-shape-preset-btn {
+    transition: all 0.2s ease;
+}
+
+.avatar-shape-preset-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-shape-preset-btn.selected {
+    border-color: var(--primary-color) !important;
+    background-color: rgba(255, 128, 171, 0.1) !important;
+}
+
+/* 头像形状应用 - 圆形 */
+.avatar-shape-circle .avatar-img,
+.avatar-shape-circle .message-avatar,
+.avatar-shape-circle .chat-avatar,
+.avatar-shape-circle.message-avatar,
+.avatar-shape-circle.chat-avatar {
+    border-radius: 50% !important;
+    clip-path: circle(50%) !important;
+}
+
+/* 头像形状应用 - 方形 */
+.avatar-shape-square .avatar-img,
+.avatar-shape-square .message-avatar,
+.avatar-shape-square .chat-avatar,
+.avatar-shape-square.message-avatar,
+.avatar-shape-square.chat-avatar {
+    border-radius: 10px !important;
+    clip-path: none !important;
+}
+
+/* 头像形状应用 - 自定义 */
+.avatar-shape-custom .avatar-img,
+.avatar-shape-custom .message-avatar,
+.avatar-shape-custom .chat-avatar,
+.avatar-shape-custom.message-avatar,
+.avatar-shape-custom.chat-avatar {
+    clip-path: var(--custom-avatar-shape) !important;
+}
