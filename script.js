@@ -1605,10 +1605,18 @@
                         this.updateCache(cacheKey, restoredMessages);
                     }
 
-                    // 应用分页
+                    // 应用分页 - 【修复】如果offset为负数，表示从后往前获取
                     if (limit) {
-                        const result = restoredMessages.slice(offset, offset + limit);
-                        return result;
+                        if (offset < 0) {
+                            // 从后往前获取：offset=-1表示最后limit条
+                            const start = Math.max(0, restoredMessages.length + offset);
+                            const result = restoredMessages.slice(start);
+                            return result;
+                        } else {
+                            // 从前往后获取
+                            const result = restoredMessages.slice(offset, offset + limit);
+                            return result;
+                        }
                     }
 
                     return restoredMessages;
@@ -2374,9 +2382,12 @@
                     charData.history = [];
                     
                     // 【性能优化】只获取最后一条消息用于列表预览
-                    const lastMessage = await dataStorage.getChatMessages(charId, 'private', 1);
-                    if (lastMessage && lastMessage.length > 0) {
-                        charData.lastMessage = lastMessage[0];
+                    // 【BUG修复】如果charData已经有lastMessage（比如导入数据时设置的），就不要覆盖它
+                    if (!charData.lastMessage) {
+                        const allMessages = await dataStorage.getChatMessages(charId, 'private');
+                        if (allMessages && allMessages.length > 0) {
+                            charData.lastMessage = allMessages[allMessages.length - 1];
+                        }
                     }
 
                     // 设置默认值
@@ -2400,9 +2411,12 @@
                     groupData.history = [];
                     
                     // 【性能优化】只获取最后一条消息用于列表预览
-                    const lastMessage = await dataStorage.getChatMessages(groupId, 'group', 1);
-                    if (lastMessage && lastMessage.length > 0) {
-                        groupData.lastMessage = lastMessage[0];
+                    // 【BUG修复】如果groupData已经有lastMessage（比如导入数据时设置的），就不要覆盖它
+                    if (!groupData.lastMessage) {
+                        const allMessages = await dataStorage.getChatMessages(groupId, 'group');
+                        if (allMessages && allMessages.length > 0) {
+                            groupData.lastMessage = allMessages[allMessages.length - 1];
+                        }
                     }
 
                     // 设置默认值
@@ -12652,7 +12666,8 @@ ${contextSummary}
             // 【关键修复】按需加载历史消息，避免一次性加载全部
             if (!chat._fullHistoryLoaded) {
                 // 先加载最近的100条消息用于快速显示
-                const recentHistory = await dataStorage.getChatMessages(chatId, type, 100);
+                // 使用负数offset表示从后往前获取
+                const recentHistory = await dataStorage.getChatMessages(chatId, type, 100, -100);
                 chat.history = recentHistory;
                 chat._fullHistoryLoaded = false; // 标记为未完全加载
                 chat._hasMoreHistory = recentHistory.length >= 100; // 是否还有更多历史
@@ -31374,16 +31389,14 @@ ${summaryPrompt}`;
             }
         }
 
-        // 导入备份数据（兼容新旧格式）
+        // 导入备份数据（完全兼容无锁版本）
         async function importBackupData(data) {
             const startTime = Date.now();
 
             try {
-                // 检测数据格式版本
-                const isOptimizedFormat = data._optimizedStorage === true;
-                const exportVersion = data._exportVersion || '1.0';
-
-                console.log(`检测到数据格式版本: ${exportVersion}, 优化存储: ${isOptimizedFormat}`);
+                console.log('=== 开始导入数据 ===');
+                console.log('角色数量:', data.characters ? data.characters.length : 0);
+                console.log('群组数量:', data.groups ? data.groups.length : 0);
 
                 // 清空现有数据
                 await dataStorage.clearAll();
@@ -31392,8 +31405,8 @@ ${summaryPrompt}`;
                 db = {
                     apiSettings: data.apiSettings || {},
                     wallpaper: data.wallpaper || 'https://i.postimg.cc/W4Z9R9x4/ins-1.jpg',
-                    // characters: [],
-                    // groups: [],
+                    characters: [],
+                    groups: [],
                     myStickers: data.myStickers || [],
                     stickerCategories: data.stickerCategories || [],
                     homeScreenMode: data.homeScreenMode || 'night',
@@ -31402,7 +31415,23 @@ ${summaryPrompt}`;
                     fontUrl: data.fontUrl || '',
                     fontLibrary: data.fontLibrary || [],
                     fontSize: data.fontSize || 16,
-                    customIcons: data.customIcons || {}
+                    customIcons: data.customIcons || {},
+                    customIconNames: data.customIconNames || {},
+                    homeScreenPresets: data.homeScreenPresets || [],
+                    homeScreenBg: data.homeScreenBg,
+                    lockScreenBg: data.lockScreenBg,
+                    showDockAppNames: data.showDockAppNames,
+                    showStatusBar: data.showStatusBar,
+                    deletedCharacterIds: data.deletedCharacterIds || [],
+                    deletedGroupIds: data.deletedGroupIds || [],
+                    musicPlaylist: data.musicPlaylist || [],
+                    enableLockScreen: data.enableLockScreen,
+                    lockScreenWallpaper: data.lockScreenWallpaper,
+                    lockScreenPassword: data.lockScreenPassword,
+                    floatingLyricsSettings: data.floatingLyricsSettings,
+                    wallpaperLibrary: data.wallpaperLibrary || [],
+                    qzonePosts: data.qzonePosts || [],
+                    favorites: data.favorites || []
                 };
 
                 let importStats = {
@@ -31411,91 +31440,56 @@ ${summaryPrompt}`;
                     messagesCount: 0
                 };
 
-                // 导入角色数据
+                // 导入角色数据（完全保留history）
                 if (data.characters && Array.isArray(data.characters)) {
+                    console.log(`开始导入 ${data.characters.length} 个角色...`);
                     for (const char of data.characters) {
-                        // 保存角色基础信息
-                        const { history, ...charData } = char;
-                        charData.history = []; // 保持兼容性
-
                         // 设置默认值
-                        if (charData.isPinned === undefined) charData.isPinned = false;
-                        if (charData.status === undefined) charData.status = '在线';
-                        if (!charData.worldBookIds) charData.worldBookIds = [];
-                        if (charData.customBubbleCss === undefined) charData.customBubbleCss = '';
-                        if (charData.useCustomBubbleCss === undefined) charData.useCustomBubbleCss = false;
+                        if (char.isPinned === undefined) char.isPinned = false;
+                        if (char.status === undefined) char.status = '在线';
+                        if (!char.worldBookIds) char.worldBookIds = [];
+                        if (char.customBubbleCss === undefined) char.customBubbleCss = '';
+                        if (char.useCustomBubbleCss === undefined) char.useCustomBubbleCss = false;
+                        if (!char.history) char.history = [];
 
-                        // 【关键修复】保存消息历史并更新lastMessage
-                        if (history && Array.isArray(history) && history.length > 0) {
-                            await dataStorage.saveChatMessages(char.id, 'private', history);
-                            charData.lastMessage = history[history.length - 1]; // 更新lastMessage
-                            importStats.messagesCount += history.length;
+                        // 统计消息数量
+                        if (char.history && Array.isArray(char.history)) {
+                            importStats.messagesCount += char.history.length;
                         }
 
-                        // db.characters.push(charData);
-                        await dataStorage.saveData(`character_${char.id}`, charData);
-
+                        db.characters.push(char);
                         importStats.charactersCount++;
                     }
                 }
 
-                // 导入群组数据
+                // 导入群组数据（完全保留history）
                 if (data.groups && Array.isArray(data.groups)) {
+                    console.log(`开始导入 ${data.groups.length} 个群组...`);
                     for (const group of data.groups) {
-                        // 保存群组基础信息
-                        const { history, ...groupData } = group;
-                        groupData.history = []; // 保持兼容性
-
                         // 设置默认值
-                        if (groupData.isPinned === undefined) groupData.isPinned = false;
-                        if (!groupData.worldBookIds) groupData.worldBookIds = [];
-                        if (groupData.customBubbleCss === undefined) groupData.customBubbleCss = '';
-                        if (groupData.useCustomBubbleCss === undefined) groupData.useCustomBubbleCss = false;
+                        if (group.isPinned === undefined) group.isPinned = false;
+                        if (!group.worldBookIds) group.worldBookIds = [];
+                        if (group.customBubbleCss === undefined) group.customBubbleCss = '';
+                        if (group.useCustomBubbleCss === undefined) group.useCustomBubbleCss = false;
+                        if (!group.history) group.history = [];
 
-                        // 【关键修复】保存消息历史并更新lastMessage
-                        if (history && Array.isArray(history) && history.length > 0) {
-                            await dataStorage.saveChatMessages(group.id, 'group', history);
-                            groupData.lastMessage = history[history.length - 1]; // 更新lastMessage
-                            importStats.messagesCount += history.length;
+                        // 统计消息数量
+                        if (group.history && Array.isArray(group.history)) {
+                            importStats.messagesCount += group.history.length;
                         }
 
-                        // db.groups.push(groupData);
-                        await dataStorage.saveData(`group_${group.id}`, groupData);
-
+                        db.groups.push(group);
                         importStats.groupsCount++;
                     }
                 }
 
-                for (const key in db){
-                    await dataStorage.saveData(key, db[key]);
-                }
-
-                // if(data.apiSettings){
-                //     await dataStorage.saveData('apiSettings', data.apiSettings);
-                // }
-                // if(data.customIcons){
-                //     await dataStorage.saveData('customIcons', data.customIcons);
-                // }
-                // if(data.fontUrl){
-                //     await dataStorage.saveData('fontUrl', data.fontUrl);
-                // }
-                // if(data.homeScreenMode){
-                //     await dataStorage.saveData('homeScreenMode', data.homeScreenMode);
-                // }
-                // if(data.wallpaper){
-                //     await dataStorage.saveData('wallpaper', data.wallpaper);
-                // }
-
-                // console.log(data)
-                // console.log(db)
-
-                // 保存基础数据
-                await dataStorage.saveData('章鱼喷墨机', db);
+                // 保存所有数据
+                await saveData();
 
                 const duration = Date.now() - startTime;
                 const message = `导入完成: ${importStats.charactersCount}个角色, ${importStats.groupsCount}个群组, ${importStats.messagesCount}条消息 (耗时${duration}ms)`;
 
-
+                console.log(message);
 
                 return {
                     success: true,
