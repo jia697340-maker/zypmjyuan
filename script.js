@@ -691,6 +691,31 @@
         // --- 优化的数据存储系统 (OPFS) ---
         class OptimizedDataStorage {
             constructor() {
+                // 创建 Dexie 数据库用于记忆快照等功能
+                this.db = new Dexie('章鱼喷墨机DB_V2');
+                
+                // 定义数据库结构
+                this.db.version(4).stores({
+                    // 基础数据存储
+                    storage: 'key, value, timestamp',
+                    // 消息分块存储
+                    messageChunks: 'id, chatId, chatType, chunkIndex, messages, timestamp',
+                    // 元数据存储
+                    metadata: 'key, value, timestamp',
+                    // 自动总结记忆存储
+                    memorySummaries: 'id, chatId, chatType, name, content, messageCount, timestamp',
+                    // 记忆快照存储
+                    memorySnapshots: 'id, chatId, chatType, name, data, timestamp',
+                    // 本机数据快照存储
+                    localSnapshots: '++id, name, data, timestamp',
+                    // 图片Blob存储（消息中的图片）
+                    imageBlobs: 'id, data, mimeType, timestamp',
+                    // 通用资源Blob存储（头像、图标、壁纸、表情等）
+                    assetBlobs: 'id, data, mimeType, category, timestamp'
+                }).upgrade(trans => {
+                    console.log('数据库升级到版本3，添加通用资源Blob存储');
+                });
+
                 // 使用 OPFS (Origin Private File System)
                 this.rootHandle = null;
                 this.initialized = false;
@@ -6840,367 +6865,6 @@ ${contextSummary}
                  }
             });
 
-            // 批量清除角色数据按钮
-            const batchClearCharBtn = document.createElement('button');
-            batchClearCharBtn.className = 'btn';
-            batchClearCharBtn.textContent = '批量清除对话数据';
-            batchClearCharBtn.style.marginTop = '15px';
-            batchClearCharBtn.style.display = 'block';
-            batchClearCharBtn.style.backgroundColor = '#ff9800';
-            batchClearCharBtn.style.color = 'white';
-            
-            batchClearCharBtn.addEventListener('click', async () => {
-                if (loadingBtn) {
-                    return;
-                }
-                
-                // 创建模态框
-                const modal = document.createElement('div');
-                modal.className = 'modal-overlay';
-                modal.style.display = 'flex';
-                modal.innerHTML = `
-                    <div class="modal-window" style="max-width: 700px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
-                        <h3 style="margin-top: 0;">批量清除对话数据</h3>
-                        
-                        <div style="margin-bottom: 15px; padding: 10px; background-color: #fff3cd; border-radius: 5px; border: 1px solid #ffc107;">
-                            <strong>清除选项：</strong><br>
-                            <label style="display: block; margin: 8px 0; cursor: pointer;">
-                                <input type="radio" name="clearType" value="messages" checked style="margin-right: 8px;">
-                                仅清除聊天记录（保留对话信息）
-                            </label>
-                            <label style="display: block; margin: 8px 0; cursor: pointer;">
-                                <input type="radio" name="clearType" value="all" style="margin-right: 8px;">
-                                清除所有数据（删除对话和聊天记录）
-                            </label>
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background-color: #f5f5f5; border-radius: 5px;">
-                            <input type="checkbox" id="select-all-items" style="width: 20px; height: 20px; cursor: pointer;">
-                            <label for="select-all-items" style="cursor: pointer; font-weight: 600; margin: 0;">全选</label>
-                            <span id="selected-count" style="margin-left: auto; color: #666; font-size: 14px;">已选择 0 项</span>
-                        </div>
-                        
-                        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                            <button class="btn btn-secondary" id="filter-all-btn" style="flex: 1; padding: 6px; font-size: 13px;">全部</button>
-                            <button class="btn btn-secondary" id="filter-private-btn" style="flex: 1; padding: 6px; font-size: 13px;">私聊</button>
-                            <button class="btn btn-secondary" id="filter-group-btn" style="flex: 1; padding: 6px; font-size: 13px;">群聊</button>
-                        </div>
-                        
-                        <div id="chat-list" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background-color: #fff;">
-                            <!-- 对话列表将动态生成 -->
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 15px;">
-                            <button class="btn btn-danger" id="confirm-clear-btn" style="flex: 1;">确认清除</button>
-                            <button class="btn btn-secondary" id="cancel-clear-btn" style="flex: 1;">取消</button>
-                        </div>
-                    </div>
-                `;
-                
-                document.body.appendChild(modal);
-                
-                const chatList = modal.querySelector('#chat-list');
-                const selectAllCheckbox = modal.querySelector('#select-all-items');
-                const selectedCountSpan = modal.querySelector('#selected-count');
-                const confirmBtn = modal.querySelector('#confirm-clear-btn');
-                const cancelBtn = modal.querySelector('#cancel-clear-btn');
-                const filterAllBtn = modal.querySelector('#filter-all-btn');
-                const filterPrivateBtn = modal.querySelector('#filter-private-btn');
-                const filterGroupBtn = modal.querySelector('#filter-group-btn');
-                
-                // 选中的对话（格式：{id, type}）
-                const selectedItems = new Set();
-                let currentFilter = 'all'; // 'all', 'private', 'group'
-                
-                function updateSelectedCount() {
-                    selectedCountSpan.textContent = `已选择 ${selectedItems.size} 项`;
-                }
-                
-                function updateFilterButtons() {
-                    filterAllBtn.style.backgroundColor = currentFilter === 'all' ? '#2196F3' : '';
-                    filterAllBtn.style.color = currentFilter === 'all' ? 'white' : '';
-                    filterPrivateBtn.style.backgroundColor = currentFilter === 'private' ? '#2196F3' : '';
-                    filterPrivateBtn.style.color = currentFilter === 'private' ? 'white' : '';
-                    filterGroupBtn.style.backgroundColor = currentFilter === 'group' ? '#2196F3' : '';
-                    filterGroupBtn.style.color = currentFilter === 'group' ? 'white' : '';
-                }
-                
-                function renderChatList() {
-                    chatList.innerHTML = '';
-                    
-                    const totalCount = db.characters.length + db.groups.length;
-                    if (totalCount === 0) {
-                        chatList.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无对话</div>';
-                        return;
-                    }
-                    
-                    // 渲染私聊
-                    if (currentFilter === 'all' || currentFilter === 'private') {
-                        db.characters.forEach(char => {
-                            const itemKey = `private_${char.id}`;
-                            const item = document.createElement('div');
-                            item.className = 'chat-item';
-                            item.dataset.type = 'private';
-                            item.style.cssText = 'display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s;';
-                            item.innerHTML = `
-                                <input type="checkbox" class="chat-checkbox" data-item-key="${itemKey}" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
-                                <img src="${char.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600;">${char.remarkName || char.realName}</div>
-                                    <div style="font-size: 12px; color: #666;">私聊 · 消息数: ${char.history ? char.history.length : 0}</div>
-                                </div>
-                            `;
-                            
-                            const checkbox = item.querySelector('.chat-checkbox');
-                            
-                            // 恢复选中状态
-                            if (selectedItems.has(itemKey)) {
-                                checkbox.checked = true;
-                                item.style.backgroundColor = '#e3f2fd';
-                            }
-                            
-                            item.addEventListener('click', (e) => {
-                                if (e.target === checkbox) return;
-                                checkbox.checked = !checkbox.checked;
-                                checkbox.dispatchEvent(new Event('change'));
-                            });
-                            
-                            checkbox.addEventListener('change', (e) => {
-                                e.stopPropagation();
-                                
-                                if (checkbox.checked) {
-                                    selectedItems.add(itemKey);
-                                    item.style.backgroundColor = '#e3f2fd';
-                                } else {
-                                    selectedItems.delete(itemKey);
-                                    item.style.backgroundColor = '';
-                                }
-                                updateSelectedCount();
-                                
-                                setTimeout(() => {
-                                    const allCheckboxes = chatList.querySelectorAll('.chat-checkbox');
-                                    const checkedCount = chatList.querySelectorAll('.chat-checkbox:checked').length;
-                                    selectAllCheckbox.checked = checkedCount === allCheckboxes.length && allCheckboxes.length > 0;
-                                }, 0);
-                            });
-                            
-                            chatList.appendChild(item);
-                        });
-                    }
-                    
-                    // 渲染群聊
-                    if (currentFilter === 'all' || currentFilter === 'group') {
-                        db.groups.forEach(group => {
-                            const itemKey = `group_${group.id}`;
-                            const item = document.createElement('div');
-                            item.className = 'chat-item';
-                            item.dataset.type = 'group';
-                            item.style.cssText = 'display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s;';
-                            item.innerHTML = `
-                                <input type="checkbox" class="chat-checkbox" data-item-key="${itemKey}" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
-                                <img src="${group.avatar}" style="width: 40px; height: 40px; border-radius: 10px; margin-right: 12px;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600;">${group.name}</div>
-                                    <div style="font-size: 12px; color: #666;">群聊 (${group.members.length}人) · 消息数: ${group.history ? group.history.length : 0}</div>
-                                </div>
-                            `;
-                            
-                            const checkbox = item.querySelector('.chat-checkbox');
-                            
-                            // 恢复选中状态
-                            if (selectedItems.has(itemKey)) {
-                                checkbox.checked = true;
-                                item.style.backgroundColor = '#e3f2fd';
-                            }
-                            
-                            item.addEventListener('click', (e) => {
-                                if (e.target === checkbox) return;
-                                checkbox.checked = !checkbox.checked;
-                                checkbox.dispatchEvent(new Event('change'));
-                            });
-                            
-                            checkbox.addEventListener('change', (e) => {
-                                e.stopPropagation();
-                                
-                                if (checkbox.checked) {
-                                    selectedItems.add(itemKey);
-                                    item.style.backgroundColor = '#e3f2fd';
-                                } else {
-                                    selectedItems.delete(itemKey);
-                                    item.style.backgroundColor = '';
-                                }
-                                updateSelectedCount();
-                                
-                                setTimeout(() => {
-                                    const allCheckboxes = chatList.querySelectorAll('.chat-checkbox');
-                                    const checkedCount = chatList.querySelectorAll('.chat-checkbox:checked').length;
-                                    selectAllCheckbox.checked = checkedCount === allCheckboxes.length && allCheckboxes.length > 0;
-                                }, 0);
-                            });
-                            
-                            chatList.appendChild(item);
-                        });
-                    }
-                }
-                
-                renderChatList();
-                updateFilterButtons();
-                
-                // 筛选按钮
-                filterAllBtn.addEventListener('click', () => {
-                    currentFilter = 'all';
-                    updateFilterButtons();
-                    renderChatList();
-                });
-                
-                filterPrivateBtn.addEventListener('click', () => {
-                    currentFilter = 'private';
-                    updateFilterButtons();
-                    renderChatList();
-                });
-                
-                filterGroupBtn.addEventListener('click', () => {
-                    currentFilter = 'group';
-                    updateFilterButtons();
-                    renderChatList();
-                });
-                
-                // 全选功能
-                selectAllCheckbox.addEventListener('change', () => {
-                    const checkboxes = chatList.querySelectorAll('.chat-checkbox');
-                    const items = chatList.querySelectorAll('.chat-item');
-                    
-                    // 批量更新所有复选框
-                    checkboxes.forEach((cb, index) => {
-                        cb.checked = selectAllCheckbox.checked;
-                        const itemKey = cb.getAttribute('data-item-key');
-                        
-                        if (selectAllCheckbox.checked) {
-                            selectedItems.add(itemKey);
-                            if (items[index]) {
-                                items[index].style.backgroundColor = '#e3f2fd';
-                            }
-                        } else {
-                            selectedItems.delete(itemKey);
-                            if (items[index]) {
-                                items[index].style.backgroundColor = '';
-                            }
-                        }
-                    });
-                    
-                    updateSelectedCount();
-                });
-                
-                // 取消按钮
-                cancelBtn.addEventListener('click', () => {
-                    document.body.removeChild(modal);
-                });
-                
-                // 确认清除按钮
-                confirmBtn.addEventListener('click', async () => {
-                    if (selectedItems.size === 0) {
-                        showToast('请至少选择一项');
-                        return;
-                    }
-                    
-                    const clearType = modal.querySelector('input[name="clearType"]:checked').value;
-                    const clearTypeText = clearType === 'messages' ? '清除聊天记录' : '删除对话和聊天记录';
-                    
-                    if (!confirm(`确定要${clearTypeText}吗？\n\n已选择 ${selectedItems.size} 项\n\n此操作不可撤销！`)) {
-                        return;
-                    }
-                    
-                    loadingBtn = true;
-                    confirmBtn.disabled = true;
-                    confirmBtn.textContent = '处理中...';
-                    
-                    try {
-                        let processedCount = 0;
-                        const deletedIds = new Set();
-                        
-                        for (const itemKey of selectedItems) {
-                            const [type, id] = itemKey.split('_');
-                            
-                            if (type === 'private') {
-                                // 处理私聊
-                                const charIndex = db.characters.findIndex(c => c.id === id);
-                                if (charIndex === -1) continue;
-                                
-                                const character = db.characters[charIndex];
-                                
-                                if (clearType === 'messages') {
-                                    // 仅清除聊天记录
-                                    character.history = [];
-                                    character.status = '在线';
-                                    await dataStorage.clearChatMessages(character.id, 'private');
-                                } else {
-                                    // 删除角色和所有数据
-                                    await dataStorage.clearChatMessages(character.id, 'private');
-                                    await dataStorage.removeData(`character_${character.id}`);
-                                    db.characters.splice(charIndex, 1);
-                                    deletedIds.add(id);
-                                }
-                                
-                                processedCount++;
-                            } else if (type === 'group') {
-                                // 处理群聊
-                                const groupIndex = db.groups.findIndex(g => g.id === id);
-                                if (groupIndex === -1) continue;
-                                
-                                const group = db.groups[groupIndex];
-                                
-                                if (clearType === 'messages') {
-                                    // 仅清除聊天记录
-                                    group.history = [];
-                                    // 重置所有群成员的在线状态
-                                    if (group.members) {
-                                        group.members.forEach(member => {
-                                            const char = db.characters.find(c => c.id === member.id);
-                                            if (char) {
-                                                char.status = '在线';
-                                            }
-                                        });
-                                    }
-                                    await dataStorage.clearChatMessages(group.id, 'group');
-                                } else {
-                                    // 删除群聊和所有数据
-                                    await dataStorage.clearChatMessages(group.id, 'group');
-                                    await dataStorage.removeData(`group_${group.id}`);
-                                    db.groups.splice(groupIndex, 1);
-                                    deletedIds.add(id);
-                                }
-                                
-                                processedCount++;
-                            }
-                        }
-                        
-                        await saveData();
-                        
-                        document.body.removeChild(modal);
-                        loadingBtn = false;
-                        
-                        if (clearType === 'messages') {
-                            showToast(`已清除 ${processedCount} 个对话的聊天记录`);
-                        } else {
-                            showToast(`已删除 ${processedCount} 个对话`);
-                        }
-                        
-                        // 刷新聊天列表
-                        renderChatList();
-                        
-                        // 如果当前正在查看被删除的对话，返回聊天列表
-                        if (clearType === 'all' && deletedIds.has(currentChatId)) {
-                            showScreen('chat-list-screen');
-                        }
-                        
-                    } catch (error) {
-                        loadingBtn = false;
-                        showToast(`操作失败: ${error.message}`);
-                        console.error('批量清除对话数据错误:', error);
-                    }
-                });
-            });
-
             // 清除本机数据按钮
             const clearLocalDataBtn = document.createElement('button');
             clearLocalDataBtn.className = 'btn btn-danger';
@@ -7245,6 +6909,549 @@ ${contextSummary}
                 }
             });
 
+            // 本机数据复制和记忆库功能
+            
+            // 复制本机数据功能
+            async function showCopyLocalDataModal() {
+                const modalHtml = `
+                    <div id="copy-local-data-modal" class="modal-overlay visible">
+                        <div class="modal-window" style="max-width: 400px;">
+                            <h3>复制本机数据</h3>
+                            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                                保存当前本机的所有数据，包括角色、群聊、聊天记录、世界书等
+                            </p>
+                            <div style="margin: 15px 0;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">快照名称</label>
+                                <input type="text" id="local-snapshot-name" 
+                                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+                                    placeholder="例如：2024年12月备份">
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button id="confirm-copy-local-data-btn" class="btn btn-primary" style="flex: 1;">保存</button>
+                                <button id="cancel-copy-local-data-btn" class="btn btn-secondary" style="flex: 1;">取消</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 移除已存在的模态框
+                const existingModal = document.getElementById('copy-local-data-modal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                // 添加新模态框
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                const modal = document.getElementById('copy-local-data-modal');
+                const nameInput = document.getElementById('local-snapshot-name');
+                const confirmBtn = document.getElementById('confirm-copy-local-data-btn');
+                const cancelBtn = document.getElementById('cancel-copy-local-data-btn');
+                
+                // 设置默认名称
+                const now = new Date();
+                const defaultName = `本机数据_${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日_${now.getHours()}时${now.getMinutes()}分`;
+                nameInput.value = defaultName;
+                nameInput.select();
+                
+                // 确认保存
+                confirmBtn.onclick = async () => {
+                    const name = nameInput.value.trim();
+                    if (!name) {
+                        showToast('请输入快照名称');
+                        return;
+                    }
+                    
+                    confirmBtn.disabled = true;
+                    confirmBtn.textContent = '保存中...';
+                    
+                    try {
+                        showToast('正在复制本机数据...');
+                        
+                        // 创建完整的数据备份
+                        const fullBackupData = await createFullBackupData();
+                        
+                        // 保存到IndexedDB
+                        await dataStorage.db.localSnapshots.add({
+                            name: name,
+                            data: fullBackupData,
+                            timestamp: Date.now()
+                        });
+                        
+                        showToast('本机数据已保存到记忆库');
+                        modal.remove();
+                    } catch (error) {
+                        console.error('保存本机数据失败:', error);
+                        showToast('保存失败：' + error.message);
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = '保存';
+                    }
+                };
+                
+                // 取消按钮
+                cancelBtn.onclick = () => {
+                    modal.remove();
+                };
+                
+                // 点击遮罩关闭
+                modal.onclick = (e) => {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                };
+            }
+            
+            // 本机记忆库功能
+            async function showLocalMemoryLibraryModal() {
+                const modalHtml = `
+                    <div id="local-memory-library-modal" class="modal-overlay visible">
+                        <div class="modal-window" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h3 style="margin: 0;">本机记忆库</h3>
+                                <button id="close-local-memory-library-modal" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #888;">&times;</button>
+                            </div>
+                            
+                            <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #2196F3;">
+                                <p style="margin: 0; font-size: 13px; color: #1565c0; line-height: 1.5;">
+                                    💾 这里保存了您的本机数据快照，可以随时恢复到之前的状态
+                                </p>
+                            </div>
+                            
+                            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="local-snapshot-select-all" style="margin-right: 8px; cursor: pointer;">
+                                    <span style="font-weight: 600;">全选</span>
+                                </label>
+                                <span style="color: #888; font-size: 14px;" id="local-snapshot-count">已选择 0 项</span>
+                            </div>
+                            
+                            <div id="local-snapshot-list" style="flex: 1; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; max-height: 400px;">
+                                <p style="text-align: center; color: #999; padding: 20px;">加载中...</p>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                <button id="delete-local-snapshots-btn" class="btn btn-danger" style="flex: 1;">删除选中</button>
+                                <button id="close-local-memory-library-btn" class="btn btn-secondary" style="flex: 1;">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 移除已存在的模态框
+                const existingModal = document.getElementById('local-memory-library-modal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                // 添加新模态框
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                const modal = document.getElementById('local-memory-library-modal');
+                const listContainer = document.getElementById('local-snapshot-list');
+                const selectAllCheckbox = document.getElementById('local-snapshot-select-all');
+                const countSpan = document.getElementById('local-snapshot-count');
+                const deleteBtn = document.getElementById('delete-local-snapshots-btn');
+                const closeBtn = document.getElementById('close-local-memory-library-btn');
+                const closeModalBtn = document.getElementById('close-local-memory-library-modal');
+                
+                // 加载快照列表
+                await renderLocalSnapshots();
+                
+                async function renderLocalSnapshots() {
+                    try {
+                        const snapshots = await dataStorage.db.localSnapshots
+                            .orderBy('timestamp')
+                            .reverse()
+                            .toArray();
+                        
+                        if (snapshots.length === 0) {
+                            listContainer.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无保存的本机数据</p>';
+                            return;
+                        }
+                        
+                        listContainer.innerHTML = '';
+                        
+                        snapshots.forEach(snapshot => {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.style.cssText = 'display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background-color 0.2s;';
+                            itemDiv.dataset.id = snapshot.id;
+                            
+                            const date = new Date(snapshot.timestamp);
+                            const dateStr = date.toLocaleString('zh-CN');
+                            
+                            itemDiv.innerHTML = `
+                                <input type="checkbox" class="local-snapshot-checkbox" style="margin-right: 12px; cursor: pointer; width: 18px; height: 18px;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${snapshot.name}</div>
+                                    <div style="font-size: 12px; color: #888;">保存时间：${dateStr}</div>
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <button class="restore-local-snapshot-btn" style="padding: 6px 12px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">恢复</button>
+                                    <button class="rename-local-snapshot-btn" style="padding: 6px 12px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">重命名</button>
+                                </div>
+                            `;
+                            
+                            const checkbox = itemDiv.querySelector('.local-snapshot-checkbox');
+                            const restoreBtn = itemDiv.querySelector('.restore-local-snapshot-btn');
+                            const renameBtn = itemDiv.querySelector('.rename-local-snapshot-btn');
+                            
+                            // checkbox change事件
+                            checkbox.addEventListener('change', () => {
+                                updateCount();
+                            });
+                            
+                            // 点击整行选择
+                            itemDiv.addEventListener('click', (e) => {
+                                if (e.target.type !== 'checkbox' && !e.target.classList.contains('restore-local-snapshot-btn') && !e.target.classList.contains('rename-local-snapshot-btn')) {
+                                    checkbox.checked = !checkbox.checked;
+                                    updateCount();
+                                }
+                            });
+                            
+                            // 恢复按钮
+                            restoreBtn.addEventListener('click', async (e) => {
+                                e.stopPropagation();
+                                
+                                if (!confirm(`确定要恢复到"${snapshot.name}"的状态吗？\n\n⚠️ 当前的所有数据将被替换为快照中的数据！\n此操作不可撤销！`)) {
+                                    return;
+                                }
+                                
+                                restoreBtn.disabled = true;
+                                restoreBtn.textContent = '恢复中...';
+                                
+                                try {
+                                    showToast('正在恢复数据...');
+                                    
+                                    // 导入快照数据
+                                    await importBackupData(snapshot.data);
+                                    
+                                    showToast('数据已恢复，页面即将刷新...');
+                                    
+                                    // 延迟刷新页面
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1500);
+                                } catch (error) {
+                                    console.error('恢复数据失败:', error);
+                                    showToast('恢复失败：' + error.message);
+                                    restoreBtn.disabled = false;
+                                    restoreBtn.textContent = '恢复';
+                                }
+                            });
+                            
+                            // 重命名按钮
+                            renameBtn.addEventListener('click', async (e) => {
+                                e.stopPropagation();
+                                
+                                const newName = prompt('请输入新的快照名称：', snapshot.name);
+                                if (newName && newName.trim() && newName.trim() !== snapshot.name) {
+                                    try {
+                                        await dataStorage.db.localSnapshots.update(snapshot.id, {
+                                            name: newName.trim()
+                                        });
+                                        showToast('重命名成功');
+                                        await renderLocalSnapshots();
+                                    } catch (error) {
+                                        console.error('重命名失败:', error);
+                                        showToast('重命名失败');
+                                    }
+                                }
+                            });
+                            
+                            // 鼠标悬停效果
+                            itemDiv.addEventListener('mouseenter', () => {
+                                itemDiv.style.backgroundColor = '#f5f5f5';
+                            });
+                            itemDiv.addEventListener('mouseleave', () => {
+                                itemDiv.style.backgroundColor = 'transparent';
+                            });
+                            
+                            listContainer.appendChild(itemDiv);
+                        });
+                        
+                        updateCount();
+                    } catch (error) {
+                        console.error('加载快照列表失败:', error);
+                        listContainer.innerHTML = '<p style="text-align: center; color: #f44336; padding: 20px;">加载失败</p>';
+                    }
+                }
+                
+                // 更新选中数量
+                function updateCount() {
+                    const checkboxes = listContainer.querySelectorAll('.local-snapshot-checkbox');
+                    const checkedCount = listContainer.querySelectorAll('.local-snapshot-checkbox:checked').length;
+                    countSpan.textContent = `已选择 ${checkedCount} 项`;
+                    selectAllCheckbox.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
+                }
+                
+                // 全选/取消全选
+                selectAllCheckbox.addEventListener('change', () => {
+                    const checkboxes = listContainer.querySelectorAll('.local-snapshot-checkbox');
+                    checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+                    updateCount();
+                });
+                
+                // 删除选中
+                deleteBtn.onclick = async () => {
+                    const checkedItems = Array.from(listContainer.querySelectorAll('.local-snapshot-checkbox:checked'))
+                        .map(cb => {
+                            const itemDiv = cb.closest('[data-id]');
+                            return parseInt(itemDiv.dataset.id);
+                        });
+                    
+                    if (checkedItems.length === 0) {
+                        showToast('请至少选择一项');
+                        return;
+                    }
+                    
+                    if (!confirm(`确定要删除选中的 ${checkedItems.length} 个快照吗？\n\n此操作不可恢复！`)) {
+                        return;
+                    }
+                    
+                    deleteBtn.disabled = true;
+                    deleteBtn.textContent = '删除中...';
+                    
+                    try {
+                        for (const id of checkedItems) {
+                            await dataStorage.db.localSnapshots.delete(id);
+                        }
+                        
+                        showToast(`已删除 ${checkedItems.length} 个快照`);
+                        await renderLocalSnapshots();
+                    } catch (error) {
+                        console.error('删除快照失败:', error);
+                        showToast('删除失败');
+                    } finally {
+                        deleteBtn.disabled = false;
+                        deleteBtn.textContent = '删除选中';
+                    }
+                };
+                
+                // 关闭按钮
+                closeBtn.onclick = () => {
+                    modal.remove();
+                };
+                
+                closeModalBtn.onclick = () => {
+                    modal.remove();
+                };
+                
+                // 点击遮罩关闭
+                modal.onclick = (e) => {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                };
+            }
+            
+            // 批量清除角色数据功能
+            function showBatchClearModal() {
+                const modal = document.getElementById('batch-clear-chat-modal');
+                const listContainer = document.getElementById('batch-clear-list');
+                const selectAllCheckbox = document.getElementById('batch-clear-select-all');
+                const countSpan = document.getElementById('batch-clear-count');
+                const confirmBtn = document.getElementById('confirm-batch-clear-btn');
+                const cancelBtn = document.getElementById('cancel-batch-clear-btn');
+                const closeBtn = document.getElementById('close-batch-clear-modal');
+                
+                // 清空列表
+                listContainer.innerHTML = '';
+                
+                // 生成角色和群组列表
+                const items = [];
+                
+                // 添加所有角色
+                db.characters.forEach(char => {
+                    items.push({
+                        id: char.id,
+                        type: 'private',
+                        name: char.remarkName || char.realName,
+                        avatar: char.avatar,
+                        messageCount: char.history ? char.history.length : 0
+                    });
+                });
+                
+                // 添加所有群组
+                db.groups.forEach(group => {
+                    items.push({
+                        id: group.id,
+                        type: 'group',
+                        name: group.name,
+                        avatar: group.avatar,
+                        messageCount: group.history ? group.history.length : 0
+                    });
+                });
+                
+                // 渲染列表
+                items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.cssText = 'display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background-color 0.2s;';
+                    itemDiv.dataset.id = item.id;
+                    itemDiv.dataset.type = item.type;
+                    
+                    itemDiv.innerHTML = `
+                        <input type="checkbox" class="batch-clear-checkbox" style="margin-right: 12px; cursor: pointer; width: 18px; height: 18px;">
+                        <img src="${item.avatar}" style="width: 45px; height: 45px; border-radius: ${item.type === 'group' ? '10px' : '50%'}; object-fit: cover; margin-right: 12px;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${item.name}</div>
+                            <div style="font-size: 12px; color: #888;">${item.type === 'group' ? '群聊' : '私聊'} · ${item.messageCount} 条消息</div>
+                        </div>
+                    `;
+                    
+                    // 获取checkbox元素
+                    const checkbox = itemDiv.querySelector('.batch-clear-checkbox');
+                    
+                    // checkbox change事件
+                    checkbox.addEventListener('change', () => {
+                        updateCount();
+                    });
+                    
+                    // 点击整行切换选中状态
+                    itemDiv.addEventListener('click', (e) => {
+                        if (e.target.type !== 'checkbox') {
+                            checkbox.checked = !checkbox.checked;
+                            updateCount();
+                        }
+                    });
+                    
+                    // 鼠标悬停效果
+                    itemDiv.addEventListener('mouseenter', () => {
+                        itemDiv.style.backgroundColor = '#f5f5f5';
+                    });
+                    itemDiv.addEventListener('mouseleave', () => {
+                        itemDiv.style.backgroundColor = 'transparent';
+                    });
+                    
+                    listContainer.appendChild(itemDiv);
+                });
+                
+                // 更新选中数量
+                function updateCount() {
+                    const checkedCount = listContainer.querySelectorAll('.batch-clear-checkbox:checked').length;
+                    countSpan.textContent = `已选择 ${checkedCount} 项`;
+                    selectAllCheckbox.checked = checkedCount === items.length && items.length > 0;
+                }
+                
+                // 全选/取消全选
+                selectAllCheckbox.addEventListener('change', () => {
+                    const checkboxes = listContainer.querySelectorAll('.batch-clear-checkbox');
+                    checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+                    updateCount();
+                });
+                
+                // 确认清除
+                confirmBtn.onclick = async () => {
+                    const checkedItems = Array.from(listContainer.querySelectorAll('.batch-clear-checkbox:checked'))
+                        .map(cb => {
+                            const itemDiv = cb.closest('[data-id]');
+                            return {
+                                id: itemDiv.dataset.id,
+                                type: itemDiv.dataset.type
+                            };
+                        });
+                    
+                    if (checkedItems.length === 0) {
+                        showToast('请至少选择一项');
+                        return;
+                    }
+                    
+                    if (!confirm(`确定要清除选中的 ${checkedItems.length} 个角色/群聊的所有聊天记录吗？\n\n此操作不可恢复！`)) {
+                        return;
+                    }
+                    
+                    // 显示加载状态
+                    confirmBtn.disabled = true;
+                    confirmBtn.textContent = '清除中...';
+                    
+                    try {
+                        let successCount = 0;
+                        
+                        for (const item of checkedItems) {
+                            if (item.type === 'private') {
+                                // 清除私聊记录
+                                const character = db.characters.find(c => c.id === item.id);
+                                if (character) {
+                                    character.history = [];
+                                    character.status = '在线';
+                                    character.autoSummarizedFloors = [];
+                                    await dataStorage.clearChatMessages(character.id, 'private');
+                                    successCount++;
+                                }
+                            } else if (item.type === 'group') {
+                                // 清除群聊记录
+                                const group = db.groups.find(g => g.id === item.id);
+                                if (group) {
+                                    group.history = [];
+                                    group.autoSummarizedFloors = [];
+                                    // 重置群成员状态
+                                    if (group.members) {
+                                        group.members.forEach(member => {
+                                            const char = db.characters.find(c => c.id === member.id);
+                                            if (char) {
+                                                char.status = '在线';
+                                            }
+                                        });
+                                    }
+                                    await dataStorage.clearChatMessages(group.id, 'group');
+                                    successCount++;
+                                }
+                            }
+                        }
+                        
+                        await saveData();
+                        renderChatList();
+                        
+                        // 如果当前正在查看被清除的聊天，刷新消息显示
+                        if (currentChatId && checkedItems.some(item => item.id === currentChatId)) {
+                            renderMessages(false, true);
+                        }
+                        
+                        showToast(`成功清除 ${successCount} 个聊天记录`);
+                        modal.classList.remove('visible');
+                    } catch (error) {
+                        console.error('批量清除失败:', error);
+                        showToast('清除失败，请重试');
+                    } finally {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = '清除选中';
+                    }
+                };
+                
+                // 取消按钮
+                cancelBtn.onclick = () => {
+                    modal.classList.remove('visible');
+                };
+                
+                // 关闭按钮
+                closeBtn.onclick = () => {
+                    modal.classList.remove('visible');
+                };
+                
+                // 点击遮罩关闭
+                modal.onclick = (e) => {
+                    if (e.target === modal) {
+                        modal.classList.remove('visible');
+                    }
+                };
+                
+                // 显示模态框
+                modal.classList.add('visible');
+                updateCount();
+            }
+            
+            // 批量清除角色数据按钮
+            const batchClearChatBtn = document.createElement('button');
+            batchClearChatBtn.className = 'btn';
+            batchClearChatBtn.textContent = '批量清除角色数据';
+            batchClearChatBtn.style.marginTop = '15px';
+            batchClearChatBtn.style.display = 'block';
+            batchClearChatBtn.style.backgroundColor = '#ff5722';
+            batchClearChatBtn.style.color = 'white';
+            
+            batchClearChatBtn.addEventListener('click', () => {
+                showBatchClearModal();
+            });
+
             tutorialContentArea.appendChild(backupDataBtn);
             tutorialContentArea.appendChild(viaBackupBtn);
             tutorialContentArea.appendChild(streamBackupBtn);
@@ -7253,7 +7460,38 @@ ${contextSummary}
             tutorialContentArea.appendChild(streamImportBtn);
             tutorialContentArea.appendChild(viewDataSizeBtn);
             tutorialContentArea.appendChild(clearCacheBtn);
-            tutorialContentArea.appendChild(batchClearCharBtn);
+            tutorialContentArea.appendChild(batchClearChatBtn);
+            
+            // 复制本机数据按钮
+            const copyLocalDataBtn = document.createElement('button');
+            copyLocalDataBtn.className = 'btn';
+            copyLocalDataBtn.textContent = '复制本机数据';
+            copyLocalDataBtn.style.marginTop = '15px';
+            copyLocalDataBtn.style.display = 'block';
+            copyLocalDataBtn.style.backgroundColor = '#4CAF50';
+            copyLocalDataBtn.style.color = 'white';
+            
+            copyLocalDataBtn.addEventListener('click', () => {
+                showCopyLocalDataModal();
+            });
+            
+            tutorialContentArea.appendChild(copyLocalDataBtn);
+            
+            // 本机记忆库按钮
+            const localMemoryLibraryBtn = document.createElement('button');
+            localMemoryLibraryBtn.className = 'btn';
+            localMemoryLibraryBtn.textContent = '本机记忆库';
+            localMemoryLibraryBtn.style.marginTop = '15px';
+            localMemoryLibraryBtn.style.display = 'block';
+            localMemoryLibraryBtn.style.backgroundColor = '#2196F3';
+            localMemoryLibraryBtn.style.color = 'white';
+            
+            localMemoryLibraryBtn.addEventListener('click', () => {
+                showLocalMemoryLibraryModal();
+            });
+            
+            tutorialContentArea.appendChild(localMemoryLibraryBtn);
+            
             tutorialContentArea.appendChild(clearLocalDataBtn);
 
             // ========== 自动提醒导出功能区域 ==========
@@ -14255,6 +14493,7 @@ ${contextSummary}
             const maxMemory = parseInt(character.maxMemory) || 10;
             const historySlice = character.history.slice(-maxMemory);
             let timeContext = '';
+            let longTimeNoSee = false;
             
             // 根据实时时间开关决定是否添加时间信息（默认开启）
             if (character.offlineRealtimeEnabled !== false) {
@@ -14262,24 +14501,52 @@ ${contextSummary}
                 timeContext += `- **当前时间**: ${currentTime}\n`;
             }
             
-            const lastAiMessage = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
+            const lastUserMsg = historySlice.filter(m => m.role === 'user' && !m.isHidden).slice(-1)[0];
+            const lastAiMsg = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
             
-            if (lastAiMessage) {
-                const lastTime = new Date(lastAiMessage.timestamp);
-                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
+            if (lastUserMsg && lastAiMsg) {
+                // 计算用户回复AI的时间差
+                const timeDiffHours = (lastUserMsg.timestamp - lastAiMsg.timestamp) / (1000 * 60 * 60);
+                const diffMinutes = Math.floor(timeDiffHours * 60);
                 
-                if (diffMinutes < 5) {
+                if (timeDiffHours > 3) {
+                    // 超过3小时没联系，强制AI意识到时间差
+                    longTimeNoSee = true;
+                    const diffDays = Math.floor(timeDiffHours / 24);
+                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${Math.floor(timeDiffHours)}小时`;
+                    
+                    timeContext += `- **对话状态**: 你的上一条消息发送后，用户过了**${timeDesc}**才回复你。你们之间已经有**${timeDesc}**没有聊天了。\n`;
+                    timeContext += `- **行为铁律**: 你【必须】意识到这个时间差！你【绝对不能】直接延续上一段对话的话题（比如几小时前或几天前的话题）。\n`;
+                    timeContext += `- **你的行动**: 你【必须】主动开启一个全新的、符合当前时间的话题来问候用户，可以：\n`;
+                    timeContext += `  1. 表达惊讶或关心："哇，好久不见！" / "这么久没联系，最近怎么样？"\n`;
+                    timeContext += `  2. 询问用户为什么这么久没联系："怎么这么久才回我呀？" / "是不是很忙？"\n`;
+                    timeContext += `  3. 分享你自己的近况或当前在做的事情\n`;
+                    timeContext += `  4. 根据当前时间（${currentTime}）开启合适的话题（如早上问早安、晚上问晚饭等）\n`;
+                    timeContext += `- **禁止行为**: 【绝对不要】延续之前的话题！【绝对不要】假装时间没有流逝！\n`;
+                } else if (diffMinutes < 5) {
                     timeContext += `- **对话状态**: 你们的对话刚刚还在继续。\n`;
                 } else if (diffMinutes < 60) {
                     timeContext += `- **对话状态**: 你们在${diffMinutes}分钟前聊过。\n`;
                 } else {
                     const diffHours = Math.floor(diffMinutes / 60);
-                    if (diffHours < 24) {
-                        timeContext += `- **对话状态**: 你们在${diffHours}小时前聊过。\n`;
-                    } else {
-                        const diffDays = Math.floor(diffHours / 24);
-                        timeContext += `- **对话状态**: 你们已经有${diffDays}天没有聊天了。\n`;
-                    }
+                    timeContext += `- **对话状态**: 你们在${diffHours}小时前聊过。\n`;
+                }
+            } else if (lastAiMsg) {
+                // 只有AI消息，没有用户回复
+                const lastTime = new Date(lastAiMsg.timestamp);
+                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
+                const diffHours = Math.floor(diffMinutes / 60);
+                
+                if (diffHours >= 3) {
+                    longTimeNoSee = true;
+                    const diffDays = Math.floor(diffHours / 24);
+                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${diffHours}小时`;
+                    timeContext += `- **对话状态**: 你在${timeDesc}前发了消息，但用户一直没有回复，现在才回复你。\n`;
+                    timeContext += `- **你的行动**: 你可以询问用户为什么这么久没回复，或者开启新话题。\n`;
+                } else if (diffMinutes < 60) {
+                    timeContext += `- **对话状态**: 你们在${diffMinutes}分钟前聊过。\n`;
+                } else {
+                    timeContext += `- **对话状态**: 你们在${diffHours}小时前聊过。\n`;
                 }
             } else {
                 timeContext += `- **对话状态**: 这是你们的第一次对话。\n`;
@@ -14746,6 +15013,7 @@ ${contextSummary}
             const maxMemory = parseInt(group.maxMemory) || 10;
             const historySlice = group.history.slice(-maxMemory);
             let timeContext = '';
+            let longTimeNoSee = false;
             
             // 群聊中，检查第一个成员的实时时间设置（群聊共享设置）
             const firstMember = group.members && group.members.length > 0 ? db.characters.find(c => c.id === group.members[0].characterId) : null;
@@ -14756,24 +15024,50 @@ ${contextSummary}
                 timeContext += `- **当前时间**: ${currentTime}\n`;
             }
             
-            const lastAiMessage = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
+            const lastUserMsg = historySlice.filter(m => m.role === 'user' && !m.isHidden).slice(-1)[0];
+            const lastAiMsg = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
             
-            if (lastAiMessage) {
-                const lastTime = new Date(lastAiMessage.timestamp);
-                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
+            if (lastUserMsg && lastAiMsg) {
+                // 计算用户回复群聊的时间差
+                const timeDiffHours = (lastUserMsg.timestamp - lastAiMsg.timestamp) / (1000 * 60 * 60);
+                const diffMinutes = Math.floor(timeDiffHours * 60);
                 
-                if (diffMinutes < 5) {
+                if (timeDiffHours > 3) {
+                    // 超过3小时没人说话，群聊应该意识到
+                    longTimeNoSee = true;
+                    const diffDays = Math.floor(timeDiffHours / 24);
+                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${Math.floor(timeDiffHours)}小时`;
+                    
+                    timeContext += `- **对话状态**: 群里已经有**${timeDesc}**没人说话了，现在用户发了消息。\n`;
+                    timeContext += `- **行为建议**: 群成员可以：\n`;
+                    timeContext += `  1. 表达惊讶："哇，群里好久没人说话了！" / "终于有人冒泡了！"\n`;
+                    timeContext += `  2. 询问大家最近在忙什么\n`;
+                    timeContext += `  3. 根据当前时间（${currentTime}）开启合适的话题\n`;
+                    timeContext += `  4. 不要直接延续${timeDesc}前的旧话题\n`;
+                } else if (diffMinutes < 5) {
                     timeContext += `- **对话状态**: 群里的对话刚刚还在继续。\n`;
                 } else if (diffMinutes < 60) {
                     timeContext += `- **对话状态**: 群里在${diffMinutes}分钟前有过对话。\n`;
                 } else {
                     const diffHours = Math.floor(diffMinutes / 60);
-                    if (diffHours < 24) {
-                        timeContext += `- **对话状态**: 群里在${diffHours}小时前有过对话。\n`;
-                    } else {
-                        const diffDays = Math.floor(diffHours / 24);
-                        timeContext += `- **对话状态**: 群里已经有${diffDays}天没有人说话了。\n`;
-                    }
+                    timeContext += `- **对话状态**: 群里在${diffHours}小时前有过对话。\n`;
+                }
+            } else if (lastAiMsg) {
+                // 只有群聊消息，没有用户回复
+                const lastTime = new Date(lastAiMsg.timestamp);
+                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
+                const diffHours = Math.floor(diffMinutes / 60);
+                
+                if (diffHours >= 3) {
+                    longTimeNoSee = true;
+                    const diffDays = Math.floor(diffHours / 24);
+                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${diffHours}小时`;
+                    timeContext += `- **对话状态**: 群里在${timeDesc}前有过对话，但之后一直没人说话，现在用户发了消息。\n`;
+                    timeContext += `- **行为建议**: 群成员可以表达"好久没见"的感觉，或询问用户为什么这么久没说话。\n`;
+                } else if (diffMinutes < 60) {
+                    timeContext += `- **对话状态**: 群里在${diffMinutes}分钟前有过对话。\n`;
+                } else {
+                    timeContext += `- **对话状态**: 群里在${diffHours}小时前有过对话。\n`;
                 }
             } else {
                 timeContext += `- **对话状态**: 这是群聊的第一次对话。\n`;

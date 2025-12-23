@@ -4067,3 +4067,43 @@
 </body>
 
 </html>
+
+    </div>
+</div>
+
+<!-- 批量清除角色数据模态框 -->
+<div id="batch-clear-chat-modal" class="modal-overlay">
+    <div class="modal-window" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;">批量清除角色数据</h3>
+            <button id="close-batch-clear-modal" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        
+        <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+            <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
+                ⚠️ 此操作将清空选中角色/群聊的所有聊天记录，效果等同于逐个进入聊天点击"清空聊天记录"按钮。
+            </p>
+        </div>
+        
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="batch-clear-select-all" style="margin-right: 8px; cursor: pointer;">
+                <span style="font-weight: 600;">全选</span>
+            </label>
+            <span style="color: #888; font-size: 14px;" id="batch-clear-count">已选择 0 项</span>
+        </div>
+        
+        <div id="batch-clear-list" style="flex: 1; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; max-height: 400px;">
+            <!-- 角色和群组列表将动态生成 -->
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button id="confirm-batch-clear-btn" class="btn btn-danger" style="flex: 1;">清除选中</button>
+            <button id="cancel-batch-clear-btn" class="btn btn-secondary" style="flex: 1;">取消</button>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
