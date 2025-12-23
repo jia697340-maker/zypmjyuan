@@ -2193,8 +2193,10 @@
                     // 保存消息到分块存储
                     if (char.history && char.history.length > 0) {
                         await dataStorage.saveChatMessages(char.id, 'private', char.history);
+                        // 【关键修复】更新lastMessage缓存
+                        char.lastMessage = char.history[char.history.length - 1];
                     }
-                    // 保存角色基础信息（不包含history）
+                    // 保存角色基础信息（不包含history，但包含lastMessage）
                     const { history, ...charData } = char;
                     charData.history = []; // 保持兼容性
                     await dataStorage.saveData(`character_${char.id}`, charData);
@@ -2206,8 +2208,10 @@
                     // 保存消息到分块存储
                     if (group.history && group.history.length > 0) {
                         await dataStorage.saveChatMessages(group.id, 'group', group.history);
+                        // 【关键修复】更新lastMessage缓存
+                        group.lastMessage = group.history[group.history.length - 1];
                     }
-                    // 保存群组基础信息（不包含history）
+                    // 保存群组基础信息（不包含history，但包含lastMessage）
                     const { history, ...groupData } = group;
                     groupData.history = []; // 保持兼容性
                     await dataStorage.saveData(`group_${group.id}`, groupData);
@@ -2361,13 +2365,19 @@
 
             console.log(`发现 ${characterKeys.length} 个角色数据, ${groupKeys.length} 个群组数据`);
 
-            // 加载角色数据
+            // 加载角色数据 - 【极致优化】只加载元数据，不加载任何消息
             const characterPromises = characterKeys.map(async (key) => {
                 const charId = key.replace('character_', '');
                 const charData = await dataStorage.getData(key);
                 if (charData) {
-                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
-                    charData.history = await dataStorage.getChatMessages(charId, 'private', 10);
+                    // 【关键修复】完全不加载历史消息，只在打开聊天时按需加载
+                    charData.history = [];
+                    
+                    // 【性能优化】只获取最后一条消息用于列表预览
+                    const lastMessage = await dataStorage.getChatMessages(charId, 'private', 1);
+                    if (lastMessage && lastMessage.length > 0) {
+                        charData.lastMessage = lastMessage[0];
+                    }
 
                     // 设置默认值
                     if (charData.isPinned === undefined) charData.isPinned = false;
@@ -2381,13 +2391,19 @@
                 return null;
             });
 
-            // 加载群组数据
+            // 加载群组数据 - 【极致优化】只加载元数据，不加载任何消息
             const groupPromises = groupKeys.map(async (key) => {
                 const groupId = key.replace('group_', '');
                 const groupData = await dataStorage.getData(key);
                 if (groupData) {
-                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
-                    groupData.history = await dataStorage.getChatMessages(groupId, 'group', 10);
+                    // 【关键修复】完全不加载历史消息，只在打开聊天时按需加载
+                    groupData.history = [];
+                    
+                    // 【性能优化】只获取最后一条消息用于列表预览
+                    const lastMessage = await dataStorage.getChatMessages(groupId, 'group', 1);
+                    if (lastMessage && lastMessage.length > 0) {
+                        groupData.lastMessage = lastMessage[0];
+                    }
 
                     // 设置默认值
                     if (groupData.isPinned === undefined) groupData.isPinned = false;
@@ -2997,6 +3013,29 @@
 
         const init = async () => {
             await loadData();
+            
+            // 【关键修复】添加定期内存清理机制
+            setInterval(() => {
+                // 清理非当前聊天的历史记录
+                db.characters.forEach(char => {
+                    if (char.id !== currentChatId && char.history && char.history.length > 100) {
+                        char.lastMessage = char.history[char.history.length - 1];
+                        char.history = [];
+                        char._fullHistoryLoaded = false;
+                    }
+                });
+                
+                db.groups.forEach(group => {
+                    if (group.id !== currentChatId && group.history && group.history.length > 100) {
+                        group.lastMessage = group.history[group.history.length - 1];
+                        group.history = [];
+                        group._fullHistoryLoaded = false;
+                    }
+                });
+                
+                console.log('✅ 定期内存清理完成');
+            }, 60000); // 每60秒清理一次
+            
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.context-menu')) {
                     e.stopPropagation();
@@ -11440,8 +11479,9 @@ ${contextSummary}
                 noChatsPlaceholder.style.display = (normalCharacters.length + db.groups.length) === 0 ? 'block' : 'none';
                 const sortedChats = allChats.sort((a, b) => {
                     if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-                    const lastMsgTimeA = a.history && a.history.length > 0 ? a.history[a.history.length - 1].timestamp : 0;
-                    const lastMsgTimeB = b.history && b.history.length > 0 ? b.history[b.history.length - 1].timestamp : 0;
+                    // 【关键修复】使用lastMessage而不是history数组
+                    const lastMsgTimeA = a.lastMessage ? a.lastMessage.timestamp : 0;
+                    const lastMsgTimeB = b.lastMessage ? b.lastMessage.timestamp : 0;
                     return lastMsgTimeB - lastMsgTimeA;
                 });
                 
@@ -11464,12 +11504,13 @@ ${contextSummary}
                         }
                     }
                     
-                    // 如果不是拉黑状态，显示正常的最后消息
-                    if (chat.history && chat.history.length > 0 && (!chat.relationship || chat.relationship.status === 'friend')) {
+                    // 【关键修复】使用lastMessage而不是遍历history数组
+                    if (chat.lastMessage && (!chat.relationship || chat.relationship.status === 'friend')) {
                         const invisibleRegex = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[系统提示：.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/;
-                        const visibleHistory = chat.history.filter(msg => !invisibleRegex.test(msg.content));
-                        if (visibleHistory.length > 0) {
-                            const lastMsg = visibleHistory[visibleHistory.length - 1];
+                        
+                        // 检查最后一条消息是否可见
+                        if (!invisibleRegex.test(chat.lastMessage.content)) {
+                            const lastMsg = chat.lastMessage;
                             
                             // 检查是否有人@了USER（仅群聊）
                             let hasMentionedUser = false;
@@ -11521,19 +11562,8 @@ ${contextSummary}
                             }
                             }
                         } else {
-                            const lastEverMsg = chat.history[chat.history.length - 1];
-                            const inviteRegex = /\[(.*?)邀请(.*?)加入了群聊\]/;
-                            const renameRegex = /\[.*?修改群名为：.*?\]/;
-                            const timeSkipRegex = /\[system-display:([\s\S]+?)\]/;
-                            const timeSkipMatch = lastEverMsg.content.match(timeSkipRegex);
-
-                            if (timeSkipMatch) {
-                                lastMessageText = timeSkipMatch[1];
-                            } else if (inviteRegex.test(lastEverMsg.content)) {
-                                lastMessageText = '新成员加入了群聊';
-                            } else if (renameRegex.test(lastEverMsg.content)) {
-                                lastMessageText = '群聊名称已修改';
-                            }
+                            // 【关键修复】如果lastMessage是不可见消息，显示默认文本
+                            lastMessageText = '开始聊天吧...';
                         }
                     }
                     const li = document.createElement('li');
@@ -12588,14 +12618,31 @@ ${contextSummary}
         }
 
         async function openChatRoom(chatId, type) {
+            // 【关键修复】在打开新聊天前，清理旧聊天的历史记录以释放内存
+            if (currentChatId && currentChatId !== chatId) {
+                const oldChat = (currentChatType === 'private') 
+                    ? db.characters.find(c => c.id === currentChatId) 
+                    : db.groups.find(g => g.id === currentChatId);
+                
+                if (oldChat && oldChat.history && oldChat.history.length > 100) {
+                    // 只保留最后一条消息用于列表预览
+                    oldChat.lastMessage = oldChat.history[oldChat.history.length - 1];
+                    oldChat.history = [];
+                    oldChat._fullHistoryLoaded = false;
+                    console.log(`✅ 已清理旧聊天 ${currentChatId} 的历史记录，释放内存`);
+                }
+            }
+            
             const chat = (type === 'private') ? db.characters.find(c => c.id === chatId) : db.groups.find(g => g.id === chatId);
             if (!chat) return;
             
-            // 【性能优化】标记是否已加载完整历史，避免重复加载
+            // 【关键修复】按需加载历史消息，避免一次性加载全部
             if (!chat._fullHistoryLoaded) {
-                const fullHistory = await dataStorage.getChatMessages(chatId, type);
-                chat.history = fullHistory;
-                chat._fullHistoryLoaded = true;
+                // 先加载最近的100条消息用于快速显示
+                const recentHistory = await dataStorage.getChatMessages(chatId, type, 100);
+                chat.history = recentHistory;
+                chat._fullHistoryLoaded = false; // 标记为未完全加载
+                chat._hasMoreHistory = recentHistory.length >= 100; // 是否还有更多历史
             }
             
             // 如果是群聊，初始化用户权限（兼容旧数据）
@@ -12879,8 +12926,11 @@ ${contextSummary}
             requestAnimationFrame(() => {
                 const oldScrollHeight = messageArea.scrollHeight;
                 const totalMessages = chat.history.length;
-                const end = totalMessages - (currentPage - 1) * MESSAGES_PER_PAGE;
-                const start = Math.max(0, end - MESSAGES_PER_PAGE);
+                
+                // 【关键修复】限制每次渲染的消息数量，避免一次性渲染过多
+                const maxRenderCount = Math.min(MESSAGES_PER_PAGE * currentPage, totalMessages);
+                const end = totalMessages;
+                const start = Math.max(0, end - maxRenderCount);
                 const messagesToRender = chat.history.slice(start, end);
                 
                 if (!isLoadMore) {
@@ -12922,13 +12972,18 @@ ${contextSummary}
                 if (existingLoadBtn) existingLoadBtn.remove();
                 
                 // 【关键修复】一次性插入所有消息，避免多次重排
-                messageArea.prepend(fragment);
+                if (!isLoadMore) {
+                    messageArea.appendChild(fragment);
+                } else {
+                    messageArea.prepend(fragment);
+                }
                 
-                if (totalMessages > currentPage * MESSAGES_PER_PAGE) {
+                // 【关键修复】只在还有更多消息时显示加载按钮
+                if (start > 0) {
                     const loadMoreButton = document.createElement('button');
                     loadMoreButton.id = 'load-more-btn';
                     loadMoreButton.className = 'load-more-btn';
-                    loadMoreButton.textContent = '加载更早的消息';
+                    loadMoreButton.textContent = `加载更早的消息 (剩余 ${start} 条)`;
                     messageArea.prepend(loadMoreButton);
                 }
                 
