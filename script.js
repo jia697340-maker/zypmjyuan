@@ -7845,6 +7845,7 @@ ${contextSummary}
                                 if (clearType === 'messages') {
                                     // 仅清除聊天记录
                                     character.history = [];
+                                    character.lastMessage = null; // 【关键修复】清空lastMessage
                                     character.status = '在线';
                                     await dataStorage.clearChatMessages(character.id, 'private');
                                 } else {
@@ -7866,6 +7867,7 @@ ${contextSummary}
                                 if (clearType === 'messages') {
                                     // 仅清除聊天记录
                                     group.history = [];
+                                    group.lastMessage = null; // 【关键修复】清空lastMessage
                                     // 重置所有群成员的在线状态
                                     if (group.members) {
                                         group.members.forEach(member => {
@@ -11475,7 +11477,18 @@ ${contextSummary}
                 chatListContainer.innerHTML = '';
                 // 过滤掉NPC角色，只显示普通角色和群聊
                 const normalCharacters = db.characters.filter(c => !c.isNPC);
-                const allChats = [...normalCharacters.map(c => ({...c, type: 'private'})), ...db.groups.map(g => ({...g, type: 'group'}))];
+                
+                // 【关键修复】不要创建新对象，直接使用原对象并标记type
+                const allChats = [];
+                normalCharacters.forEach(c => {
+                    c.type = 'private';
+                    allChats.push(c);
+                });
+                db.groups.forEach(g => {
+                    g.type = 'group';
+                    allChats.push(g);
+                });
+                
                 noChatsPlaceholder.style.display = (normalCharacters.length + db.groups.length) === 0 ? 'block' : 'none';
                 const sortedChats = allChats.sort((a, b) => {
                     if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
@@ -24323,12 +24336,14 @@ ${summaryPrompt}`;
                 if (!character) return;
                 if (confirm(`你确定要清空与"${character.remarkName}"的所有聊天记录吗？这个操作是不可恢复的！`)) {
                     character.history = [];
+                    character.lastMessage = null; // 【关键修复】清空lastMessage
                     character.status = '在线'; // 重置在线状态为默认值
                     character.autoSummarizedFloors = []; // 清空已总结记录
                     // 清空数据库中的消息chunks
                     await dataStorage.clearChatMessages(character.id, 'private');
                     await saveData();
                     renderMessages(false, true);
+                    renderChatList();
                     renderChatList();
                     // 实时更新状态显示
                     chatRoomStatusText.textContent = character.status;
@@ -30115,6 +30130,7 @@ ${summaryPrompt}`;
                 if (!group) return;
                 if (confirm(`你确定要清空群聊“${group.name}”的所有聊天记录吗？这个操作是不可恢复的！`)) {
                     group.history = [];
+                    group.lastMessage = null; // 【关键修复】清空lastMessage
                     group.autoSummarizedFloors = []; // 清空已总结记录
                     // 重置所有群成员的在线状态为默认值
                     if (group.members) {
@@ -31409,14 +31425,15 @@ ${summaryPrompt}`;
                         if (charData.customBubbleCss === undefined) charData.customBubbleCss = '';
                         if (charData.useCustomBubbleCss === undefined) charData.useCustomBubbleCss = false;
 
-                        // db.characters.push(charData);
-                        await dataStorage.saveData(`character_${char.id}`, charData);
-
-                        // 保存消息历史
+                        // 【关键修复】保存消息历史并更新lastMessage
                         if (history && Array.isArray(history) && history.length > 0) {
                             await dataStorage.saveChatMessages(char.id, 'private', history);
+                            charData.lastMessage = history[history.length - 1]; // 更新lastMessage
                             importStats.messagesCount += history.length;
                         }
+
+                        // db.characters.push(charData);
+                        await dataStorage.saveData(`character_${char.id}`, charData);
 
                         importStats.charactersCount++;
                     }
@@ -31435,14 +31452,15 @@ ${summaryPrompt}`;
                         if (groupData.customBubbleCss === undefined) groupData.customBubbleCss = '';
                         if (groupData.useCustomBubbleCss === undefined) groupData.useCustomBubbleCss = false;
 
-                        // db.groups.push(groupData);
-                        await dataStorage.saveData(`group_${group.id}`, groupData);
-
-                        // 保存消息历史
+                        // 【关键修复】保存消息历史并更新lastMessage
                         if (history && Array.isArray(history) && history.length > 0) {
                             await dataStorage.saveChatMessages(group.id, 'group', history);
+                            groupData.lastMessage = history[history.length - 1]; // 更新lastMessage
                             importStats.messagesCount += history.length;
                         }
+
+                        // db.groups.push(groupData);
+                        await dataStorage.saveData(`group_${group.id}`, groupData);
 
                         importStats.groupsCount++;
                     }
