@@ -245,30 +245,6 @@
             });
         }
 
-        // Base64 图片压缩函数
-        async function compressBase64Image(base64Data, quality = 0.7) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-
-                        // 转换为 JPEG 格式并压缩
-                        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-                        resolve(compressedDataUrl);
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                img.onerror = () => reject(new Error('图片加载失败'));
-                img.src = base64Data;
-            });
-        }
-
         // --- Initial HTML Injection ---
         document.getElementById('api-settings-screen').innerHTML = `<header class="app-header"><button class="back-btn" data-target="home-screen">‹</button><div class="title-container"><h1 class="title">API 设置</h1></div><div class="placeholder"></div></header><main class="content"><form id="api-form"><div class="form-group"><label for="api-provider">API 服务商</label><select id="api-provider" name="provider"><option value="newapi">NewAPI (自定义)</option><option value="deepseek">DeepSeek</option><option value="claude">Claude</option><option value="gemini">Gemini</option></select></div><div class="form-group"><label for="api-url">API 地址（后缀不用添加/v1）</label><input type="url" id="api-url" name="url" placeholder="选择服务商可自动填写" required></div><div class="form-group"><label for="api-key">密钥 (Key)</label><input type="password" id="api-key" name="key" placeholder="请输入你的API密钥" required></div><button type="button" class="btn btn-secondary" id="fetch-models-btn"><span class="btn-text">点击拉取模型</span><div class="spinner"></div></button><button type="button" class="btn btn-secondary" id="test-connection-btn" style="margin-top: 10px;"><span class="btn-text">测试连通性</span><div class="spinner"></div></button><div class="form-group"><label for="api-model">选择模型</label><select id="api-model" name="model" required><option value="">请先拉取模型列表</option></select></div><button type="submit" class="btn btn-primary" id="save-btn"><span class="btn-text">保 存</span><div class="spinner"></div></button></form><hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"><div style="padding: 0 20px;"><h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">副API设置</h3><p style="font-size: 14px; color: #666; background-color: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">副API用于聊天总结等功能。如果留空，则默认使用主API。</p><div class="form-group"><label for="secondary-api-provider">副API 服务商</label><select id="secondary-api-provider" name="provider"><option value="">-- 不使用副API --</option><option value="newapi">NewAPI (自定义)</option><option value="deepseek">DeepSeek</option><option value="claude">Claude</option><option value="gemini">Gemini</option></select></div><div class="form-group"><label for="secondary-api-url">副API 地址</label><input type="url" id="secondary-api-url" name="url" placeholder="选择服务商可自动填写"></div><div class="form-group"><label for="secondary-api-key">副API 密钥</label><input type="password" id="secondary-api-key" name="key" placeholder="请输入副API密钥"></div><button type="button" class="btn btn-secondary" id="fetch-secondary-models-btn"><span class="btn-text">拉取副API模型</span><div class="spinner"></div></button><div class="form-group" style="margin-top: 10px;"><label for="secondary-api-model">副API 模型</label><select id="secondary-api-model" name="model"><option value="">请先拉取模型列表</option></select></div><button type="button" class="btn btn-primary" id="save-secondary-api-btn" style="margin-bottom: 20px;">保存副API设置</button></div><hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"><div style="padding: 0 20px;"><h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">副API 预设</h3><div class="form-group"><label for="secondary-api-preset-select">选择副API预设</label><select id="secondary-api-preset-select" style="margin-bottom: 10px;"><option value="">-- 选择一个预设 --</option></select></div><div style="display: flex; gap: 10px; margin-bottom: 15px;"><button type="button" class="btn btn-primary" id="save-secondary-preset-btn" style="flex: 1;">保存副API预设</button><button type="button" class="btn btn-danger" id="delete-secondary-preset-btn" style="flex: 1;">删除副API预设</button></div><div id="secondary-preset-list-container" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; display: none;"><div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><input type="checkbox" id="select-all-secondary-presets" style="cursor: pointer;"><label for="select-all-secondary-presets" style="cursor: pointer; margin: 0;">全选</label></div><div id="secondary-preset-checkboxes"></div></div></div><hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"><div style="padding: 0 20px;"><h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">Minimax 语音 (TTS) 设置</h3><p style="font-size: 14px; color: #666; background-color: #f0f0f0; padding: 10px; border-radius: 8px; margin-bottom: 15px;">用于AI发送语音消息时的真实语音播放</p><div class="form-group"><label for="minimax-group-id">Minimax Group ID</label><input type="text" id="minimax-group-id" placeholder="输入你的 Minimax Group ID"></div><div class="form-group"><label for="minimax-api-key">Minimax API Key</label><input type="password" id="minimax-api-key" placeholder="输入你的 Minimax API Key"></div><div class="form-group"><label for="minimax-voice-id">语音 ID (Voice ID)</label><input type="text" id="minimax-voice-id" placeholder="例如: male-qn-qingse" value="male-qn-qingse"></div><div class="form-group"><label for="minimax-speech-model">语音模型</label><select id="minimax-speech-model"><option value="speech-01">speech-01</option><option value="speech-02">speech-02</option></select></div><button type="button" class="btn btn-primary" id="save-minimax-btn" style="margin-bottom: 20px;">保存 Minimax 设置</button></div><hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"><div style="padding: 0 20px;"><h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">API 预设</h3><div class="form-group"><label for="api-preset-select">选择预设</label><select id="api-preset-select" style="margin-bottom: 10px;"><option value="">-- 选择一个预设 --</option></select></div><div style="display: flex; gap: 10px; margin-bottom: 15px;"><button type="button" class="btn btn-primary" id="save-preset-btn" style="flex: 1;">保存预设</button><button type="button" class="btn btn-danger" id="delete-preset-btn" style="flex: 1;">删除预设</button></div><div id="preset-list-container" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; display: none;"><div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><input type="checkbox" id="select-all-presets" style="cursor: pointer;"><label for="select-all-presets" style="cursor: pointer; margin: 0;">全选</label></div><div id="preset-checkboxes"></div></div></div></main>`;
         document.getElementById('wallpaper-screen').innerHTML = `
@@ -688,17 +664,40 @@
             resetIconCancelBtn = document.getElementById('reset-icon-cancel-btn');
         let currentResetIconId = null;
 
-        // --- 优化的数据存储系统 (OPFS) ---
+        // --- 优化的数据存储系统 ---
         class OptimizedDataStorage {
             constructor() {
-                // 使用 OPFS (Origin Private File System)
-                this.rootHandle = null;
-                this.initialized = false;
+                // 创建数据库
+                this.db = new Dexie('章鱼喷墨机DB_V2');
+
+                // 定义数据库结构 - 升级到版本3，添加通用资源存储
+                this.db.version(3).stores({
+                    // 基础数据存储
+                    storage: 'key, value, timestamp',
+                    // 消息分块存储
+                    messageChunks: 'id, chatId, chatType, chunkIndex, messages, timestamp',
+                    // 元数据存储
+                    metadata: 'key, value, timestamp',
+                    // 自动总结记忆存储
+                    memorySummaries: 'id, chatId, chatType, name, content, messageCount, timestamp',
+                    // 记忆快照存储
+                    memorySnapshots: 'id, chatId, chatType, name, data, timestamp',
+                    // 图片Blob存储（消息中的图片）
+                    imageBlobs: 'id, data, mimeType, timestamp',
+                    // 通用资源Blob存储（头像、图标、壁纸、表情等）
+                    assetBlobs: 'id, data, mimeType, category, timestamp'
+                }).upgrade(trans => {
+                    console.log('数据库升级到版本3，添加通用资源Blob存储');
+                });
 
                 // LRU缓存配置
                 this.cache = new Map();
                 this.maxCacheSize = 50; // 最大缓存50个数据块
                 this.chunkSize = 100; // 每个数据块100条消息
+                
+                // 资源Blob缓存
+                this.assetBlobCache = new Map();
+                this.assetBlobCacheMaxSize = 100; // 缓存100个资源
 
                 // 性能监控
                 this.performanceMetrics = {
@@ -707,114 +706,6 @@
                     operationTimes: [],
                     memoryUsage: 0
                 };
-
-                // 初始化 OPFS
-                this.init();
-            }
-
-            // 初始化 OPFS
-            async init() {
-                try {
-                    if (!navigator.storage || !navigator.storage.getDirectory) {
-                        throw new Error('OPFS 不支持，浏览器版本过低');
-                    }
-                    this.rootHandle = await navigator.storage.getDirectory();
-                    this.initialized = true;
-                    console.log('✅ OPFS 初始化成功');
-                } catch (error) {
-                    console.error('❌ OPFS 初始化失败:', error);
-                    // 降级到 localStorage
-                    console.warn('⚠️ 降级使用 localStorage');
-                    this.initialized = false;
-                }
-            }
-
-            // 确保初始化完成
-            async ensureInitialized() {
-                if (!this.initialized) {
-                    await this.init();
-                }
-                if (!this.initialized) {
-                    throw new Error('存储系统未初始化');
-                }
-            }
-
-            // 获取或创建目录（支持嵌套路径）
-            async getOrCreateDirectory(dirPath) {
-                await this.ensureInitialized();
-                
-                // 分割路径
-                const parts = dirPath.split('/').filter(p => p);
-                let currentHandle = this.rootHandle;
-                
-                // 逐级创建目录
-                for (const part of parts) {
-                    currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
-                }
-                
-                return currentHandle;
-            }
-
-            // 写入文件
-            async writeFile(dirName, fileName, data) {
-                try {
-                    const dirHandle = await this.getOrCreateDirectory(dirName);
-                    const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(JSON.stringify(data));
-                    await writable.close();
-                    return true;
-                } catch (error) {
-                    console.error(`写入文件失败 ${dirName}/${fileName}:`, error);
-                    return false;
-                }
-            }
-
-            // 读取文件
-            async readFile(dirName, fileName) {
-                try {
-                    const dirHandle = await this.getOrCreateDirectory(dirName);
-                    const fileHandle = await dirHandle.getFileHandle(fileName);
-                    const file = await fileHandle.getFile();
-                    const text = await file.text();
-                    return JSON.parse(text);
-                } catch (error) {
-                    if (error.name !== 'NotFoundError') {
-                        console.error(`读取文件失败 ${dirName}/${fileName}:`, error);
-                    }
-                    return null;
-                }
-            }
-
-            // 删除文件
-            async deleteFile(dirName, fileName) {
-                try {
-                    const dirHandle = await this.getOrCreateDirectory(dirName);
-                    await dirHandle.removeEntry(fileName);
-                    return true;
-                } catch (error) {
-                    if (error.name !== 'NotFoundError') {
-                        console.error(`删除文件失败 ${dirName}/${fileName}:`, error);
-                    }
-                    return false;
-                }
-            }
-
-            // 列出目录中的所有文件
-            async listFiles(dirName) {
-                try {
-                    const dirHandle = await this.getOrCreateDirectory(dirName);
-                    const files = [];
-                    for await (const entry of dirHandle.values()) {
-                        if (entry.kind === 'file') {
-                            files.push(entry.name);
-                        }
-                    }
-                    return files;
-                } catch (error) {
-                    console.error(`列出文件失败 ${dirName}:`, error);
-                    return [];
-                }
             }
 
 
@@ -849,18 +740,748 @@
                 return null;
             }
 
+            // ===== 新增：通用资源Blob存储方法 =====
+            
+            /**
+             * 保存资源Blob（头像、图标、表情、壁纸、字体等）
+             * @param {string} base64Data - Base64数据或URL
+             * @param {string} category - 资源类别：'avatar', 'icon', 'sticker', 'wallpaper', 'font'
+             * @returns {string} - 返回blob引用ID (格式: asset:id) 或原URL
+             */
+            async saveAssetBlob(base64Data, category = 'general') {
+                try {
+                    if (!base64Data || !base64Data.startsWith('data:')) {
+                        return base64Data; // 不是Base64，直接返回（可能是URL）
+                    }
+
+                    // 生成唯一ID
+                    const assetId = `${category}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    // 解析Base64数据
+                    const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!matches) {
+                        console.warn('Base64格式不正确');
+                        return base64Data;
+                    }
+
+                    const mimeType = matches[1];
+                    const base64String = matches[2];
+                    
+                    // 转换为Blob
+                    const byteCharacters = atob(base64String);
+                    const byteArray = new Uint8Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteArray[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const blob = new Blob([byteArray], { type: mimeType });
+
+                    // 存储到IndexedDB
+                    await this.db.assetBlobs.put({
+                        id: assetId,
+                        data: blob,
+                        mimeType: mimeType,
+                        category: category,
+                        timestamp: Date.now()
+                    });
+
+                    console.log(`✓ 资源Blob已保存: ${category}/${assetId}, 大小: ${(blob.size / 1024).toFixed(2)}KB`);
+                    
+                    return `asset:${assetId}`;
+                } catch (error) {
+                    console.error('保存资源Blob失败:', error);
+                    return base64Data;
+                }
+            }
+
+            /**
+             * 加载资源Blob
+             * @param {string} assetRef - 资源引用 (格式: asset:id) 或URL
+             * @returns {string} - 返回Base64数据URL或原URL
+             */
+            async loadAssetBlob(assetRef) {
+                try {
+                    if (!assetRef || !assetRef.startsWith('asset:')) {
+                        return assetRef; // 不是asset引用，直接返回
+                    }
+
+                    // 检查缓存
+                    if (this.assetBlobCache.has(assetRef)) {
+                        return this.assetBlobCache.get(assetRef);
+                    }
+
+                    // 提取ID
+                    const assetId = assetRef.replace('asset:', '');
+
+                    // 从IndexedDB获取
+                    const record = await this.db.assetBlobs.get(assetId);
+                    if (!record) {
+                        console.warn(`未找到资源Blob: ${assetId}`);
+                        return assetRef;
+                    }
+
+                    // 转换Blob为Base64
+                    const base64Data = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(record.data);
+                    });
+
+                    // 缓存结果
+                    this.assetBlobCache.set(assetRef, base64Data);
+                    
+                    // 限制缓存大小
+                    if (this.assetBlobCache.size > this.assetBlobCacheMaxSize) {
+                        const firstKey = this.assetBlobCache.keys().next().value;
+                        this.assetBlobCache.delete(firstKey);
+                    }
+
+                    return base64Data;
+                } catch (error) {
+                    console.error('加载资源Blob失败:', error);
+                    return assetRef;
+                }
+            }
+
+            /**
+             * 自动转换数据中的所有Base64资源为Blob存储
+             * 包括：角色头像、我的头像、头像库、表情、壁纸、图标等
+             */
+            async convertAllBase64ToBlob(data) {
+                try {
+                    console.log('🚀 开始自动转换所有Base64资源为Blob存储...');
+                    
+                    let convertedCount = 0;
+                    let totalSizeBefore = 0;
+                    
+                    // 1. 转换角色头像
+                    if (data.characters && Array.isArray(data.characters)) {
+                        console.log(`📝 处理 ${data.characters.length} 个角色的头像...`);
+                        for (const char of data.characters) {
+                            // 角色头像
+                            if (char.avatar && char.avatar.startsWith('data:')) {
+                                totalSizeBefore += char.avatar.length;
+                                char.avatar = await this.saveAssetBlob(char.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 我的头像
+                            if (char.myAvatar && char.myAvatar.startsWith('data:')) {
+                                totalSizeBefore += char.myAvatar.length;
+                                char.myAvatar = await this.saveAssetBlob(char.myAvatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 角色头像库
+                            if (char.avatarLibrary && Array.isArray(char.avatarLibrary)) {
+                                for (const avatar of char.avatarLibrary) {
+                                    if (avatar.url && avatar.url.startsWith('data:')) {
+                                        totalSizeBefore += avatar.url.length;
+                                        avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                        convertedCount++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. 转换群组头像
+                    if (data.groups && Array.isArray(data.groups)) {
+                        console.log(`📝 处理 ${data.groups.length} 个群组的头像...`);
+                        for (const group of data.groups) {
+                            if (group.avatar && group.avatar.startsWith('data:')) {
+                                totalSizeBefore += group.avatar.length;
+                                group.avatar = await this.saveAssetBlob(group.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                            
+                            // 群成员头像
+                            if (group.members && Array.isArray(group.members)) {
+                                for (const member of group.members) {
+                                    if (member.avatar && member.avatar.startsWith('data:')) {
+                                        totalSizeBefore += member.avatar.length;
+                                        member.avatar = await this.saveAssetBlob(member.avatar, 'avatar');
+                                        convertedCount++;
+                                    }
+                                }
+                            }
+                            
+                            // 我的头像
+                            if (group.me && group.me.avatar && group.me.avatar.startsWith('data:')) {
+                                totalSizeBefore += group.me.avatar.length;
+                                group.me.avatar = await this.saveAssetBlob(group.me.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 3. 转换头像库
+                    if (data.avatarLibrary && Array.isArray(data.avatarLibrary)) {
+                        console.log(`📝 处理 ${data.avatarLibrary.length} 个头像库项目...`);
+                        for (const avatar of data.avatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 4. 转换我的头像库
+                    if (data.myAvatarLibrary && Array.isArray(data.myAvatarLibrary)) {
+                        console.log(`📝 处理 ${data.myAvatarLibrary.length} 个我的头像库项目...`);
+                        for (const avatar of data.myAvatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('data:')) {
+                                totalSizeBefore += avatar.url.length;
+                                avatar.url = await this.saveAssetBlob(avatar.url, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 5. 转换情头绑定
+                    if (data.avatarBindings && Array.isArray(data.avatarBindings)) {
+                        console.log(`📝 处理 ${data.avatarBindings.length} 个情头绑定...`);
+                        for (const binding of data.avatarBindings) {
+                            if (binding.charAvatarUrl && binding.charAvatarUrl.startsWith('data:')) {
+                                totalSizeBefore += binding.charAvatarUrl.length;
+                                binding.charAvatarUrl = await this.saveAssetBlob(binding.charAvatarUrl, 'avatar');
+                                convertedCount++;
+                            }
+                            if (binding.myAvatarUrl && binding.myAvatarUrl.startsWith('data:')) {
+                                totalSizeBefore += binding.myAvatarUrl.length;
+                                binding.myAvatarUrl = await this.saveAssetBlob(binding.myAvatarUrl, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 6. 转换表情包
+                    if (data.myStickers && Array.isArray(data.myStickers)) {
+                        console.log(`📝 处理 ${data.myStickers.length} 个表情包...`);
+                        for (const sticker of data.myStickers) {
+                            if (sticker.url && sticker.url.startsWith('data:')) {
+                                totalSizeBefore += sticker.url.length;
+                                sticker.url = await this.saveAssetBlob(sticker.url, 'sticker');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 7. 转换壁纸
+                    if (data.wallpaperUrl && data.wallpaperUrl.startsWith('data:')) {
+                        console.log('📝 处理主屏幕壁纸...');
+                        totalSizeBefore += data.wallpaperUrl.length;
+                        data.wallpaperUrl = await this.saveAssetBlob(data.wallpaperUrl, 'wallpaper');
+                        convertedCount++;
+                    }
+
+                    if (data.lockWallpaperUrl && data.lockWallpaperUrl.startsWith('data:')) {
+                        console.log('📝 处理锁屏壁纸...');
+                        totalSizeBefore += data.lockWallpaperUrl.length;
+                        data.lockWallpaperUrl = await this.saveAssetBlob(data.lockWallpaperUrl, 'wallpaper');
+                        convertedCount++;
+                    }
+
+                    // 8. 转换壁纸库
+                    if (data.wallpaperLibrary && Array.isArray(data.wallpaperLibrary)) {
+                        console.log(`📝 处理 ${data.wallpaperLibrary.length} 个壁纸库项目...`);
+                        for (const wallpaper of data.wallpaperLibrary) {
+                            if (wallpaper.url && wallpaper.url.startsWith('data:')) {
+                                totalSizeBefore += wallpaper.url.length;
+                                wallpaper.url = await this.saveAssetBlob(wallpaper.url, 'wallpaper');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 9. 转换自定义图标
+                    if (data.customIcons) {
+                        console.log('📝 处理自定义图标...');
+                        for (const key in data.customIcons) {
+                            const icon = data.customIcons[key];
+                            if (icon && icon.url && icon.url.startsWith('data:')) {
+                                totalSizeBefore += icon.url.length;
+                                icon.url = await this.saveAssetBlob(icon.url, 'icon');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 10. 转换NPC头像
+                    if (data.npcLibrary && Array.isArray(data.npcLibrary)) {
+                        console.log(`📝 处理 ${data.npcLibrary.length} 个NPC头像...`);
+                        for (const npc of data.npcLibrary) {
+                            if (npc.avatar && npc.avatar.startsWith('data:')) {
+                                totalSizeBefore += npc.avatar.length;
+                                npc.avatar = await this.saveAssetBlob(npc.avatar, 'avatar');
+                                convertedCount++;
+                            }
+                        }
+                    }
+
+                    // 11. 转换头像框
+                    if (data.avatarFrames && Array.isArray(data.avatarFrames)) {
+                        console.log(`📝 处理 ${data.avatarFrames.length} 个头像框...`);
+                        for (const frame of data.avatarFrames) {
+                            if (frame.url && frame.url.startsWith('data:')) {
+                                totalSizeBefore += frame.url.length;
+                                frame.url = await this.saveAssetBlob(frame.url, 'icon');
+                                convertedCount++;
+                            }
+                        }
+                    }
+                    
+                    const totalSizeAfter = convertedCount * 50; // 每个引用约50字节
+                    const savedSize = totalSizeBefore - totalSizeAfter;
+                    const savedPercent = totalSizeBefore > 0 ? ((savedSize / totalSizeBefore) * 100).toFixed(1) : 0;
+                    
+                    console.log('✅ 转换完成！');
+                    console.log(`📊 统计信息：`);
+                    console.log(`  - 转换项目数: ${convertedCount}`);
+                    console.log(`  - 转换前大小: ${(totalSizeBefore / 1024 / 1024).toFixed(2)} MB`);
+                    console.log(`  - 转换后大小: ${(totalSizeAfter / 1024).toFixed(2)} KB`);
+                    console.log(`  - 节省空间: ${(savedSize / 1024 / 1024).toFixed(2)} MB (${savedPercent}%)`);
+                    
+                    return {
+                        convertedCount,
+                        totalSizeBefore,
+                        totalSizeAfter,
+                        savedSize,
+                        savedPercent
+                    };
+                } catch (error) {
+                    console.error('❌ 转换失败:', error);
+                    throw error;
+                }
+            }
+
+            /**
+             * 加载数据时自动恢复Blob引用为Base64
+             */
+            async loadDataWithAssets(data) {
+                try {
+                    if (!data) return null;
+
+                    // 恢复角色头像
+                    if (data.characters && Array.isArray(data.characters)) {
+                        for (const char of data.characters) {
+                            if (char.avatar && char.avatar.startsWith('asset:')) {
+                                char.avatar = await this.loadAssetBlob(char.avatar);
+                            }
+                            if (char.myAvatar && char.myAvatar.startsWith('asset:')) {
+                                char.myAvatar = await this.loadAssetBlob(char.myAvatar);
+                            }
+                            // 恢复角色头像库
+                            if (char.avatarLibrary && Array.isArray(char.avatarLibrary)) {
+                                for (const avatar of char.avatarLibrary) {
+                                    if (avatar.url && avatar.url.startsWith('asset:')) {
+                                        avatar.url = await this.loadAssetBlob(avatar.url);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 恢复群组头像
+                    if (data.groups && Array.isArray(data.groups)) {
+                        for (const group of data.groups) {
+                            if (group.avatar && group.avatar.startsWith('asset:')) {
+                                group.avatar = await this.loadAssetBlob(group.avatar);
+                            }
+                            if (group.members && Array.isArray(group.members)) {
+                                for (const member of group.members) {
+                                    if (member.avatar && member.avatar.startsWith('asset:')) {
+                                        member.avatar = await this.loadAssetBlob(member.avatar);
+                                    }
+                                }
+                            }
+                            if (group.me && group.me.avatar && group.me.avatar.startsWith('asset:')) {
+                                group.me.avatar = await this.loadAssetBlob(group.me.avatar);
+                            }
+                        }
+                    }
+
+                    // 恢复头像库
+                    if (data.avatarLibrary && Array.isArray(data.avatarLibrary)) {
+                        for (const avatar of data.avatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('asset:')) {
+                                avatar.url = await this.loadAssetBlob(avatar.url);
+                            }
+                        }
+                    }
+
+                    // 恢复我的头像库
+                    if (data.myAvatarLibrary && Array.isArray(data.myAvatarLibrary)) {
+                        for (const avatar of data.myAvatarLibrary) {
+                            if (avatar.url && avatar.url.startsWith('asset:')) {
+                                avatar.url = await this.loadAssetBlob(avatar.url);
+                            }
+                        }
+                    }
+
+                    // 恢复情头绑定
+                    if (data.avatarBindings && Array.isArray(data.avatarBindings)) {
+                        for (const binding of data.avatarBindings) {
+                            if (binding.charAvatarUrl && binding.charAvatarUrl.startsWith('asset:')) {
+                                binding.charAvatarUrl = await this.loadAssetBlob(binding.charAvatarUrl);
+                            }
+                            if (binding.myAvatarUrl && binding.myAvatarUrl.startsWith('asset:')) {
+                                binding.myAvatarUrl = await this.loadAssetBlob(binding.myAvatarUrl);
+                            }
+                        }
+                    }
+
+                    // 恢复表情包
+                    if (data.myStickers && Array.isArray(data.myStickers)) {
+                        for (const sticker of data.myStickers) {
+                            if (sticker.url && sticker.url.startsWith('asset:')) {
+                                sticker.url = await this.loadAssetBlob(sticker.url);
+                            }
+                        }
+                    }
+
+                    // 恢复壁纸
+                    if (data.wallpaperUrl && data.wallpaperUrl.startsWith('asset:')) {
+                        data.wallpaperUrl = await this.loadAssetBlob(data.wallpaperUrl);
+                    }
+                    if (data.lockWallpaperUrl && data.lockWallpaperUrl.startsWith('asset:')) {
+                        data.lockWallpaperUrl = await this.loadAssetBlob(data.lockWallpaperUrl);
+                    }
+
+                    // 恢复壁纸库
+                    if (data.wallpaperLibrary && Array.isArray(data.wallpaperLibrary)) {
+                        for (const wallpaper of data.wallpaperLibrary) {
+                            if (wallpaper.url && wallpaper.url.startsWith('asset:')) {
+                                wallpaper.url = await this.loadAssetBlob(wallpaper.url);
+                            }
+                        }
+                    }
+
+                    // 恢复自定义图标
+                    if (data.customIcons) {
+                        for (const key in data.customIcons) {
+                            const icon = data.customIcons[key];
+                            if (icon && icon.url && icon.url.startsWith('asset:')) {
+                                icon.url = await this.loadAssetBlob(icon.url);
+                            }
+                        }
+                    }
+
+                    // 恢复NPC头像
+                    if (data.npcLibrary && Array.isArray(data.npcLibrary)) {
+                        for (const npc of data.npcLibrary) {
+                            if (npc.avatar && npc.avatar.startsWith('asset:')) {
+                                npc.avatar = await this.loadAssetBlob(npc.avatar);
+                            }
+                        }
+                    }
+
+                    // 恢复头像框
+                    if (data.avatarFrames && Array.isArray(data.avatarFrames)) {
+                        for (const frame of data.avatarFrames) {
+                            if (frame.url && frame.url.startsWith('asset:')) {
+                                frame.url = await this.loadAssetBlob(frame.url);
+                            }
+                        }
+                    }
+
+                    return data;
+                } catch (error) {
+                    console.error('恢复资源数据失败:', error);
+                    return data;
+                }
+            }
+
+            /**
+             * 清理未使用的资源Blob
+             */
+            async cleanupUnusedAssets() {
+                try {
+                    console.log('🧹 开始清理未使用的资源Blob...');
+                    
+                    // 获取所有资源Blob
+                    const allAssets = await this.db.assetBlobs.toArray();
+                    const allAssetIds = new Set(allAssets.map(asset => asset.id));
+                    
+                    // 获取使用中的资源ID
+                    const usedAssetIds = new Set();
+                    const data = await this.getData('章鱼喷墨机');
+                    
+                    if (data) {
+                        // 收集所有asset:引用
+                        const collectAssetRefs = (obj) => {
+                            if (!obj) return;
+                            
+                            if (typeof obj === 'string' && obj.startsWith('asset:')) {
+                                usedAssetIds.add(obj.replace('asset:', ''));
+                            } else if (Array.isArray(obj)) {
+                                obj.forEach(item => collectAssetRefs(item));
+                            } else if (typeof obj === 'object') {
+                                Object.values(obj).forEach(value => collectAssetRefs(value));
+                            }
+                        };
+                        
+                        collectAssetRefs(data);
+                    }
+                    
+                    // 找出未使用的资源
+                    const unusedAssetIds = [...allAssetIds].filter(id => !usedAssetIds.has(id));
+                    
+                    // 删除未使用的资源
+                    if (unusedAssetIds.length > 0) {
+                        await this.db.assetBlobs.bulkDelete(unusedAssetIds);
+                        console.log(`✅ 已清理 ${unusedAssetIds.length} 个未使用的资源`);
+                    } else {
+                        console.log('✅ 没有需要清理的资源');
+                    }
+                    
+                    return {
+                        total: allAssetIds.size,
+                        used: usedAssetIds.size,
+                        cleaned: unusedAssetIds.length
+                    };
+                } catch (error) {
+                    console.error('清理资源失败:', error);
+                    throw error;
+                }
+            }
+
+            // ===== 通用资源Blob存储方法结束 =====
+
+            // ===== 原有的图片Blob存储方法（用于消息中的图片） =====
+            
+            // 将Base64图片数据存储为Blob
+            async saveImageBlob(imageData) {
+                try {
+                    // 检查是否是Base64数据
+                    if (!imageData || !imageData.startsWith('data:')) {
+                        return imageData; // 如果是URL，直接返回
+                    }
+
+                    // 提取MIME类型和Base64数据
+                    const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!matches) {
+                        return imageData;
+                    }
+
+                    const mimeType = matches[1];
+                    const base64Data = matches[2];
+
+                    // 生成唯一ID
+                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+                    // 将Base64转换为Blob
+                    const byteCharacters = atob(base64Data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: mimeType });
+
+                    // 存储到IndexedDB
+                    await this.db.imageBlobs.put({
+                        id: imageId,
+                        data: blob,
+                        mimeType: mimeType,
+                        timestamp: Date.now()
+                    });
+
+                    console.log(`图片已保存为Blob: ${imageId}, 大小: ${(blob.size / 1024).toFixed(2)}KB`);
+                    
+                    // 返回引用ID
+                    return `blob:${imageId}`;
+                } catch (error) {
+                    console.error('保存图片Blob失败:', error);
+                    return imageData; // 失败时返回原数据
+                }
+            }
+
+            // 从Blob存储中获取图片数据
+            async getImageBlob(imageRef) {
+                try {
+                    // 检查是否是Blob引用
+                    if (!imageRef || !imageRef.startsWith('blob:')) {
+                        return imageRef; // 如果是URL或Base64，直接返回
+                    }
+
+                    // 提取图片ID
+                    const imageId = imageRef.replace('blob:', '');
+
+                    // 从IndexedDB获取
+                    const record = await this.db.imageBlobs.get(imageId);
+                    if (!record) {
+                        console.warn(`未找到图片Blob: ${imageId}`);
+                        return null;
+                    }
+
+                    // 将Blob转换回Base64
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(record.data);
+                    });
+                } catch (error) {
+                    console.error('获取图片Blob失败:', error);
+                    return null;
+                }
+            }
+
+            // 处理消息中的图片数据（保存前）
+            async processMessageImages(message) {
+                try {
+                    const processedMessage = { ...message };
+
+                    // 处理imageUrl字段
+                    if (processedMessage.imageUrl && processedMessage.imageUrl.startsWith('data:')) {
+                        processedMessage.imageUrl = await this.saveImageBlob(processedMessage.imageUrl);
+                    }
+
+                    // 处理parts中的图片
+                    if (processedMessage.parts && Array.isArray(processedMessage.parts)) {
+                        processedMessage.parts = await Promise.all(
+                            processedMessage.parts.map(async (part) => {
+                                if (part.type === 'image' && part.data && part.data.startsWith('data:')) {
+                                    return {
+                                        ...part,
+                                        data: await this.saveImageBlob(part.data)
+                                    };
+                                }
+                                return part;
+                            })
+                        );
+                    }
+
+                    // 处理content中的Base64图片（如果有）
+                    if (typeof processedMessage.content === 'string' && processedMessage.content.startsWith('data:')) {
+                        processedMessage.content = await this.saveImageBlob(processedMessage.content);
+                    }
+
+                    return processedMessage;
+                } catch (error) {
+                    console.error('处理消息图片失败:', error);
+                    return message;
+                }
+            }
+
+            // 恢复消息中的图片数据（读取后）
+            async restoreMessageImages(message) {
+                try {
+                    const restoredMessage = { ...message };
+
+                    // 恢复imageUrl字段
+                    if (restoredMessage.imageUrl && restoredMessage.imageUrl.startsWith('blob:')) {
+                        restoredMessage.imageUrl = await this.getImageBlob(restoredMessage.imageUrl);
+                    }
+
+                    // 恢复parts中的图片
+                    if (restoredMessage.parts && Array.isArray(restoredMessage.parts)) {
+                        restoredMessage.parts = await Promise.all(
+                            restoredMessage.parts.map(async (part) => {
+                                if (part.type === 'image' && part.data && part.data.startsWith('blob:')) {
+                                    return {
+                                        ...part,
+                                        data: await this.getImageBlob(part.data)
+                                    };
+                                }
+                                return part;
+                            })
+                        );
+                    }
+
+                    // 恢复content中的图片引用
+                    if (typeof restoredMessage.content === 'string' && restoredMessage.content.startsWith('blob:')) {
+                        restoredMessage.content = await this.getImageBlob(restoredMessage.content);
+                    }
+
+                    return restoredMessage;
+                } catch (error) {
+                    console.error('恢复消息图片失败:', error);
+                    return message;
+                }
+            }
+
+            // ===== 图片Blob存储方法结束 =====
+
+            // 清理未使用的图片Blob
+            async cleanupUnusedImages() {
+                try {
+                    console.log('开始清理未使用的图片...');
+                    
+                    // 获取所有图片Blob的ID
+                    const allImageBlobs = await this.db.imageBlobs.toArray();
+                    const allImageIds = new Set(allImageBlobs.map(img => img.id));
+                    
+                    // 获取所有消息中使用的图片ID
+                    const usedImageIds = new Set();
+                    const allMessageChunks = await this.db.messageChunks.toArray();
+                    
+                    for (const chunk of allMessageChunks) {
+                        for (const msg of chunk.messages) {
+                            // 检查imageUrl
+                            if (msg.imageUrl && msg.imageUrl.startsWith('blob:')) {
+                                usedImageIds.add(msg.imageUrl.replace('blob:', ''));
+                            }
+                            
+                            // 检查parts中的图片
+                            if (msg.parts && Array.isArray(msg.parts)) {
+                                for (const part of msg.parts) {
+                                    if (part.type === 'image' && part.data && part.data.startsWith('blob:')) {
+                                        usedImageIds.add(part.data.replace('blob:', ''));
+                                    }
+                                }
+                            }
+                            
+                            // 检查content
+                            if (typeof msg.content === 'string' && msg.content.startsWith('blob:')) {
+                                usedImageIds.add(msg.content.replace('blob:', ''));
+                            }
+                        }
+                    }
+                    
+                    // 找出未使用的图片ID
+                    const unusedImageIds = [...allImageIds].filter(id => !usedImageIds.has(id));
+                    
+                    // 删除未使用的图片
+                    if (unusedImageIds.length > 0) {
+                        await this.db.imageBlobs.bulkDelete(unusedImageIds);
+                        console.log(`已清理 ${unusedImageIds.length} 张未使用的图片`);
+                    } else {
+                        console.log('没有需要清理的图片');
+                    }
+                    
+                    return {
+                        total: allImageIds.size,
+                        used: usedImageIds.size,
+                        cleaned: unusedImageIds.length
+                    };
+                } catch (error) {
+                    console.error('清理图片失败:', error);
+                    return null;
+                }
+            }
+
             // 保存基础数据（非消息数据）
             async saveData(key, data) {
                 const startTime = Date.now();
                 try {
-                    // 保存到 OPFS: storage/key.json
-                    await this.writeFile('storage', `${key}.json`, {
+                    // 如果是主数据，自动转换所有Base64资源为Blob
+                    let processedData = data;
+                    if (key === '章鱼喷墨机') {
+                        processedData = JSON.parse(JSON.stringify(data)); // 深拷贝
+                        await this.convertAllBase64ToBlob(processedData);
+                    }
+                    
+                    const item = {
                         key: key,
-                        value: data,
+                        value: JSON.stringify(processedData),
                         timestamp: Date.now()
-                    });
+                    };
 
-                    this.updateCache(key, data);
+                    await this.db.storage.put(item);
+                    this.updateCache(key, data); // 缓存原始数据
                     console.log(`数据已保存: ${key}`);
                     return true;
                 } catch (error) {
@@ -879,11 +1500,17 @@
                         return cached;
                     }
 
-                    // 从 OPFS 读取: storage/key.json
-                    const item = await this.readFile('storage', `${key}.json`);
-                    if (item && item.value) {
-                        this.updateCache(key, item.value);
-                        return item.value;
+                    const item = await this.db.storage.get(key);
+                    if (item) {
+                        let data = JSON.parse(item.value);
+                        
+                        // 如果是主数据，自动恢复Blob引用为Base64
+                        if (key === '章鱼喷墨机') {
+                            data = await this.loadDataWithAssets(data);
+                        }
+                        
+                        this.updateCache(key, data);
+                        return data;
                     } else {
                         console.log(`未找到数据: ${key}`);
                         return null;
@@ -892,19 +1519,6 @@
                     console.error('获取数据失败:', error);
                     return null;
                 }
-            }
-
-            // 处理消息中的图片数据（转换为Blob引用）
-            async processMessageImages(msg) {
-                // 简化版本：直接返回消息，不做图片处理
-                // 如果需要图片优化，可以在这里添加逻辑
-                return msg;
-            }
-
-            // 恢复消息中的图片数据
-            async restoreMessageImages(msg) {
-                // 简化版本：直接返回消息，不做图片处理
-                return msg;
             }
 
             // 保存聊天消息（分块存储）
@@ -916,32 +1530,27 @@
                         messages.map(msg => this.processMessageImages(msg))
                     );
 
-                    // 将消息分块存储到 OPFS: messages/chatType_chatId/chunk_0.json
-                    const dirName = `messages/${chatType}_${chatId}`;
-                    
-                    // 先删除旧的分块文件
-                    const oldFiles = await this.listFiles(dirName);
-                    for (const file of oldFiles) {
-                        await this.deleteFile(dirName, file);
-                    }
+                    // 清除该聊天的所有现有分块
+                    await this.db.messageChunks.where('chatId').equals(chatId).and(chunk => chunk.chatType === chatType).delete();
 
                     // 将消息分块存储
                     const chunks = [];
                     for (let i = 0; i < processedMessages.length; i += this.chunkSize) {
                         const chunkMessages = processedMessages.slice(i, i + this.chunkSize);
-                        const chunkIndex = Math.floor(i / this.chunkSize);
-                        const fileName = `chunk_${chunkIndex}.json`;
+                        const chunkId = `${chatId}_${chatType}_${Math.floor(i / this.chunkSize)}`;
 
-                        await this.writeFile(dirName, fileName, {
-                            id: `${chatId}_${chatType}_${chunkIndex}`,
+                        chunks.push({
+                            id: chunkId,
                             chatId: chatId,
                             chatType: chatType,
-                            chunkIndex: chunkIndex,
+                            chunkIndex: Math.floor(i / this.chunkSize),
                             messages: chunkMessages,
                             timestamp: Date.now()
                         });
+                    }
 
-                        chunks.push(fileName);
+                    if (chunks.length > 0) {
+                        await this.db.messageChunks.bulkPut(chunks);
                     }
 
                     // 更新缓存（缓存原始消息，不是处理后的）
@@ -970,28 +1579,14 @@
                         }
                     }
 
-                    // 从 OPFS 获取分块: messages/chatType_chatId/chunk_*.json
-                    const dirName = `messages/${chatType}_${chatId}`;
-                    const files = await this.listFiles(dirName);
-                    
-                    if (files.length === 0) {
+                    // 从数据库获取分块
+                    const chunks = await this.db.messageChunks
+                        .where('chatId').equals(chatId)
+                        .and(chunk => chunk.chatType === chatType)
+                        .sortBy('chunkIndex');
+
+                    if (chunks.length === 0) {
                         return [];
-                    }
-
-                    // 按文件名排序（chunk_0, chunk_1, ...）
-                    files.sort((a, b) => {
-                        const aIndex = parseInt(a.match(/chunk_(\d+)/)?.[1] || '0');
-                        const bIndex = parseInt(b.match(/chunk_(\d+)/)?.[1] || '0');
-                        return aIndex - bIndex;
-                    });
-
-                    // 读取所有分块
-                    const chunks = [];
-                    for (const file of files) {
-                        const chunk = await this.readFile(dirName, file);
-                        if (chunk) {
-                            chunks.push(chunk);
-                        }
                     }
 
                     // 合并所有消息
@@ -1050,6 +1645,7 @@
 
                     await this.saveChatMessages(chatId, chatType, filteredMessages);
 
+
                     return true;
                 } catch (error) {
                     console.error('删除消息失败:', error);
@@ -1084,17 +1680,12 @@
             async clearChatMessages(chatId, chatType) {
                 const startTime = Date.now();
                 try {
-                    // 删除 OPFS 中的消息目录
-                    const dirName = `messages/${chatType}_${chatId}`;
-                    const files = await this.listFiles(dirName);
-                    
-                    for (const file of files) {
-                        await this.deleteFile(dirName, file);
-                    }
+                    await this.db.messageChunks.where('chatId').equals(chatId).and(chunk => chunk.chatType === chatType).delete();
 
                     // 清除缓存
                     const cacheKey = `messages_${chatId}_${chatType}`;
                     this.cache.delete(cacheKey);
+
 
                     return true;
                 } catch (error) {
@@ -1108,7 +1699,7 @@
             async removeData(key) {
                 const startTime = Date.now();
                 try {
-                    await this.deleteFile('storage', `${key}.json`);
+                    await this.db.storage.delete(key);
                     this.cache.delete(key);
                     console.log(`数据已删除: ${key}`);
 
@@ -1124,23 +1715,10 @@
             async clearAll() {
                 const startTime = Date.now();
                 try {
-                    await this.ensureInitialized();
-                    
-                    // 删除所有目录
-                    const directories = ['storage', 'messages', 'metadata', 'images', 'assets'];
-                    
-                    for (const dirName of directories) {
-                        try {
-                            const dirHandle = await this.rootHandle.getDirectoryHandle(dirName);
-                            // 删除目录中的所有文件
-                            for await (const entry of dirHandle.values()) {
-                                await dirHandle.removeEntry(entry.name, { recursive: true });
-                            }
-                        } catch (error) {
-                            // 目录不存在，跳过
-                        }
-                    }
-                    
+                    await this.db.storage.clear();
+                    await this.db.messageChunks.clear();
+                    await this.db.metadata.clear();
+                    await this.db.imageBlobs.clear(); // 清理图片Blob
                     this.cache.clear();
                     console.log('所有数据已清空');
 
@@ -1155,8 +1733,8 @@
             // 获取所有存储的键
             async getAllKeys() {
                 try {
-                    const files = await this.listFiles('storage');
-                    return files.map(file => file.replace('.json', ''));
+                    const storageItems = await this.db.storage.toArray();
+                    return storageItems.map(item => item.key);
                 } catch (error) {
                     console.error('获取所有键失败:', error);
                     return [];
@@ -1167,56 +1745,34 @@
             async getStorageInfo() {
                 const startTime = Date.now();
                 try {
-                    // 获取所有存储文件
-                    const storageFiles = await this.listFiles('storage');
-                    
-                    // 计算存储大小
-                    let storageSize = 0;
-                    for (const file of storageFiles) {
-                        const data = await this.readFile('storage', file);
-                        if (data) {
-                            storageSize += JSON.stringify(data).length;
-                        }
-                    }
+                    const [storageItems, messageChunks, imageBlobs, assetBlobs] = await Promise.all([
+                        this.db.storage.toArray(),
+                        this.db.messageChunks.toArray(),
+                        this.db.imageBlobs.toArray(),
+                        this.db.assetBlobs.toArray()
+                    ]);
 
-                    // 获取消息目录
-                    let messageSize = 0;
-                    let chunkCount = 0;
-                    try {
-                        const messagesDir = await this.rootHandle.getDirectoryHandle('messages');
-                        for await (const chatDir of messagesDir.values()) {
-                            if (chatDir.kind === 'directory') {
-                                for await (const file of chatDir.values()) {
-                                    if (file.kind === 'file') {
-                                        const fileHandle = await chatDir.getFileHandle(file.name);
-                                        const fileObj = await fileHandle.getFile();
-                                        messageSize += fileObj.size;
-                                        chunkCount++;
-                                    }
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        // messages 目录不存在
-                    }
-
-                    const totalSize = storageSize + messageSize;
+                    const storageSize = storageItems.reduce((sum, item) => sum + item.value.length, 0);
+                    const messageSize = messageChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk.messages).length, 0);
+                    const imageBlobSize = imageBlobs.reduce((sum, blob) => sum + blob.data.size, 0);
+                    const assetBlobSize = assetBlobs.reduce((sum, blob) => sum + blob.data.size, 0);
+                    const totalSize = storageSize + messageSize + imageBlobSize + assetBlobSize;
 
                     const info = {
-                        itemCount: storageFiles.length,
-                        chunkCount: chunkCount,
-                        imageBlobCount: 0,
-                        assetBlobCount: 0,
+                        itemCount: storageItems.length,
+                        chunkCount: messageChunks.length,
+                        imageBlobCount: imageBlobs.length,
+                        assetBlobCount: assetBlobs.length,
                         totalSize: totalSize,
                         storageSize: storageSize,
                         messageSize: messageSize,
-                        imageBlobSize: 0,
-                        assetBlobSize: 0,
+                        imageBlobSize: imageBlobSize,
+                        assetBlobSize: assetBlobSize,
                         cacheSize: this.cache.size,
-                        items: storageFiles.map(file => ({
-                            key: file.replace('.json', ''),
-                            size: 0, // 需要读取文件才能知道大小
-                            timestamp: new Date().toLocaleString()
+                        items: storageItems.map(item => ({
+                            key: item.key,
+                            size: item.value.length,
+                            timestamp: new Date(item.timestamp).toLocaleString()
                         }))
                     };
 
@@ -1269,9 +1825,9 @@
                         if (key.startsWith('character_')) {
                             const id = key.replace('character_', '');
                             if (!activeCharacterIds.has(id)) {
-                                const item = await this.getData(key);
+                                const item = await this.db.storage.get(key);
                                 if (item) {
-                                    deletedSize += JSON.stringify(item).length;
+                                    deletedSize += item.value.length;
                                     await this.removeData(key);
                                     // 同时清理对应的消息记录
                                     await this.clearChatMessages(id, 'private');
@@ -1282,9 +1838,9 @@
                         } else if (key.startsWith('group_')) {
                             const id = key.replace('group_', '');
                             if (!activeGroupIds.has(id)) {
-                                const item = await this.getData(key);
+                                const item = await this.db.storage.get(key);
                                 if (item) {
-                                    deletedSize += JSON.stringify(item).length;
+                                    deletedSize += item.value.length;
                                     await this.removeData(key);
                                     // 同时清理对应的消息记录
                                     await this.clearChatMessages(id, 'group');
@@ -1296,36 +1852,25 @@
                     }
                     
                     // 2. 清理孤立的消息分块
-                    try {
-                        const messagesDir = await this.rootHandle.getDirectoryHandle('messages');
-                        for await (const chatDir of messagesDir.values()) {
-                            if (chatDir.kind === 'directory') {
-                                const dirName = chatDir.name;
-                                const parts = dirName.split('_');
-                                if (parts.length >= 2) {
-                                    const chatType = parts[0];
-                                    const chatId = parts.slice(1).join('_');
-                                    
-                                    let isOrphan = false;
-                                    if (chatType === 'private' && !activeCharacterIds.has(chatId)) {
-                                        isOrphan = true;
-                                    } else if (chatType === 'group' && !activeGroupIds.has(chatId)) {
-                                        isOrphan = true;
-                                    }
-                                    
-                                    if (isOrphan) {
-                                        // 删除整个目录
-                                        for await (const file of chatDir.values()) {
-                                            await chatDir.removeEntry(file.name);
-                                            deletedCount++;
-                                        }
-                                        await messagesDir.removeEntry(dirName);
-                                    }
-                                }
+                    const allChunks = await this.db.messageChunks.toArray();
+                    for (const chunk of allChunks) {
+                        let isOrphan = false;
+                        
+                        if (chunk.chatType === 'private') {
+                            if (!activeCharacterIds.has(chunk.chatId)) {
+                                isOrphan = true;
+                            }
+                        } else if (chunk.chatType === 'group') {
+                            if (!activeGroupIds.has(chunk.chatId)) {
+                                isOrphan = true;
                             }
                         }
-                    } catch (error) {
-                        // messages 目录不存在
+                        
+                        if (isOrphan) {
+                            await this.db.messageChunks.where('id').equals(chunk.id).delete();
+                            deletedSize += JSON.stringify(chunk.messages).length;
+                            deletedCount++;
+                        }
                     }
 
                     // 3. 清理孤立的缓存对象
@@ -1354,20 +1899,15 @@
                 }
             }
 
-            // 数据迁移方法（从旧版本 IndexedDB 迁移到 OPFS）
+            // 数据迁移方法（从旧版本迁移）
             async migrateFromOldStorage() {
                 const startTime = Date.now();
+                let oldDb = null;
                 let migrationSuccess = false;
 
                 try {
-                    // 检查是否支持 Dexie（用于迁移）
-                    if (typeof Dexie === 'undefined') {
-                        console.log('Dexie 未加载，跳过迁移');
-                        return false;
-                    }
-
                     // 尝试从旧数据库获取数据
-                    const oldDb = new Dexie('章鱼喷墨机DB');
+                    oldDb = new Dexie('章鱼喷墨机DB');
                     oldDb.version(1).stores({
                         storage: 'key, value, timestamp'
                     });
@@ -1375,7 +1915,7 @@
                     // 检查旧数据库是否存在数据
                     const oldData = await oldDb.storage.get('章鱼喷墨机');
                     if (oldData) {
-                        console.log('检测到旧 IndexedDB 数据库，开始迁移到 OPFS...');
+                        console.log('检测到旧数据库，开始迁移...');
                         const data = JSON.parse(oldData.value);
 
                         // 迁移基础数据
@@ -1386,17 +1926,22 @@
                         let migratedGroups = 0;
                         let migratedImages = 0;
 
-                        // 迁移角色消息
+                        // 迁移角色消息（包含图片处理）
                         if (characters) {
                             for (const char of characters) {
                                 if (char.history && char.history.length > 0) {
-                                    // 统计图片数量
-                                    char.history.forEach(msg => {
-                                        if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
-                                        if (msg.parts) {
-                                            migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
-                                        }
-                                    });
+                                    // 处理消息中的图片
+                                    const processedHistory = await Promise.all(
+                                        char.history.map(async (msg) => {
+                                            const processed = await this.processMessageImages(msg);
+                                            // 统计迁移的图片数量
+                                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
+                                            if (msg.parts) {
+                                                migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
+                                            }
+                                            return processed;
+                                        })
+                                    );
                                     await this.saveChatMessages(char.id, 'private', char.history);
                                 }
                                 // 保存角色信息（不包含history）
@@ -1407,17 +1952,22 @@
                             }
                         }
 
-                        // 迁移群组消息
+                        // 迁移群组消息（包含图片处理）
                         if (groups) {
                             for (const group of groups) {
                                 if (group.history && group.history.length > 0) {
-                                    // 统计图片数量
-                                    group.history.forEach(msg => {
-                                        if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
-                                        if (msg.parts) {
-                                            migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
-                                        }
-                                    });
+                                    // 处理消息中的图片
+                                    const processedHistory = await Promise.all(
+                                        group.history.map(async (msg) => {
+                                            const processed = await this.processMessageImages(msg);
+                                            // 统计迁移的图片数量
+                                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) migratedImages++;
+                                            if (msg.parts) {
+                                                migratedImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
+                                            }
+                                            return processed;
+                                        })
+                                    );
                                     await this.saveChatMessages(group.id, 'group', group.history);
                                 }
                                 // 保存群组信息（不包含history）
@@ -1429,29 +1979,91 @@
                         }
 
                         migrationSuccess = true;
-                        console.log(`✅ 数据迁移完成: ${migratedCharacters}个角色, ${migratedGroups}个群组, ${migratedImages}张图片`);
+                        console.log(`数据迁移完成: ${migratedCharacters}个角色, ${migratedGroups}个群组, ${migratedImages}张图片`);
 
-                        // 迁移成功后删除旧数据库
+                        // 迁移成功后立即删除旧数据库
                         try {
-                            console.log('开始删除旧 IndexedDB 数据库...');
+                            console.log('开始删除旧数据库...');
+
+                            // 关闭数据库连接
                             if (oldDb.isOpen()) {
                                 oldDb.close();
                             }
+
+                            // 删除整个数据库
                             await oldDb.delete();
-                            console.log('✅ 旧数据库删除成功');
+                            console.log('旧数据库删除成功');
+
+                            // 验证删除是否成功
+                            const deletedDb = new Dexie('章鱼喷墨机DB');
+                            try {
+                                deletedDb.version(1).stores({
+                                    storage: 'key, value, timestamp'
+                                });
+                                const testData = await deletedDb.storage.get('章鱼喷墨机');
+                                if (!testData) {
+                                    console.log('旧数据库删除验证成功');
+                                } else {
+                                    console.warn('旧数据库可能未完全删除');
+                                }
+                                deletedDb.close();
+                            } catch (verifyError) {
+                                // 如果无法访问，说明删除成功
+                                console.log('旧数据库删除验证成功（数据库不存在）');
+                            }
+
                         } catch (deleteError) {
-                            console.error('删除旧数据库失败:', deleteError);
+                            console.error('删除旧数据库失败，但不影响主要功能:', deleteError);
+                            // 尝试清空数据而不是删除数据库
+                            try {
+                                if (!oldDb.isOpen()) {
+                                    await oldDb.open();
+                                }
+                                await oldDb.storage.clear();
+                                console.log('已清空旧数据库内容');
+                                oldDb.close();
+                            } catch (clearError) {
+                                console.error('清空旧数据库也失败:', clearError);
+                            }
                         }
 
                         return true;
                     } else {
                         console.log('未发现旧数据库数据');
+                        // 即使没有数据，也尝试删除可能存在的空数据库
+                        try {
+                            if (oldDb.isOpen()) {
+                                oldDb.close();
+                            }
+                            await oldDb.delete();
+                            console.log('已删除空的旧数据库');
+                        } catch (deleteError) {
+                            // 删除失败可能是因为数据库不存在，这是正常的
+                            console.log('旧数据库不存在或已删除');
+                        }
                         return false;
                     }
+
+
+                    return false;
                 } catch (error) {
                     console.error('数据迁移失败:', error);
+
+                    // 即使迁移失败，也尝试清理旧数据库连接
+                    if (oldDb) {
+                        try {
+                            if (oldDb.isOpen()) {
+                                oldDb.close();
+                                console.log('已关闭旧数据库连接');
+                            }
+                        } catch (closeError) {
+                            console.error('关闭旧数据库连接失败:', closeError);
+                        }
+                    }
+
                     return false;
                 } finally {
+                    // 确保在任何情况下都记录迁移耗时
                     const duration = Date.now() - startTime;
                     console.log(`数据迁移操作完成，耗时: ${duration}ms, 成功: ${migrationSuccess}`);
                 }
@@ -1487,22 +2099,14 @@
                 try {
                     console.log('📊 开始分析存储使用情况...');
                     
-                    // 统计图片（OPFS 版本）
+                    // 统计图片Blob
+                    const allImages = await this.dataStorage.db.imageBlobs.toArray();
                     let imageTotalSize = 0;
-                    let imageCount = 0;
-                    try {
-                        const imagesDir = await this.dataStorage.rootHandle.getDirectoryHandle('images');
-                        for await (const file of imagesDir.values()) {
-                            if (file.kind === 'file') {
-                                const fileHandle = await imagesDir.getFileHandle(file.name);
-                                const fileObj = await fileHandle.getFile();
-                                imageTotalSize += fileObj.size;
-                                imageCount++;
-                            }
+                    allImages.forEach(img => {
+                        if (img.data && img.data.size) {
+                            imageTotalSize += img.data.size;
                         }
-                    } catch (error) {
-                        // images 目录不存在
-                    }
+                    });
                     
                     // 统计消息数量
                     const baseData = await this.dataStorage.getData('章鱼喷墨机');
@@ -1529,14 +2133,14 @@
                     }
                     
                     console.log('📊 存储分析结果:');
-                    console.log(`   - 图片数量: ${imageCount} 张`);
+                    console.log(`   - 图片数量: ${allImages.length} 张`);
                     console.log(`   - 图片大小: ${(imageTotalSize / 1024 / 1024).toFixed(2)}MB`);
                     console.log(`   - 角色数量: ${totalCharacters} 个`);
                     console.log(`   - 群组数量: ${totalGroups} 个`);
                     console.log(`   - 消息总数: ${totalMessages} 条`);
                     
                     return {
-                        imageCount: imageCount,
+                        imageCount: allImages.length,
                         imageSize: imageTotalSize,
                         characterCount: totalCharacters,
                         groupCount: totalGroups,
@@ -1565,20 +2169,30 @@
             // 分离消息数据和基础数据
             const { characters, groups, ...baseData } = dbData;
 
-            console.log(`💾 saveData 被调用，角色数量: ${characters ? characters.length : 0}, 群组数量: ${groups ? groups.length : 0}`);
-
             // 保存基础数据
             await dataStorage.saveData('章鱼喷墨机', baseData);
 
             // 分别保存角色和群组数据（包含消息）
             if (characters) {
                 for (const char of characters) {
+                    // 如果是NPC角色，同步数据回父角色的npcLibrary
+                    if (char.isNPC && char.parentCharacterId && char.originalNpcId) {
+                        const parentChar = characters.find(c => c.id === char.parentCharacterId);
+                        if (parentChar && parentChar.npcLibrary) {
+                            const npc = parentChar.npcLibrary.find(n => n.id === char.originalNpcId);
+                            if (npc) {
+                                npc.history = char.history;
+                                npc.maxMemory = char.maxMemory;
+                                npc.chatBg = char.chatBg;
+                                npc.customBubbleCss = char.customBubbleCss;
+                                npc.useCustomBubbleCss = char.useCustomBubbleCss;
+                            }
+                        }
+                    }
+                    
                     // 保存消息到分块存储
                     if (char.history && char.history.length > 0) {
-                        console.log(`💾 保存角色 ${char.remarkName || char.name} 的 ${char.history.length} 条消息`);
                         await dataStorage.saveChatMessages(char.id, 'private', char.history);
-                    } else {
-                        console.log(`⚠️ 角色 ${char.remarkName || char.name} 没有消息历史`);
                     }
                     // 保存角色基础信息（不包含history）
                     const { history, ...charData } = char;
@@ -1591,13 +2205,10 @@
                 for (const group of groups) {
                     // 保存消息到分块存储
                     if (group.history && group.history.length > 0) {
-                        console.log(`💾 保存群组 ${group.name} 的 ${group.history.length} 条消息`);
                         await dataStorage.saveChatMessages(group.id, 'group', group.history);
-                    } else {
-                        console.log(`⚠️ 群组 ${group.name} 没有消息历史`);
                     }
                     // 保存群组基础信息（不包含history）
-                    const { history, ...groupData} = group;
+                    const { history, ...groupData } = group;
                     groupData.history = []; // 保持兼容性
                     await dataStorage.saveData(`group_${group.id}`, groupData);
                 }
@@ -1611,6 +2222,9 @@
             }
             if(dbData.fontUrl){
                 await dataStorage.saveData('fontUrl', dbData.fontUrl);
+            }
+            if(dbData.fontLibrary){
+                await dataStorage.saveData('fontLibrary', dbData.fontLibrary);
             }
             if(dbData.homeScreenMode){
                 await dataStorage.saveData('homeScreenMode', dbData.homeScreenMode);
@@ -1657,26 +2271,24 @@
 
             // 额外的安全检查：确保旧数据库完全清理
             try {
-                if (typeof Dexie !== 'undefined') {
-                    const safetyCheckDb = new Dexie('章鱼喷墨机DB');
-                    safetyCheckDb.version(1).stores({
-                        storage: 'key, value, timestamp'
-                    });
+                const safetyCheckDb = new Dexie('章鱼喷墨机DB');
+                safetyCheckDb.version(1).stores({
+                    storage: 'key, value, timestamp'
+                });
 
-                    const residualData = await safetyCheckDb.storage.get('章鱼喷墨机');
-                    if (residualData) {
-                        console.warn('发现残留的旧数据库数据，执行强制清理...');
-                        await safetyCheckDb.storage.clear();
-                        safetyCheckDb.close();
-                        await safetyCheckDb.delete();
-                        console.log('残留旧数据库已强制清理');
-                    } else {
-                        safetyCheckDb.close();
-                    }
+                const residualData = await safetyCheckDb.storage.get('章鱼喷墨机');
+                if (residualData) {
+                    console.warn('发现残留的旧数据库数据，执行强制清理...');
+                    await safetyCheckDb.storage.clear();
+                    safetyCheckDb.close();
+                    await safetyCheckDb.delete();
+                    console.log('残留旧数据库已强制清理');
+                } else {
+                    safetyCheckDb.close();
                 }
             } catch (safetyError) {
                 // 如果无法访问旧数据库，说明已经被正确删除
-                console.log('旧数据库安全检查完成（数据库不存在或 Dexie 未加载）');
+                console.log('旧数据库安全检查完成（数据库不存在）');
             }
 
             // 加载基础数据
@@ -1691,8 +2303,51 @@
             if (!db.myStickers) db.myStickers = [];
             if (!db.homeScreenMode) db.homeScreenMode = 'night';
             if (!db.worldBooks) db.worldBooks = [];
+            if (!db.worldBookGroups) db.worldBookGroups = [];
             if (!db.fontUrl) db.fontUrl = '';
+            if (!db.fontLibrary) db.fontLibrary = [];
+            if (!db.fontSize) db.fontSize = 16;
             if (!db.customIcons) db.customIcons = {};
+            if (!db.deletedCharacterIds) db.deletedCharacterIds = [];
+            if (!db.deletedGroupIds) db.deletedGroupIds = [];
+            if (!db.musicPlaylist) db.musicPlaylist = [];
+            if (db.showDockAppNames === undefined) db.showDockAppNames = false;
+            if (db.showStatusBar === undefined) db.showStatusBar = false;
+            if (db.enableLockScreen === undefined) db.enableLockScreen = false;
+            if (!db.lockScreenWallpaper) db.lockScreenWallpaper = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            
+            // 悬浮歌词设置 - 深度合并以保留所有属性
+            if (!db.floatingLyricsSettings) {
+                db.floatingLyricsSettings = {
+                    activeFontSize: 18,
+                    otherFontSize: 13,
+                    linesCount: 3,
+                    activeColor: '#ff80ab',
+                    previousColor: '#787878',
+                    upcomingColor: '#787878',
+                    lineGap: 8
+                };
+            } else {
+                // 确保所有属性都存在，使用默认值填充缺失的属性
+                const defaultSettings = {
+                    activeFontSize: 18,
+                    otherFontSize: 13,
+                    linesCount: 3,
+                    activeColor: '#ff80ab',
+                    previousColor: '#787878',
+                    upcomingColor: '#787878',
+                    lineGap: 8
+                };
+                db.floatingLyricsSettings = { ...defaultSettings, ...db.floatingLyricsSettings };
+            }
+            
+            // 锁屏密码配置
+            if (!db.lockScreenPassword) db.lockScreenPassword = {
+                enabled: false,      // 是否启用密码
+                type: 'none',        // 密码类型: 'none', 'pin', 'gesture'
+                pin: '',             // 数字密码
+                gesture: []          // 手势密码（九宫格路径）
+            };
 
             // 重建characters和groups列表
             // 由于saveData时这两个字段被排除，需要从存储中重新构建
@@ -1711,8 +2366,8 @@
                 const charId = key.replace('character_', '');
                 const charData = await dataStorage.getData(key);
                 if (charData) {
-                    // 按需加载消息历史
-                    charData.history = await dataStorage.getChatMessages(charId, 'private');
+                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
+                    charData.history = await dataStorage.getChatMessages(charId, 'private', 10);
 
                     // 设置默认值
                     if (charData.isPinned === undefined) charData.isPinned = false;
@@ -1731,8 +2386,8 @@
                 const groupId = key.replace('group_', '');
                 const groupData = await dataStorage.getData(key);
                 if (groupData) {
-                    // 按需加载消息历史
-                    groupData.history = await dataStorage.getChatMessages(groupId, 'group');
+                    // 【性能优化】只加载最后10条消息用于预览，完整历史在打开聊天时再加载
+                    groupData.history = await dataStorage.getChatMessages(groupId, 'group', 10);
 
                     // 设置默认值
                     if (groupData.isPinned === undefined) groupData.isPinned = false;
@@ -1752,11 +2407,31 @@
             ]);
 
             // 过滤掉null值并赋值给db
-            db.characters = loadedCharacters.filter(char => char !== null);
-            db.groups = loadedGroups.filter(group => group !== null);
+            db.characters = loadedCharacters.filter(char => char !== null && !db.deletedCharacterIds.includes(char.id));
+            db.groups = loadedGroups.filter(group => group !== null && !db.deletedGroupIds.includes(group.id));
 
             console.log(`成功加载 ${db.characters.length} 个角色, ${db.groups.length} 个群组`);
             console.log('完整数据库对象:', db);
+            
+            // 加载音乐播放列表到musicState
+            if (db.musicPlaylist && db.musicPlaylist.length > 0) {
+                musicState.playlist = db.musicPlaylist;
+                console.log(`加载了 ${musicState.playlist.length} 首歌曲到播放列表`);
+            }
+
+            // 启动性能监控和数据完整性检查
+            setTimeout(async () => {
+                dataStorage.getStorageInfo();
+
+                // 执行数据完整性验证
+                const validation = await validateDataIntegrity();
+                if (!validation.isValid) {
+                    console.warn('数据完整性检查发现问题:', validation.issues);
+                    // 可以选择显示警告或自动修复
+                }
+            }, 1000);
+
+            return Promise.resolve();
         };
         const showToast = (message) => {
             toastElement.textContent = message;
@@ -6204,8 +6879,6 @@ ${contextSummary}
                     await compressedWriter.write(encoder.encode('"fontLibrary":' + JSON.stringify(db.fontLibrary || []) + ','));
                     await compressedWriter.write(encoder.encode('"fontSize":' + (db.fontSize || 16) + ','));
                     await compressedWriter.write(encoder.encode('"customIcons":' + JSON.stringify(db.customIcons || {}) + ','));
-                    // 修复：导出人设预设
-                    await compressedWriter.write(encoder.encode('"personaPresets":' + JSON.stringify(db.personaPresets || []) + ','));
                     
                     // 导出角色数据（包含完整历史）
                     showToast('正在导出角色数据...');
@@ -6213,10 +6886,8 @@ ${contextSummary}
                     for (const char of db.characters) {
                         const fullHistory = await dataStorage.getChatMessages(char.id, 'private');
                         const charData = await dataStorage.getData(`character_${char.id}`) || char;
-                        // 修复：确保 worldBookIds 被导出
                         charactersWithHistory.push({
                             ...charData,
-                            worldBookIds: charData.worldBookIds || char.worldBookIds || [],
                             history: fullHistory || []
                         });
                     }
@@ -6228,10 +6899,8 @@ ${contextSummary}
                     for (const group of db.groups) {
                         const fullHistory = await dataStorage.getChatMessages(group.id, 'group');
                         const groupData = await dataStorage.getData(`group_${group.id}`) || group;
-                        // 修复：确保 worldBookIds 被导出
                         groupsWithHistory.push({
                             ...groupData,
-                            worldBookIds: groupData.worldBookIds || group.worldBookIds || [],
                             history: fullHistory || []
                         });
                     }
@@ -9074,21 +9743,16 @@ ${contextSummary}
                     const imageCountDisplay = document.getElementById('image-count-display');
                     imageCountDisplay.textContent = '正在统计...';
 
-                    // 统计所有图片（OPFS 版本）
-                    let totalCount = 0;
+                    // 统计所有图片
+                    const allImages = await dataStorage.db.imageBlobs.toArray();
+                    const totalCount = allImages.length;
+                    
+                    // 估算总大小
                     let totalSize = 0;
-                    try {
-                        const imagesDir = await dataStorage.rootHandle.getDirectoryHandle('images');
-                        for await (const file of imagesDir.values()) {
-                            if (file.kind === 'file') {
-                                const fileHandle = await imagesDir.getFileHandle(file.name);
-                                const fileObj = await fileHandle.getFile();
-                                totalSize += fileObj.size;
-                                totalCount++;
-                            }
+                    for (const img of allImages) {
+                        if (img.blob) {
+                            totalSize += img.blob.size;
                         }
-                    } catch (error) {
-                        // images 目录不存在
                     }
 
                     const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
@@ -9123,117 +9787,77 @@ ${contextSummary}
 
                 try {
                     showToast('开始压缩图片，请稍候...');
-                    
-                    // OPFS 版本的图片压缩
+
+                    const allImages = await dataStorage.db.imageBlobs.toArray();
                     let compressedCount = 0;
                     let totalSizeBefore = 0;
                     let totalSizeAfter = 0;
                     let skippedCount = 0;
 
-                    // 遍历所有聊天，找出所有图片消息
-                    const allChats = [...db.characters, ...db.groups];
-                    let totalImages = 0;
-                    let processedImages = 0;
-
-                    // 先统计总图片数
-                    for (const chat of allChats) {
-                        const chatType = chat.members ? 'group' : 'private';
-                        const messages = await dataStorage.getChatMessages(chat.id, chatType);
-                        for (const msg of messages) {
-                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) {
-                                totalImages++;
-                            }
-                            if (msg.parts) {
-                                totalImages += msg.parts.filter(p => p.type === 'image' && p.data && p.data.startsWith('data:')).length;
-                            }
-                        }
-                    }
-
-                    if (totalImages === 0) {
-                        showToast('没有找到需要压缩的图片');
-                        return;
-                    }
-
-                    // 压缩图片
-                    for (const chat of allChats) {
-                        const chatType = chat.members ? 'group' : 'private';
-                        const messages = await dataStorage.getChatMessages(chat.id, chatType);
-                        let modified = false;
-
-                        for (const msg of messages) {
-                            // 压缩 imageUrl
-                            if (msg.imageUrl && msg.imageUrl.startsWith('data:')) {
-                                try {
-                                    const sizeBefore = msg.imageUrl.length;
-                                    totalSizeBefore += sizeBefore;
-
-                                    const compressed = await compressBase64Image(msg.imageUrl, quality);
-                                    
-                                    if (compressed) {
-                                        msg.imageUrl = compressed;
-                                        totalSizeAfter += compressed.length;
-                                        compressedCount++;
-                                        modified = true;
-                                    } else {
-                                        totalSizeAfter += sizeBefore;
-                                        skippedCount++;
-                                    }
-                                } catch (error) {
-                                    console.error('压缩图片失败:', error);
-                                    skippedCount++;
-                                    totalSizeAfter += msg.imageUrl.length;
-                                }
-
-                                processedImages++;
-                                if (processedImages % 5 === 0 || processedImages === totalImages) {
-                                    compressBtn.innerHTML = `<span style="font-size: 16px;">🔄</span> 压缩中... ${processedImages}/${totalImages}`;
-                                }
+                    for (let i = 0; i < allImages.length; i++) {
+                        const img = allImages[i];
+                        
+                        try {
+                            if (!img.blob) {
+                                skippedCount++;
+                                continue;
                             }
 
-                            // 压缩 parts 中的图片
-                            if (msg.parts) {
-                                for (const part of msg.parts) {
-                                    if (part.type === 'image' && part.data && part.data.startsWith('data:')) {
-                                        try {
-                                            const sizeBefore = part.data.length;
-                                            totalSizeBefore += sizeBefore;
+                            totalSizeBefore += img.blob.size;
 
-                                            const compressed = await compressBase64Image(part.data, quality);
-                                            
-                                            if (compressed) {
-                                                part.data = compressed;
-                                                totalSizeAfter += compressed.length;
-                                                compressedCount++;
-                                                modified = true;
-                                            } else {
-                                                totalSizeAfter += sizeBefore;
-                                                skippedCount++;
-                                            }
-                                        } catch (error) {
-                                            console.error('压缩图片失败:', error);
-                                            skippedCount++;
-                                            totalSizeAfter += part.data.length;
-                                        }
+                            // 创建图片元素
+                            const imgElement = new Image();
+                            const blobUrl = URL.createObjectURL(img.blob);
+                            
+                            await new Promise((resolve, reject) => {
+                                imgElement.onload = resolve;
+                                imgElement.onerror = reject;
+                                imgElement.src = blobUrl;
+                            });
 
-                                        processedImages++;
-                                        if (processedImages % 5 === 0 || processedImages === totalImages) {
-                                            compressBtn.innerHTML = `<span style="font-size: 16px;">🔄</span> 压缩中... ${processedImages}/${totalImages}`;
-                                        }
-                                    }
-                                }
+                            // 压缩图片
+                            const canvas = document.createElement('canvas');
+                            canvas.width = imgElement.width;
+                            canvas.height = imgElement.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(imgElement, 0, 0);
+
+                            // 转换为Blob
+                            const compressedBlob = await new Promise(resolve => {
+                                canvas.toBlob(resolve, 'image/jpeg', quality);
+                            });
+
+                            URL.revokeObjectURL(blobUrl);
+
+                            if (compressedBlob) {
+                                totalSizeAfter += compressedBlob.size;
+                                
+                                // 更新数据库
+                                await dataStorage.db.imageBlobs.update(img.id, {
+                                    blob: compressedBlob,
+                                    mimeType: 'image/jpeg'
+                                });
+                                
+                                compressedCount++;
+                            } else {
+                                skippedCount++;
                             }
-                        }
 
-                        // 如果有修改，保存消息
-                        if (modified) {
-                            await dataStorage.saveChatMessages(chat.id, chatType, messages);
+                            // 更新进度
+                            if ((i + 1) % 10 === 0 || i === allImages.length - 1) {
+                                compressBtn.innerHTML = `<span style="font-size: 16px;"></span> 压缩中... ${i + 1}/${allImages.length}`;
+                            }
+
+                        } catch (error) {
+                            console.error(`压缩图片 ${img.id} 失败:`, error);
+                            skippedCount++;
                         }
                     }
 
                     const sizeSavedMB = ((totalSizeBefore - totalSizeAfter) / (1024 * 1024)).toFixed(2);
                     const percentSaved = totalSizeBefore > 0 ? ((1 - totalSizeAfter / totalSizeBefore) * 100).toFixed(1) : 0;
 
-                    showToast(`✅ 压缩完成！\n成功: ${compressedCount} 张\n跳过: ${skippedCount} 张\n节省: ${sizeSavedMB} MB (${percentSaved}%)`, 6000);
+                    showToast(` 压缩完成！\n成功: ${compressedCount} 张\n跳过: ${skippedCount} 张\n节省: ${sizeSavedMB} MB (${percentSaved}%)`, 6000);
 
                     // 更新统计信息
                     await updateImageStats();
@@ -9252,7 +9876,7 @@ ${contextSummary}
                                 <span id="image-count-display">正在统计...</span>
                             </div>
                             <br>
-                            <strong style="color: #4CAF50;">✅ 最近压缩：</strong>${new Date().toLocaleString('zh-CN')}<br>
+                            <strong style="color: #4CAF50;"> 最近压缩：</strong>${new Date().toLocaleString('zh-CN')}<br>
                             <strong style="color: #4CAF50;">压缩质量：</strong>${qualitySlider.value}%<br>
                             <strong style="color: #4CAF50;">成功压缩：</strong>${compressedCount} 张<br>
                             <strong style="color: #4CAF50;">节省空间：</strong>${sizeSavedMB} MB (${percentSaved}%)
@@ -30599,39 +31223,28 @@ ${summaryPrompt}`;
             const startTime = Date.now();
 
             try {
-                console.log('🔄 开始创建完整备份数据...');
-                
                 // 获取基础数据
                 const baseData = await dataStorage.getData('章鱼喷墨机') || {};
-                console.log('📦 基础数据:', baseData);
 
                 // 重建完整的数据结构
                 const fullData = {
-                    ...baseData,
                     ...db,
+                    ...baseData,
                     characters: [],
                     groups: [],
-                    // 确保 personaPresets 被包含（修复：user人设预设无法跟随导出的问题）
-                    personaPresets: db.personaPresets || [],
                     // 添加版本信息用于兼容性检测
                     _exportVersion: '2.0',
                     _exportTimestamp: Date.now(),
                     _optimizedStorage: true
                 };
 
-                console.log(`📊 当前内存中有 ${db.characters.length} 个角色, ${db.groups.length} 个群组`);
-
                 // 重建角色数据（包含完整消息历史）
                 for (const char of db.characters) {
                     const fullHistory = await dataStorage.getChatMessages(char.id, 'private');
                     const charData = await dataStorage.getData(`character_${char.id}`) || char;
 
-                    console.log(`👤 角色 ${charData.remarkName || charData.name}: ${fullHistory.length} 条消息`);
-
-                    // 修复：确保 worldBookIds 被包含（角色关联世界书无法跟随导出的问题）
                     fullData.characters.push({
                         ...charData,
-                        worldBookIds: charData.worldBookIds || char.worldBookIds || [],
                         history: fullHistory || []
                     });
                 }
@@ -30641,22 +31254,17 @@ ${summaryPrompt}`;
                     const fullHistory = await dataStorage.getChatMessages(group.id, 'group');
                     const groupData = await dataStorage.getData(`group_${group.id}`) || group;
 
-                    console.log(`👥 群组 ${groupData.name}: ${fullHistory.length} 条消息`);
-
-                    // 修复：确保 worldBookIds 被包含（群组关联世界书无法跟随导出的问题）
                     fullData.groups.push({
                         ...groupData,
-                        worldBookIds: groupData.worldBookIds || group.worldBookIds || [],
                         history: fullHistory || []
                     });
                 }
 
-                console.log(`✅ 完整备份数据创建完成，耗时: ${Date.now() - startTime}ms`);
-                console.log(`📊 导出统计: ${fullData.characters.length}个角色, ${fullData.groups.length}个群组, ${fullData.personaPresets.length}个人设预设`);
+                console.log(`完整备份数据创建完成，耗时: ${Date.now() - startTime}ms`);
                 return fullData;
 
             } catch (error) {
-                console.error('❌ 创建备份数据失败:', error);
+                console.error('创建备份数据失败:', error);
                 throw new Error(`备份数据创建失败: ${error.message}`);
             }
         }
@@ -30675,30 +31283,30 @@ ${summaryPrompt}`;
                 // 清空现有数据
                 await dataStorage.clearAll();
 
-                // 重建数据库结构（修复：确保 personaPresets 被导入）
+                // 重建数据库结构
                 db = {
                     apiSettings: data.apiSettings || {},
                     wallpaper: data.wallpaper || 'https://i.postimg.cc/W4Z9R9x4/ins-1.jpg',
                     // characters: [],
                     // groups: [],
                     myStickers: data.myStickers || [],
+                    stickerCategories: data.stickerCategories || [],
                     homeScreenMode: data.homeScreenMode || 'night',
                     worldBooks: data.worldBooks || [],
                     fontUrl: data.fontUrl || '',
-                    customIcons: data.customIcons || {},
-                    personaPresets: data.personaPresets || []
+                    fontLibrary: data.fontLibrary || [],
+                    fontSize: data.fontSize || 16,
+                    customIcons: data.customIcons || {}
                 };
 
                 let importStats = {
                     charactersCount: 0,
                     groupsCount: 0,
-                    messagesCount: 0,
-                    personaPresetsCount: 0
+                    messagesCount: 0
                 };
 
                 // 导入角色数据
                 if (data.characters && Array.isArray(data.characters)) {
-                    console.log(`开始导入 ${data.characters.length} 个角色`);
                     for (const char of data.characters) {
                         // 保存角色基础信息
                         const { history, ...charData } = char;
@@ -30716,22 +31324,16 @@ ${summaryPrompt}`;
 
                         // 保存消息历史
                         if (history && Array.isArray(history) && history.length > 0) {
-                            console.log(`角色 ${charData.remarkName || charData.name} 有 ${history.length} 条消息`);
                             await dataStorage.saveChatMessages(char.id, 'private', history);
                             importStats.messagesCount += history.length;
-                        } else {
-                            console.log(`角色 ${charData.remarkName || charData.name} 没有消息历史`);
                         }
 
                         importStats.charactersCount++;
                     }
-                } else {
-                    console.log('没有找到角色数据或格式不正确');
                 }
 
                 // 导入群组数据
                 if (data.groups && Array.isArray(data.groups)) {
-                    console.log(`开始导入 ${data.groups.length} 个群组`);
                     for (const group of data.groups) {
                         // 保存群组基础信息
                         const { history, ...groupData } = group;
@@ -30748,17 +31350,12 @@ ${summaryPrompt}`;
 
                         // 保存消息历史
                         if (history && Array.isArray(history) && history.length > 0) {
-                            console.log(`群组 ${groupData.name} 有 ${history.length} 条消息`);
                             await dataStorage.saveChatMessages(group.id, 'group', history);
                             importStats.messagesCount += history.length;
-                        } else {
-                            console.log(`群组 ${groupData.name} 没有消息历史`);
                         }
 
                         importStats.groupsCount++;
                     }
-                } else {
-                    console.log('没有找到群组数据或格式不正确');
                 }
 
                 for (const key in db){
@@ -30787,54 +31384,8 @@ ${summaryPrompt}`;
                 // 保存基础数据
                 await dataStorage.saveData('章鱼喷墨机', db);
 
-                // 【修复】重新加载角色和群组数据，确保history被正确加载
-                db.characters = [];
-                db.groups = [];
-
-                // 获取所有存储的键，找出角色和群组数据
-                const allKeys = await dataStorage.getAllKeys();
-                const characterKeys = allKeys.filter(key => key.startsWith('character_'));
-                const groupKeys = allKeys.filter(key => key.startsWith('group_'));
-
-                // 加载角色数据（包含消息历史）
-                const characterPromises = characterKeys.map(async (key) => {
-                    const charId = key.replace('character_', '');
-                    const charData = await dataStorage.getData(key);
-                    if (charData) {
-                        // 加载消息历史
-                        charData.history = await dataStorage.getChatMessages(charId, 'private');
-                        return charData;
-                    }
-                    return null;
-                });
-
-                // 加载群组数据（包含消息历史）
-                const groupPromises = groupKeys.map(async (key) => {
-                    const groupId = key.replace('group_', '');
-                    const groupData = await dataStorage.getData(key);
-                    if (groupData) {
-                        // 加载消息历史
-                        groupData.history = await dataStorage.getChatMessages(groupId, 'group');
-                        return groupData;
-                    }
-                    return null;
-                });
-
-                // 等待所有数据加载完成
-                const [loadedCharacters, loadedGroups] = await Promise.all([
-                    Promise.all(characterPromises),
-                    Promise.all(groupPromises)
-                ]);
-
-                // 过滤掉null值并赋值给db
-                db.characters = loadedCharacters.filter(char => char !== null);
-                db.groups = loadedGroups.filter(group => group !== null);
-
-                // 统计人设预设数量
-                importStats.personaPresetsCount = db.personaPresets ? db.personaPresets.length : 0;
-
                 const duration = Date.now() - startTime;
-                const message = `导入完成: ${importStats.charactersCount}个角色, ${importStats.groupsCount}个群组, ${importStats.messagesCount}条消息, ${importStats.personaPresetsCount}个人设预设 (耗时${duration}ms)`;
+                const message = `导入完成: ${importStats.charactersCount}个角色, ${importStats.groupsCount}个群组, ${importStats.messagesCount}条消息 (耗时${duration}ms)`;
 
 
 
