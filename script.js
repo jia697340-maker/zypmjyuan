@@ -1898,6 +1898,47 @@
         }
 
         /**
+         * 【新增】为AI上下文格式化时间戳 - 让AI能理解对话历史中的时间
+         * @param {number} timestamp - 消息的时间戳
+         * @returns {string} - 格式化后的日期时间字符串，例如 "今天 17:42", "昨天 23:50" 等
+         */
+        function formatTimestampForAI(timestamp) {
+            if (!timestamp) return '';
+            
+            const now = new Date();
+            const date = new Date(timestamp);
+
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const timeString = `${hours}:${minutes}`;
+
+            // 如果是今天
+            if (now.toDateString() === date.toDateString()) {
+                return `今天 ${timeString}`;
+            }
+
+            // 如果是昨天
+            const yesterday = new Date();
+            yesterday.setDate(now.getDate() - 1);
+            if (yesterday.toDateString() === date.toDateString()) {
+                return `昨天 ${timeString}`;
+            }
+            
+            // 如果是今年
+            if (now.getFullYear() === date.getFullYear()) {
+                const month = String(date.getMonth() + 1);
+                const day = String(date.getDate());
+                return `${month}月${day}日 ${timeString}`;
+            }
+            
+            // 更早的时间
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1);
+            const day = String(date.getDate());
+            return `${year}年${month}月${day}日 ${timeString}`;
+        }
+
+        /**
          * 创建系统时间提示的DOM元素
          * @param {number} timestamp - 要显示的时间戳
          * @returns {HTMLElement} - 创建好的DOM元素
@@ -2659,11 +2700,26 @@
                 const lastAiMessage = messages.filter(m => m.role === 'assistant').slice(-1)[0];
                 
                 let recentContextSummary = "你们最近没有聊过天。";
+                let timeAwarenessContext = "";
+                
                 if (lastUserMessage) {
                     recentContextSummary = `用户 (${userNickname}) 最后对你说："${String(lastUserMessage.content).substring(0, 50)}..."。`;
                 }
                 if (lastAiMessage) {
                     recentContextSummary += `\n你最后对用户说："${String(lastAiMessage.content).substring(0, 50)}..."。`;
+                    
+                    // 【新增】计算时间差，增强时间感知
+                    const timeDiffHours = (Date.now() - lastAiMessage.timestamp) / (1000 * 60 * 60);
+                    if (timeDiffHours > 3) {
+                        const diffDays = Math.floor(timeDiffHours / 24);
+                        const timeDesc = diffDays > 0 ? `${diffDays}天` : `${Math.floor(timeDiffHours)}小时`;
+                        timeAwarenessContext = `\n\n# ⚠️ 时间感知 - 重要提示\n`;
+                        timeAwarenessContext += `- 你们已经有**${timeDesc}**没有聊天了！\n`;
+                        timeAwarenessContext += `- 你【绝对不能】延续${timeDesc}前的话题或状态！\n`;
+                        timeAwarenessContext += `- 如果你${timeDesc}前说自己在喝酒/吃饭/看电影等，现在【绝对不能】还在做同样的事！\n`;
+                        timeAwarenessContext += `- 你【必须】根据当前时间（${currentTime}）和你的人设，开启一个全新的、符合当前时间的话题或状态。\n`;
+                        timeAwarenessContext += `- 例如：如果现在是早上，你可以说刚起床；如果是晚上，你可以说在准备睡觉等。\n`;
+                    }
                 }
                 
                 // 构建系统提示词
@@ -2697,6 +2753,7 @@
 - 如果用户很久没回复，你可以发送多条消息表达你的想法或关心
 - 根据对话上下文和你的人设，自然地表达
 - 每次发送消息后都要添加心声
+${timeAwarenessContext}
 
 # 供你决策的参考信息：
 -   **你的角色设定**: ${character.persona || '无特定设定'}
@@ -14326,14 +14383,14 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
-    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
+    - [你收取了${character.realName}的转账：xxx元；备注：xxx]：我收取了你给我的转账，转账已完成。你【不应该】再让我收取这笔转账。
+    - [你退回了${character.realName}的转账：xxx元；备注：xxx]：我退回了你给我的转账，转账已被拒绝。你【不应该】再让我收取这笔转账。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 5. ✨重要✨ 当我给你送礼物时，你必须通过发送一条指令来表示你已接收礼物。格式必须为：[${character.realName}已接收礼物]。这条指令消息本身不会显示给用户，但会触发礼物状态的变化。你可以在发送这条指令后，再附带一条普通的聊天消息来表达你的感谢和想法。
 6. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
+    注意：当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 或 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经处理了你给我的转账，转账已经完成或被拒绝，你【不需要】再次回应这些指令，也【不应该】再让我收取或退回这笔转账。
 7. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
 8. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
@@ -14417,8 +14474,8 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [${character.myName}接收${character.realName}的转账]：我收取了你给我的转账。
-    - [${character.myName}退回${character.realName}的转账]：我退回了你给我的转账。
+    - [你收取了${character.realName}的转账：xxx元；备注：xxx]：我收取了你给我的转账，转账已完成。你【不应该】再让我收取这笔转账。
+    - [你退回了${character.realName}的转账：xxx元；备注：xxx]：我退回了你给我的转账，转账已被拒绝。你【不应该】再让我收取这笔转账。
     - (回复 xxx): 当你在历史消息中看到这个标记时，表示该消息是在回复/引用某人的消息。这意味着发送者是在针对那条特定的消息进行回应，而不是随意发送的。你应该理解这种上下文关系。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 `;
@@ -14428,7 +14485,7 @@ ${contextSummary}
             prompt += `${ruleNum}. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [${character.myName}接收${character.realName}的转账] 或 [${character.myName}退回${character.realName}的转账] 时，这表示我已经处理了你给我的转账，你不需要再次回应这些指令。
+    注意：当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 或 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经处理了你给我的转账，转账已经完成或被拒绝，你【不需要】再次回应这些指令，也【不应该】再让我收取或退回这笔转账。
 `;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。\n`;
@@ -14499,14 +14556,18 @@ ${contextSummary}
             if (character.offlineRealtimeEnabled !== false) {
                 timeContext = `\n\n# 时间感知\n`;
                 timeContext += `- **当前时间**: ${currentTime}\n`;
+                timeContext += `- **重要提示**: 对话历史中每条消息前都标注了发送时间（格式如 [今天 17:42]、[昨天 23:50] 等）。你【必须】仔细查看这些时间戳，理解对话的时间线。\n`;
             }
             
             const lastUserMsg = historySlice.filter(m => m.role === 'user' && !m.isHidden).slice(-1)[0];
             const lastAiMsg = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
             
-            if (lastUserMsg && lastAiMsg) {
-                // 计算用户回复AI的时间差
-                const timeDiffHours = (lastUserMsg.timestamp - lastAiMsg.timestamp) / (1000 * 60 * 60);
+            // 【修复】使用最后一条消息（无论是谁发的）来计算时间差
+            const lastMessage = historySlice.filter(m => !m.isHidden).slice(-1)[0];
+            
+            if (lastMessage) {
+                // 计算从最后一条消息到现在的时间差
+                const timeDiffHours = (Date.now() - lastMessage.timestamp) / (1000 * 60 * 60);
                 const diffMinutes = Math.floor(timeDiffHours * 60);
                 
                 if (timeDiffHours > 3) {
@@ -14515,14 +14576,33 @@ ${contextSummary}
                     const diffDays = Math.floor(timeDiffHours / 24);
                     const timeDesc = diffDays > 0 ? `${diffDays}天` : `${Math.floor(timeDiffHours)}小时`;
                     
-                    timeContext += `- **对话状态**: 你的上一条消息发送后，用户过了**${timeDesc}**才回复你。你们之间已经有**${timeDesc}**没有聊天了。\n`;
-                    timeContext += `- **行为铁律**: 你【必须】意识到这个时间差！你【绝对不能】直接延续上一段对话的话题（比如几小时前或几天前的话题）。\n`;
-                    timeContext += `- **你的行动**: 你【必须】主动开启一个全新的、符合当前时间的话题来问候用户，可以：\n`;
-                    timeContext += `  1. 表达惊讶或关心："哇，好久不见！" / "这么久没联系，最近怎么样？"\n`;
-                    timeContext += `  2. 询问用户为什么这么久没联系："怎么这么久才回我呀？" / "是不是很忙？"\n`;
-                    timeContext += `  3. 分享你自己的近况或当前在做的事情\n`;
-                    timeContext += `  4. 根据当前时间（${currentTime}）开启合适的话题（如早上问早安、晚上问晚饭等）\n`;
-                    timeContext += `- **禁止行为**: 【绝对不要】延续之前的话题！【绝对不要】假装时间没有流逝！\n`;
+                    // 判断最后一条消息是谁发的
+                    if (lastMessage.role === 'user') {
+                        timeContext += `- **对话状态**: 用户在**${timeDesc}前**给你发了消息，但你一直没有回复。现在用户又发消息了。\n`;
+                        timeContext += `- **行为铁律**: 你【必须】意识到这个时间差！你【绝对不能】直接延续${timeDesc}前的话题或状态。\n`;
+                        timeContext += `- **状态更新铁律**: 如果你在对话历史中说过自己在做某事（如吃饭、喝酒、看电影等），现在已经过去了${timeDesc}，你【绝对不能】还在做同样的事！你【必须】根据当前时间（${currentTime}）更新你的状态。\n`;
+                        timeContext += `- **你的行动**: 你【必须】：\n`;
+                        timeContext += `  1. 先道歉或解释为什么这么久没回复："不好意思，刚才在忙..." / "抱歉回晚了..."\n`;
+                        timeContext += `  2. 询问用户为什么这么久才回复："怎么这么久才回我呀？" / "是不是很忙？"\n`;
+                        timeContext += `  3. 根据当前时间（${currentTime}）和之前的话题，自然地回应\n`;
+                        timeContext += `- **禁止行为**: 【绝对不要】假装刚看到消息！【绝对不要】无视时间流逝！【绝对不要】延续${timeDesc}前的状态！\n`;
+                    } else {
+                        timeContext += `- **对话状态**: 你在**${timeDesc}前**发了消息，但用户一直没有回复，现在才回复你。\n`;
+                        timeContext += `- **行为铁律**: 你【必须】意识到这个时间差！你【绝对不能】直接延续${timeDesc}前的话题或状态。\n`;
+                        timeContext += `- **状态更新铁律**: 如果你在对话历史中说过自己在做某事（如吃饭、喝酒、看电影等），现在已经过去了${timeDesc}，你【绝对不能】还在做同样的事！你【必须】根据当前时间（${currentTime}）更新你的状态。\n`;
+                        timeContext += `- **你的行动**: 你【必须】：\n`;
+                        timeContext += `  1. 表达惊讶或关心："哇，好久不见！" / "这么久没联系，最近怎么样？"\n`;
+                        timeContext += `  2. 询问用户为什么这么久没回复："怎么这么久才回我呀？" / "是不是很忙？"\n`;
+                        timeContext += `  3. 分享你自己的近况或当前在做的事情（【必须】是符合当前时间的新状态，不是${timeDesc}前的旧状态）\n`;
+                        timeContext += `  4. 根据当前时间（${currentTime}）开启合适的话题（如早上问早安、晚上问晚饭等）\n`;
+                        timeContext += `- **禁止行为**: 【绝对不要】延续之前的话题！【绝对不要】假装时间没有流逝！【绝对不要】延续${timeDesc}前的状态！\n`;
+                    }
+                    
+                    // 【新增】分析对话历史中提到的未来事件
+                    timeContext += `\n- **⚠️ 未来事件理解铁律**: 如果对话历史中提到了未来的时间或事件（如"七点上晚自习"、"明天见"等），你【必须】理解这些是【过去提到的未来事件】。\n`;
+                    timeContext += `  - 如果现在的时间已经超过了那个时间点，说明那个事件【已经发生或应该已经发生】。\n`;
+                    timeContext += `  - 例如：如果对话历史中说"七点上晚自习"，而现在已经是晚上11点，那么晚自习【早就结束了】，你【绝对不能】还让用户去上晚自习！\n`;
+                    timeContext += `  - 你应该询问用户那个事件的结果，如"晚自习上完了吗？"、"今天怎么样？"等。\n`;
                 } else if (diffMinutes < 5) {
                     timeContext += `- **对话状态**: 你们的对话刚刚还在继续。\n`;
                 } else if (diffMinutes < 60) {
@@ -14530,23 +14610,7 @@ ${contextSummary}
                 } else {
                     const diffHours = Math.floor(diffMinutes / 60);
                     timeContext += `- **对话状态**: 你们在${diffHours}小时前聊过。\n`;
-                }
-            } else if (lastAiMsg) {
-                // 只有AI消息，没有用户回复
-                const lastTime = new Date(lastAiMsg.timestamp);
-                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
-                const diffHours = Math.floor(diffMinutes / 60);
-                
-                if (diffHours >= 3) {
-                    longTimeNoSee = true;
-                    const diffDays = Math.floor(diffHours / 24);
-                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${diffHours}小时`;
-                    timeContext += `- **对话状态**: 你在${timeDesc}前发了消息，但用户一直没有回复，现在才回复你。\n`;
-                    timeContext += `- **你的行动**: 你可以询问用户为什么这么久没回复，或者开启新话题。\n`;
-                } else if (diffMinutes < 60) {
-                    timeContext += `- **对话状态**: 你们在${diffMinutes}分钟前聊过。\n`;
-                } else {
-                    timeContext += `- **对话状态**: 你们在${diffHours}小时前聊过。\n`;
+                    timeContext += `- **状态提示**: 如果你在${diffHours}小时前说自己在做某事，现在【可能】已经不在做那件事了，请根据当前时间（${currentTime}）自然地更新你的状态。\n`;
                 }
             } else {
                 timeContext += `- **对话状态**: 这是你们的第一次对话。\n`;
@@ -15022,14 +15086,15 @@ ${contextSummary}
             if (realtimeEnabled) {
                 timeContext = `\n\n# 时间感知\n`;
                 timeContext += `- **当前时间**: ${currentTime}\n`;
+                timeContext += `- **重要提示**: 对话历史中每条消息前都标注了发送时间（格式如 [今天 17:42]、[昨天 23:50] 等）。你【必须】仔细查看这些时间戳，理解对话的时间线。\n`;
             }
             
-            const lastUserMsg = historySlice.filter(m => m.role === 'user' && !m.isHidden).slice(-1)[0];
-            const lastAiMsg = historySlice.filter(m => m.role === 'assistant' && !m.isHidden).slice(-1)[0];
+            // 【修复】使用最后一条消息（无论是谁发的）来计算时间差
+            const lastMessage = historySlice.filter(m => !m.isHidden).slice(-1)[0];
             
-            if (lastUserMsg && lastAiMsg) {
-                // 计算用户回复群聊的时间差
-                const timeDiffHours = (lastUserMsg.timestamp - lastAiMsg.timestamp) / (1000 * 60 * 60);
+            if (lastMessage) {
+                // 计算从最后一条消息到现在的时间差
+                const timeDiffHours = (Date.now() - lastMessage.timestamp) / (1000 * 60 * 60);
                 const diffMinutes = Math.floor(timeDiffHours * 60);
                 
                 if (timeDiffHours > 3) {
@@ -15039,11 +15104,19 @@ ${contextSummary}
                     const timeDesc = diffDays > 0 ? `${diffDays}天` : `${Math.floor(timeDiffHours)}小时`;
                     
                     timeContext += `- **对话状态**: 群里已经有**${timeDesc}**没人说话了，现在用户发了消息。\n`;
+                    timeContext += `- **行为铁律**: 群成员【必须】意识到这个时间差！【绝对不能】直接延续${timeDesc}前的话题或状态。\n`;
+                    timeContext += `- **状态更新铁律**: 如果群成员在对话历史中说过自己在做某事（如吃饭、喝酒、看电影等），现在已经过去了${timeDesc}，【绝对不能】还在做同样的事！【必须】根据当前时间（${currentTime}）更新状态。\n`;
                     timeContext += `- **行为建议**: 群成员可以：\n`;
                     timeContext += `  1. 表达惊讶："哇，群里好久没人说话了！" / "终于有人冒泡了！"\n`;
                     timeContext += `  2. 询问大家最近在忙什么\n`;
                     timeContext += `  3. 根据当前时间（${currentTime}）开启合适的话题\n`;
                     timeContext += `  4. 不要直接延续${timeDesc}前的旧话题\n`;
+                    timeContext += `- **禁止行为**: 【绝对不要】假装时间没有流逝！【绝对不要】延续旧话题！【绝对不要】延续${timeDesc}前的状态！\n`;
+                    
+                    // 【新增】分析对话历史中提到的未来事件
+                    timeContext += `\n- **⚠️ 未来事件理解铁律**: 如果对话历史中提到了未来的时间或事件（如"七点上晚自习"、"明天见"等），你【必须】理解这些是【过去提到的未来事件】。\n`;
+                    timeContext += `  - 如果现在的时间已经超过了那个时间点，说明那个事件【已经发生或应该已经发生】。\n`;
+                    timeContext += `  - 例如：如果对话历史中说"七点上晚自习"，而现在已经是晚上11点，那么晚自习【早就结束了】，你【绝对不能】还让用户去上晚自习！\n`;
                 } else if (diffMinutes < 5) {
                     timeContext += `- **对话状态**: 群里的对话刚刚还在继续。\n`;
                 } else if (diffMinutes < 60) {
@@ -15051,23 +15124,7 @@ ${contextSummary}
                 } else {
                     const diffHours = Math.floor(diffMinutes / 60);
                     timeContext += `- **对话状态**: 群里在${diffHours}小时前有过对话。\n`;
-                }
-            } else if (lastAiMsg) {
-                // 只有群聊消息，没有用户回复
-                const lastTime = new Date(lastAiMsg.timestamp);
-                const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
-                const diffHours = Math.floor(diffMinutes / 60);
-                
-                if (diffHours >= 3) {
-                    longTimeNoSee = true;
-                    const diffDays = Math.floor(diffHours / 24);
-                    const timeDesc = diffDays > 0 ? `${diffDays}天` : `${diffHours}小时`;
-                    timeContext += `- **对话状态**: 群里在${timeDesc}前有过对话，但之后一直没人说话，现在用户发了消息。\n`;
-                    timeContext += `- **行为建议**: 群成员可以表达"好久没见"的感觉，或询问用户为什么这么久没说话。\n`;
-                } else if (diffMinutes < 60) {
-                    timeContext += `- **对话状态**: 群里在${diffMinutes}分钟前有过对话。\n`;
-                } else {
-                    timeContext += `- **对话状态**: 群里在${diffHours}小时前有过对话。\n`;
+                    timeContext += `- **状态提示**: 如果群成员在${diffHours}小时前说自己在做某事，现在【可能】已经不在做那件事了，请根据当前时间（${currentTime}）自然地更新状态。\n`;
                 }
             } else {
                 timeContext += `- **对话状态**: 这是群聊的第一次对话。\n`;
@@ -15282,11 +15339,52 @@ ${contextSummary}
                         systemPrompt = await generateGroupSystemPrompt(chat, memoryLibrary);
                     }
                 }
-                // 【修复】过滤掉不可见的系统消息（如转账收取/退回、状态更新等）
-                const invisibleMessageRegex = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]/;
-                const visibleHistory = chat.history.filter(msg => !invisibleMessageRegex.test(msg.content));
+                // 【修复】处理不可见的系统消息，但保留转账状态信息
+                // 将"[你接收了XXX的转账]"转换为AI可理解的格式
+                const processedHistory = chat.history.map(msg => {
+                    // 检查是否是转账收取/退回消息
+                    const acceptTransferMatch = msg.content.match(/\[.*?接收.*?的转账\]/);
+                    const returnTransferMatch = msg.content.match(/\[.*?退回.*?的转账\]/);
+                    
+                    if (acceptTransferMatch || returnTransferMatch) {
+                        // 找到对应的转账消息
+                        const transferMsg = chat.history.slice(0, chat.history.indexOf(msg)).reverse().find(m => 
+                            m.content.includes('给你转账：') && m.transferStatus
+                        );
+                        
+                        if (transferMsg) {
+                            const amountMatch = transferMsg.content.match(/(\d+(?:\.\d+)?)元/);
+                            const remarkMatch = transferMsg.content.match(/备注：(.+?)\]/);
+                            const amount = amountMatch ? amountMatch[1] : '未知';
+                            const remark = remarkMatch ? remarkMatch[1] : '无';
+                            
+                            if (acceptTransferMatch) {
+                                // 转换为AI可理解的格式
+                                return {
+                                    ...msg,
+                                    content: `[你收取了${chat.remarkName || chat.realName}的转账：${amount}元；备注：${remark}]`,
+                                    isTransferStatus: true
+                                };
+                            } else {
+                                return {
+                                    ...msg,
+                                    content: `[你退回了${chat.remarkName || chat.realName}的转账：${amount}元；备注：${remark}]`,
+                                    isTransferStatus: true
+                                };
+                            }
+                        }
+                    }
+                    
+                    // 过滤其他不可见消息（状态更新、礼物接收等）
+                    const invisibleMessageRegex = /\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]/;
+                    if (invisibleMessageRegex.test(msg.content)) {
+                        return null;
+                    }
+                    
+                    return msg;
+                }).filter(msg => msg !== null);
                 
-                let historySlice = visibleHistory.slice(-chat.maxMemory);
+                let historySlice = processedHistory.slice(-chat.maxMemory);
                 
                 // 旁观者模式特殊处理：如果历史消息为空，添加一条启动消息
                 if (currentChatType === 'group' && chat.isObserverMode && historySlice.length === 0) {
@@ -15316,6 +15414,11 @@ ${contextSummary}
                                     if (msg.quote) {
                                         text = `(回复 ${msg.quote.senderName}): ${text}`;
                                     }
+                                    // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                                    if (msg.timestamp) {
+                                        const timeStr = formatTimestampForAI(msg.timestamp);
+                                        text = `[${timeStr}] ${text}`;
+                                    }
                                     return {text: text};
                                 } else if (p.type === 'image') {
                                     const match = p.data.match(/^data:(image\/(.+));base64,(.*)$/);
@@ -15330,7 +15433,12 @@ ${contextSummary}
                             // ▼▼▼ 【群投票功能】将投票消息转换为AI可理解的文本格式 ▼▼▼
                             const whoVoted = Object.values(msg.votes || {}).flat().join('、') || '还没有人';
                             const pollStatus = msg.isClosed ? '已结束' : '进行中';
-                            const pollText = `[${msg.senderName}发起了一个投票(${pollStatus})：问题是"${msg.question}"，选项有：${msg.options.join('、')}。目前投票的人有：${whoVoted}]`;
+                            let pollText = `[${msg.senderName}发起了一个投票(${pollStatus})：问题是"${msg.question}"，选项有：${msg.options.join('、')}。目前投票的人有：${whoVoted}]`;
+                            // 【新增】为投票消息添加时间戳
+                            if (msg.timestamp) {
+                                const timeStr = formatTimestampForAI(msg.timestamp);
+                                pollText = `[${timeStr}] ${pollText}`;
+                            }
                             parts = [{text: pollText}];
                             // ▲▲▲ 【群投票功能】结束 ▲▲▲
                         } else {
@@ -15338,6 +15446,11 @@ ${contextSummary}
                             let text = msg.content;
                             if (msg.quote) {
                                 text = `(回复 ${msg.quote.senderName}): ${text}`;
+                            }
+                            // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                            if (msg.timestamp) {
+                                const timeStr = formatTimestampForAI(msg.timestamp);
+                                text = `[${timeStr}] ${text}`;
                             }
                             parts = [{text: text}];
                         }
@@ -15360,6 +15473,11 @@ ${contextSummary}
                                     if (msg.quote) {
                                         text = `(回复 ${msg.quote.senderName}): ${text}`;
                                     }
+                                    // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                                    if (msg.timestamp) {
+                                        const timeStr = formatTimestampForAI(msg.timestamp);
+                                        text = `[${timeStr}] ${text}`;
+                                    }
                                     return {type: 'text', text: text};
                                 } else if (p.type === 'image') {
                                     return {type: 'image_url', image_url: {url: p.data}};
@@ -15371,12 +15489,22 @@ ${contextSummary}
                             const whoVoted = Object.values(msg.votes || {}).flat().join('、') || '还没有人';
                             const pollStatus = msg.isClosed ? '已结束' : '进行中';
                             content = `[${msg.senderName}发起了一个投票(${pollStatus})：问题是"${msg.question}"，选项有：${msg.options.join('、')}。目前投票的人有：${whoVoted}]`;
+                            // 【新增】为投票消息添加时间戳
+                            if (msg.timestamp) {
+                                const timeStr = formatTimestampForAI(msg.timestamp);
+                                content = `[${timeStr}] ${content}`;
+                            }
                             // ▲▲▲ 【群投票功能】结束 ▲▲▲
                         } else {
                             // 如果有引用信息，在内容前添加引用标记
                             content = msg.content;
                             if (msg.quote) {
                                 content = `(回复 ${msg.quote.senderName}): ${content}`;
+                            }
+                            // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                            if (msg.timestamp) {
+                                const timeStr = formatTimestampForAI(msg.timestamp);
+                                content = `[${timeStr}] ${content}`;
                             }
                         }
                         messages.push({role: msg.role, content: content});
