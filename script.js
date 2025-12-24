@@ -306,6 +306,21 @@
                 
                 <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
                 
+                <!-- 全局聊天背景 -->
+                <h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">全局聊天背景</h3>
+                <p style="font-size: 14px; color: #666; background-color: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">设置后将应用于所有角色和群聊的聊天背景，无需逐个更换</p>
+                <div class="wallpaper-preview" id="global-chat-bg-preview"><span>全局聊天背景预览</span></div>
+                <input type="file" id="global-chat-bg-upload" accept="image/*" style="display: none;">
+                <label for="global-chat-bg-upload" class="btn btn-primary">从相册选择聊天背景</label>
+                <button type="button" class="btn btn-danger" id="reset-global-chat-bg-btn" style="margin-top: 10px; width: 100%;">重置聊天背景</button>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="global-chat-bg-url-input">或通过URL上传</label>
+                    <input type="url" id="global-chat-bg-url-input" placeholder="输入聊天背景图片URL" style="margin-bottom: 10px;">
+                    <button type="button" class="btn btn-secondary" id="global-chat-bg-url-btn">通过URL上传聊天背景</button>
+                </div>
+                
+                <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+                
                 <!-- 壁纸库 -->
                 <div style="padding: 0 20px;">
                     <h3 style="font-size: 16px; margin-bottom: 15px; color: #333;">壁纸库</h3>
@@ -432,6 +447,15 @@
             },
             wallpaper: 'https://i.postimg.cc/W4Z9R9x4/ins-1.jpg',
             wallpaperLibrary: [],
+            homeScreenBg: '', // 主屏幕背景（如果设置了，会覆盖wallpaper）
+            lockScreenBg: '', // 锁屏壁纸
+            globalChatBg: '', // 全局聊天背景（应用于所有角色和群聊）
+            enableLockScreen: false, // 是否启用锁屏
+            lockScreenPassword: { // 锁屏密码设置
+                type: 'none', // 'none', 'pin', 'gesture'
+                pin: '', // 数字密码
+                gesture: [] // 手势密码路径
+            },
             myStickers: [],
             stickerCategories: [],
             avatarLibrary: [],
@@ -5061,6 +5085,34 @@ ${contextSummary}
 
         function renderCustomizeForm() {
             customizeForm.innerHTML = '';
+            
+            // 确保 lockScreenPassword 对象存在
+            if (!db.lockScreenPassword) {
+                db.lockScreenPassword = {
+                    type: 'none',
+                    pin: '',
+                    gesture: []
+                };
+            }
+            
+            // 确保 enableLockScreen 属性存在
+            if (db.enableLockScreen === undefined) {
+                db.enableLockScreen = false;
+            }
+            
+            // 确保 floatingLyricsSettings 对象存在
+            if (!db.floatingLyricsSettings) {
+                db.floatingLyricsSettings = {
+                    activeFontSize: 18,
+                    otherFontSize: 13,
+                    linesCount: 3,
+                    activeColor: '#ff80ab',
+                    previousColor: '#787878',
+                    upcomingColor: '#787878',
+                    lineGap: 8
+                };
+            }
+            
             Object.entries(defaultIcons).forEach(([id, {name, url}]) => {
                 const currentIcon = db.customIcons[id] || url;
                 const currentName = db.customIconNames[id] || name;
@@ -12294,7 +12346,16 @@ ${contextSummary}
                 subtitle.style.display = 'none';
             }
             getReplyBtn.style.display = 'inline-flex';
-            chatRoomScreen.style.backgroundImage = chat.chatBg ? `url(${chat.chatBg})` : 'none';
+            
+            // 应用聊天背景：优先使用全局聊天背景，否则使用角色/群聊独立背景
+            if (db.globalChatBg) {
+                chatRoomScreen.style.backgroundImage = `url(${db.globalChatBg})`;
+                chatRoomScreen.style.backgroundSize = 'cover';
+                chatRoomScreen.style.backgroundPosition = 'center';
+            } else {
+                chatRoomScreen.style.backgroundImage = chat.chatBg ? `url(${chat.chatBg})` : 'none';
+            }
+            
             typingIndicator.style.display = 'none';
             isGenerating = false;
             getReplyBtn.disabled = false;
@@ -15414,7 +15475,7 @@ ${contextSummary}
                                     if (msg.quote) {
                                         text = `(回复 ${msg.quote.senderName}): ${text}`;
                                     }
-                                    // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                                    // 【临时添加】为AI添加时间戳上下文（不影响历史记录和UI显示）
                                     if (msg.timestamp) {
                                         const timeStr = formatTimestampForAI(msg.timestamp);
                                         text = `[${timeStr}] ${text}`;
@@ -15434,7 +15495,7 @@ ${contextSummary}
                             const whoVoted = Object.values(msg.votes || {}).flat().join('、') || '还没有人';
                             const pollStatus = msg.isClosed ? '已结束' : '进行中';
                             let pollText = `[${msg.senderName}发起了一个投票(${pollStatus})：问题是"${msg.question}"，选项有：${msg.options.join('、')}。目前投票的人有：${whoVoted}]`;
-                            // 【新增】为投票消息添加时间戳
+                            // 【临时添加】为AI添加时间戳上下文（不影响历史记录和UI显示）
                             if (msg.timestamp) {
                                 const timeStr = formatTimestampForAI(msg.timestamp);
                                 pollText = `[${timeStr}] ${pollText}`;
@@ -15447,7 +15508,7 @@ ${contextSummary}
                             if (msg.quote) {
                                 text = `(回复 ${msg.quote.senderName}): ${text}`;
                             }
-                            // 【新增】为每条消息添加时间戳，让AI理解时间上下文
+                            // 【临时添加】为AI添加时间戳上下文（不影响历史记录和UI显示）
                             if (msg.timestamp) {
                                 const timeStr = formatTimestampForAI(msg.timestamp);
                                 text = `[${timeStr}] ${text}`;
@@ -15675,6 +15736,11 @@ ${contextSummary}
             console.log("==================");
             
             if (fullResponse) {
+                // 【修复】移除AI响应中的时间戳标记（这些时间戳只是为了给AI提供上下文，不应该显示给用户）
+                // 匹配格式：[今天 21:16]、[昨天 23:50]、[12月24日 15:30]、[2024年12月24日 15:30]
+                const timestampRegex = /\[(今天|昨天|\d{1,2}月\d{1,2}日|\d{4}年\d{1,2}月\d{1,2}日)\s+\d{1,2}:\d{2}\]\s*/g;
+                fullResponse = fullResponse.replace(timestampRegex, '');
+                
                 // 提取心声
                 let innerThought = null;
                 const innerThoughtRegex = /\[心声[:：]\s*([\s\S]+?)\]/;
@@ -27263,6 +27329,13 @@ ${summaryPrompt}`;
             const lockWallpaperUrlBtn = document.getElementById('lock-wallpaper-url-btn');
             const resetLockWallpaperBtn = document.getElementById('reset-lock-wallpaper-btn');
             
+            // 全局聊天背景元素
+            const globalChatBgUpload = document.getElementById('global-chat-bg-upload');
+            const globalChatBgPreview = document.getElementById('global-chat-bg-preview');
+            const globalChatBgUrlInput = document.getElementById('global-chat-bg-url-input');
+            const globalChatBgUrlBtn = document.getElementById('global-chat-bg-url-btn');
+            const resetGlobalChatBgBtn = document.getElementById('reset-global-chat-bg-btn');
+            
             // 壁纸库元素
             const addToLibraryBtn = document.getElementById('add-to-library-btn');
             const manageLibraryBtn = document.getElementById('manage-library-btn');
@@ -27332,6 +27405,7 @@ ${summaryPrompt}`;
                         <img src="${wallpaper.url}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 10px; margin-bottom: 20px;">
                         <button id="apply-to-home" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">主屏幕</button>
                         <button id="apply-to-lock" class="btn btn-secondary" style="width: 100%; margin-bottom: 10px;">锁屏界面</button>
+                        <button id="apply-to-chat" class="btn btn-secondary" style="width: 100%; margin-bottom: 10px;">全局聊天背景</button>
                         <button id="cancel-apply" class="btn btn-neutral" style="width: 100%;">取消</button>
                     </div>
                 `;
@@ -27361,6 +27435,19 @@ ${summaryPrompt}`;
                     lockWallpaperPreview.textContent = '';
                     await saveData();
                     showToast('已应用到锁屏界面！');
+                    modal.remove();
+                });
+                
+                // 应用到全局聊天背景
+                document.getElementById('apply-to-chat').addEventListener('click', async () => {
+                    db.globalChatBg = wallpaper.url;
+                    applyGlobalChatBackground(wallpaper.url);
+                    globalChatBgPreview.style.backgroundImage = `url(${wallpaper.url})`;
+                    globalChatBgPreview.style.backgroundSize = 'cover';
+                    globalChatBgPreview.style.backgroundPosition = 'center';
+                    globalChatBgPreview.textContent = '';
+                    await saveData();
+                    showToast('已应用到全局聊天背景！');
                     modal.remove();
                 });
                 
@@ -27408,6 +27495,33 @@ ${summaryPrompt}`;
                         lockScreen.style.backgroundImage = `url(${wallpaper})`;
                         lockScreen.style.backgroundSize = 'cover';
                         lockScreen.style.backgroundPosition = 'center';
+                    }
+                }
+            }
+            
+            // 应用全局聊天背景函数
+            function applyGlobalChatBackground(bgUrl) {
+                // 如果设置了全局聊天背景，应用到当前聊天界面
+                const chatScreen = document.getElementById('chat-screen');
+                if (chatScreen) {
+                    if (bgUrl) {
+                        chatScreen.style.backgroundImage = `url(${bgUrl})`;
+                        chatScreen.style.backgroundSize = 'cover';
+                        chatScreen.style.backgroundPosition = 'center';
+                    } else {
+                        // 如果清空了全局背景，恢复默认或角色独立背景
+                        chatScreen.style.backgroundImage = '';
+                        // 如果当前有打开的聊天，应用其独立背景
+                        if (currentChatId && currentChatType) {
+                            const chat = currentChatType === 'private' 
+                                ? db.characters.find(c => c.id === currentChatId)
+                                : db.groups.find(g => g.id === currentChatId);
+                            if (chat && chat.chatBackground) {
+                                chatScreen.style.backgroundImage = `url(${chat.chatBackground})`;
+                                chatScreen.style.backgroundSize = 'cover';
+                                chatScreen.style.backgroundPosition = 'center';
+                            }
+                        }
                     }
                 }
             }
@@ -27593,6 +27707,94 @@ ${summaryPrompt}`;
                     showToast('锁屏壁纸已重置！');
                 }
             });
+            
+            // ===== 全局聊天背景处理 =====
+            
+            // 初始化全局聊天背景预览
+            function initGlobalChatBgPreview() {
+                if (db.globalChatBg) {
+                    globalChatBgPreview.style.backgroundImage = `url(${db.globalChatBg})`;
+                    globalChatBgPreview.style.backgroundSize = 'cover';
+                    globalChatBgPreview.style.backgroundPosition = 'center';
+                    globalChatBgPreview.textContent = '';
+                } else {
+                    globalChatBgPreview.style.backgroundImage = '';
+                    globalChatBgPreview.innerHTML = '<span>全局聊天背景预览</span>';
+                }
+            }
+            
+            // 本地上传全局聊天背景
+            globalChatBgUpload.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                try {
+                    const compressed = await compressImage(file, {quality: 0.85, maxWidth: 1080, maxHeight: 1920});
+                    db.globalChatBg = compressed;
+                    applyGlobalChatBackground(compressed);
+                    globalChatBgPreview.style.backgroundImage = `url(${compressed})`;
+                    globalChatBgPreview.style.backgroundSize = 'cover';
+                    globalChatBgPreview.style.backgroundPosition = 'center';
+                    globalChatBgPreview.textContent = '';
+                    await saveData();
+                    showToast('全局聊天背景更换成功！');
+                } catch (error) {
+                    showToast('全局聊天背景上传失败：' + error.message);
+                }
+                event.target.value = '';
+            });
+            
+            // URL上传全局聊天背景
+            globalChatBgUrlBtn.addEventListener('click', async () => {
+                const url = globalChatBgUrlInput.value.trim();
+                if (!url) {
+                    return showToast('请输入图片URL');
+                }
+                
+                globalChatBgUrlBtn.disabled = true;
+                globalChatBgUrlBtn.textContent = '上传中...';
+                
+                try {
+                    db.globalChatBg = url;
+                    applyGlobalChatBackground(url);
+                    globalChatBgPreview.style.backgroundImage = `url(${url})`;
+                    globalChatBgPreview.style.backgroundSize = 'cover';
+                    globalChatBgPreview.style.backgroundPosition = 'center';
+                    globalChatBgPreview.textContent = '';
+                    await saveData();
+                    showToast('全局聊天背景更换成功！');
+                    globalChatBgUrlInput.value = '';
+                } catch (error) {
+                    showToast('全局聊天背景上传失败：' + error.message);
+                } finally {
+                    globalChatBgUrlBtn.disabled = false;
+                    globalChatBgUrlBtn.textContent = '通过URL上传聊天背景';
+                }
+            });
+            
+            // 支持回车键上传全局聊天背景
+            globalChatBgUrlInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    globalChatBgUrlBtn.click();
+                }
+            });
+            
+            // 重置全局聊天背景
+            resetGlobalChatBgBtn.addEventListener('click', async () => {
+                if (confirm('确定要重置全局聊天背景吗？重置后将使用各角色/群聊的独立背景。')) {
+                    db.globalChatBg = '';
+                    applyGlobalChatBackground('');
+                    globalChatBgPreview.style.backgroundImage = '';
+                    globalChatBgPreview.innerHTML = '<span>全局聊天背景预览</span>';
+                    await saveData();
+                    showToast('全局聊天背景已重置！');
+                }
+            });
+            
+            // 初始化全局聊天背景预览
+            initGlobalChatBgPreview();
+            
+            // ===== 全局聊天背景处理结束 =====
             
             // 添加到壁纸库
             addToLibraryBtn.addEventListener('click', async () => {
