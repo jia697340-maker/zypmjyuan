@@ -2743,6 +2743,10 @@
             right: 0;
         }
 
+        .settings-sidebar.open {
+            right: 0;
+        }
+
         .settings-sidebar .header {
             padding: 15px;
             border-bottom: 1px solid #eee;
@@ -6146,4 +6150,220 @@
 .avatar-shape-custom.message-avatar,
 .avatar-shape-custom.chat-avatar {
     clip-path: var(--custom-avatar-shape) !important;
+}
+
+/* 导出角色卡样式 */
+.export-format-btn {
+    transition: all 0.2s ease;
+}
+
+.export-format-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* 导出角色弹窗滚动条样式 */
+#export-character-form::-webkit-scrollbar {
+    width: 8px;
+}
+
+#export-character-form::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+#export-character-form::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+#export-character-form::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-color);
+}
+
+.export-wb-checkbox {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+#export-worldbook-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#export-worldbook-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#export-worldbook-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+#export-worldbook-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 解密按钮样式 */
+#decrypt-persona-btn {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 128, 171, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 128, 171, 0.8);
+    }
+}
+
+/* 导入小手机角色卡弹窗样式 */
+#import-phone-character-modal .modal-window {
+    animation: slideUp 0.4s ease-out;
+}
+
+#decrypt-character-modal .modal-window {
+    animation: slideUp 0.4s ease-out;
+}
+
+/* 加密类型选择样式 */
+#export-encryption-type {
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+#export-encryption-type:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 128, 171, 0.1);
+}
+
+/* 自定义假内容输入框样式 */
+#custom-fake-persona {
+    font-family: var(--font-family);
+    transition: border-color 0.2s;
+}
+
+#custom-fake-persona:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 128, 171, 0.1);
+}
+
+/* 解密口令输入框样式 */
+#export-decrypt-password,
+#decrypt-password-input {
+    transition: border-color 0.2s;
+}
+
+#export-decrypt-password:focus,
+#decrypt-password-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 128, 171, 0.1);
+}
+
+
+/* 插入新消息功能样式 */
+#insert-message-area {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#insert-message-above-btn,
+#insert-message-below-btn {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+#insert-message-above-btn:hover,
+#insert-message-below-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+#insert-message-above-btn:active,
+#insert-message-below-btn:active {
+    transform: translateY(0);
+}
+
+#insert-message-role {
+    font-size: 14px;
+    color: #333;
+    background: white;
+}
+
+#insert-message-textarea {
+    font-family: var(--font-family);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+#insert-message-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(255, 128, 171, 0.1);
+}
+
+#confirm-insert-message-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+#confirm-insert-message-btn:hover {
+    background: var(--secondary-color);
+    transform: translateY(-1px);
+}
+
+#cancel-insert-message-btn {
+    background: #e0e0e0;
+    color: #666;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+#cancel-insert-message-btn:hover {
+    background: #d0d0d0;
+}
+
+/* 编辑消息弹窗滚动条美化 */
+#edit-message-modal .modal-window > div:first-of-type {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 128, 171, 0.3) transparent;
+}
+
+#edit-message-modal .modal-window > div:first-of-type::-webkit-scrollbar {
+    width: 6px;
+}
+
+#edit-message-modal .modal-window > div:first-of-type::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#edit-message-modal .modal-window > div:first-of-type::-webkit-scrollbar-thumb {
+    background: rgba(255, 128, 171, 0.3);
+    border-radius: 3px;
+}
+
+#edit-message-modal .modal-window > div:first-of-type::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 128, 171, 0.5);
 }

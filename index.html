@@ -38,7 +38,7 @@
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 
-        <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="style.css?v=20251225">
 
 </head>
 
@@ -1055,18 +1055,55 @@
     </div>
     <!-- Edit Message Modal -->
     <div id="edit-message-modal" class="modal-overlay">
-        <div class="modal-window" style="max-width: 400px;">
-            <h3>编辑消息</h3>
-            <form id="edit-message-form">
-                <div class="form-group">
-                    <label for="edit-message-textarea">消息内容</label>
-                    <textarea id="edit-message-textarea" rows="4" style="resize: vertical; min-height: 80px;" required></textarea>
+        <div class="modal-window" style="max-width: 400px; max-height: 85vh; display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 15px 0; flex-shrink: 0;">编辑消息</h3>
+            
+            <!-- 可滚动内容区域 -->
+            <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 5px;">
+                <form id="edit-message-form">
+                    <div class="form-group">
+                        <label for="edit-message-textarea">消息内容</label>
+                        <textarea id="edit-message-textarea" rows="4" style="resize: vertical; min-height: 80px;" required></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
+                        <button type="button" class="btn btn-secondary" id="cancel-edit-message-btn" style="flex: 1;">取消</button>
+                    </div>
+                </form>
+                
+                <!-- 插入新消息功能 -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button type="button" class="btn btn-secondary" id="insert-message-above-btn" style="flex: 1; font-size: 13px; padding: 8px 10px;">
+                            <span style="font-size: 16px;">↑</span> 上方插入
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="insert-message-below-btn" style="flex: 1; font-size: 13px; padding: 8px 10px;">
+                            <span style="font-size: 16px;">↓</span> 下方插入
+                        </button>
+                    </div>
+                    
+                    <!-- 插入消息的输入区域（默认隐藏） -->
+                    <div id="insert-message-area" style="display: none;">
+                        <div class="form-group">
+                            <label for="insert-message-role">消息角色</label>
+                            <select id="insert-message-role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="user">用户消息</option>
+                                <option value="assistant">AI消息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="insert-message-textarea">新消息内容</label>
+                            <textarea id="insert-message-textarea" rows="4" style="resize: vertical; min-height: 80px; width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="输入要插入的消息内容..."></textarea>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-primary" id="confirm-insert-message-btn" style="flex: 1;">确认插入</button>
+                            <button type="button" class="btn btn-secondary" id="cancel-insert-message-btn" style="flex: 1;">取消</button>
+                        </div>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
-                    <button type="button" class="btn btn-secondary" id="cancel-edit-message-btn" style="flex: 1;">取消</button>
-                </div>
-            </form>
+            </div>
+        </div>
+    </div>
         </div>
     </div>
     <!-- Token Details Modal -->
@@ -1654,6 +1691,21 @@
                             <input type="number" id="token-warning-threshold" placeholder="例如：10000" min="100" step="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
                         </div>
                     </div>
+                    
+                    <!-- 条数过大提示 -->
+                    <div style="background-color: #e3f2fd; border: 1px solid #64b5f6; border-radius: 8px; padding: 12px; margin-top: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="font-weight: 500; color: #333; margin: 0;">条数过大提示</label>
+                            <label class="switch" style="margin: 0;">
+                                <input type="checkbox" id="message-count-warning-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div id="message-count-warning-options" style="display: none; margin-top: 10px;">
+                            <label style="font-size: 13px; color: #666; display: block; margin-bottom: 5px;">当消息条数超过以下值时提示需要总结：</label>
+                            <input type="number" id="message-count-warning-threshold" placeholder="例如：100" min="10" step="10" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group"><label for="setting-max-memory">最大记忆轮数</label><input type="number"
@@ -1888,6 +1940,7 @@
                 <button type="submit" class="btn btn-primary">保存设置</button>
             </form>
             <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+            <button type="button" class="btn btn-success" id="export-character-btn" style="width: 100%; margin-bottom: 10px;">导出角色</button>
             <button type="button" class="btn btn-info" id="search-chat-history-btn" style="width: 100%; margin-bottom: 10px;">查找聊天记录</button>
             <button type="button" class="btn" id="block-chat-btn" style="width: 100%; margin-bottom: 10px; background-color: #ff3b30; color: white; border-color: #ff3b30;">拉黑对方</button>
             <button type="button" class="btn btn-danger" id="clear-chat-history-btn">清空聊天记录</button>
@@ -2299,6 +2352,21 @@
                         <div id="group-token-warning-options" style="display: none; margin-top: 10px;">
                             <label style="font-size: 13px; color: #666; display: block; margin-bottom: 5px;">当Token数超过以下值时提示：</label>
                             <input type="number" id="group-token-warning-threshold" placeholder="例如：10000" min="100" step="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                        </div>
+                    </div>
+                    
+                    <!-- 条数过大提示（群聊） -->
+                    <div style="background-color: #e3f2fd; border: 1px solid #64b5f6; border-radius: 8px; padding: 12px; margin-top: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="font-weight: 500; color: #333; margin: 0;">条数过大提示</label>
+                            <label class="switch" style="margin: 0;">
+                                <input type="checkbox" id="group-message-count-warning-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div id="group-message-count-warning-options" style="display: none; margin-top: 10px;">
+                            <label style="font-size: 13px; color: #666; display: block; margin-bottom: 5px;">当消息条数超过以下值时提示需要总结：</label>
+                            <input type="number" id="group-message-count-warning-threshold" placeholder="例如：100" min="10" step="10" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
                         </div>
                     </div>
                 </div>
@@ -4062,6 +4130,111 @@
     
     <!-- TTS音频播放器 (用于Minimax语音播放) -->
     <audio id="tts-audio-player" style="display: none;"></audio>
+    
+    <!-- 导出角色弹窗 -->
+    <div id="export-character-modal" class="modal-overlay">
+        <div class="modal-window" style="max-width: 450px; max-height: 80vh; display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 15px 0; flex-shrink: 0;">导出角色</h3>
+            <form id="export-character-form" style="overflow-y: auto; flex: 1; padding-right: 5px;">
+                <div class="form-group">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">选择导出格式</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="export-format-btn" data-format="json" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                            <div style="font-size: 14px; font-weight: 600;">JSON</div>
+                        </button>
+                        <button type="button" class="export-format-btn" data-format="png" style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                            <div style="font-size: 14px; font-weight: 600;">PNG</div>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">关联世界书</label>
+                    <div id="export-worldbook-list" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9;">
+                        <p style="text-align: center; color: #999; margin: 0;">该角色未绑定世界书</p>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="export-npc-section" style="display: none;">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">NPC库</label>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">是否导出该角色的NPC库？</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" id="export-npc-yes" style="flex: 1;">导出NPC库</button>
+                        <button type="button" class="btn btn-neutral" id="export-npc-no" style="flex: 1;">不导出</button>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="export-avatar-section" style="display: none;">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block;">头像库</label>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">是否导出该角色的头像库？</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" id="export-avatar-yes" style="flex: 1;">导出头像库</button>
+                        <button type="button" class="btn btn-neutral" id="export-avatar-no" style="flex: 1;">不导出</button>
+                    </div>
+                </div>
+                
+                <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+                
+                <div class="form-group">
+                    <label style="font-weight: bold; margin-bottom: 10px; display: block; color: var(--primary-color);">加密设置</label>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">选择加密方式，让导入者看不到真实内容，但AI能正常处理</p>
+                    <select id="export-encryption-type" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                        <option value="none">不加密</option>
+                        <option value="blank">导入后显示空白</option>
+                        <option value="fake">导入后显示假角色</option>
+                        <option value="custom">自定义假内容</option>
+                    </select>
+                    
+                    <div id="custom-fake-content-section" style="display: none; margin-top: 10px;">
+                        <label for="custom-fake-persona" style="font-size: 13px; margin-bottom: 5px; display: block;">自定义假角色人设</label>
+                        <textarea id="custom-fake-persona" rows="3" placeholder="输入假的角色人设内容..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; resize: vertical;"></textarea>
+                    </div>
+                    
+                    <div id="encryption-password-section" style="display: none; margin-top: 10px;">
+                        <label for="export-decrypt-password" style="font-size: 13px; margin-bottom: 5px; display: block;">解密口令（必填）</label>
+                        <input type="text" id="export-decrypt-password" placeholder="设置解密口令，不限格式和字数" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                        <small style="font-size: 12px; color: #888; display: block; margin-top: 5px;">导入者需要输入此口令才能看到真实内容</small>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">确认导出</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-export-character-btn" style="flex: 1;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 导入小手机角色卡弹窗 -->
+    <div id="import-phone-character-modal" class="modal-overlay">
+        <div class="modal-window" style="max-width: 400px;">
+            <h3>导入小手机角色卡</h3>
+            <div style="text-align: center; padding: 20px;">
+                <p style="color: #666; margin-bottom: 20px;">支持导入加密的小手机角色卡（JSON/PNG格式）</p>
+                <input type="file" id="import-phone-character-input" accept=".json,.png" style="display: none;">
+                <label for="import-phone-character-input" class="btn btn-primary" style="width: 100%; padding: 12px; cursor: pointer;">选择文件</label>
+                <button type="button" class="btn btn-secondary" id="cancel-import-phone-character-btn" style="width: 100%; margin-top: 10px;">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 解密角色卡弹窗 -->
+    <div id="decrypt-character-modal" class="modal-overlay">
+        <div class="modal-window" style="max-width: 400px;">
+            <h3>解密角色卡</h3>
+            <div style="padding: 20px;">
+                <p style="color: #666; margin-bottom: 15px;">该角色卡已加密，请输入作者设置的解密口令</p>
+                <div class="form-group">
+                    <label for="decrypt-password-input" style="font-size: 14px; margin-bottom: 8px; display: block;">解密口令</label>
+                    <input type="text" id="decrypt-password-input" placeholder="输入解密口令" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="btn btn-primary" id="confirm-decrypt-btn" style="flex: 1;">解密</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-decrypt-btn" style="flex: 1;">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

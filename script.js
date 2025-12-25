@@ -162,6 +162,19 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
+        // 修复侧边栏定位：把侧边栏移到.phone-screen里面
+        const phoneScreenEl = document.querySelector('.phone-screen');
+        const chatSettingsSidebarEl = document.getElementById('chat-settings-sidebar');
+        const groupSettingsSidebarEl = document.getElementById('group-settings-sidebar');
+        
+        if (phoneScreenEl && chatSettingsSidebarEl) {
+            phoneScreenEl.appendChild(chatSettingsSidebarEl);
+        }
+        
+        if (phoneScreenEl && groupSettingsSidebarEl) {
+            phoneScreenEl.appendChild(groupSettingsSidebarEl);
+        }
+        
         // 图片压缩函数 - 优化版，防止内存溢出
         async function compressImage(file, options = {}) {
             const {
@@ -2063,6 +2076,10 @@
                     
                     // Check token warning
                     checkTokenWarning(character, tokens, 'private');
+                    
+                    // Check message count warning
+                    const messageCount = (character.history || []).length;
+                    checkMessageCountWarning(character, messageCount, 'private');
                 }
             } else if (currentChatType === 'group') {
                 const group = db.groups.find(g => g.id === currentChatId);
@@ -2096,19 +2113,16 @@
                     
                     // Check token warning
                     checkTokenWarning(group, tokens, 'group');
+                    
+                    // Check message count warning
+                    const messageCount = (group.history || []).length;
+                    checkMessageCountWarning(group, messageCount, 'group');
                 }
             }
         }
         
         // 检查Token是否超过阈值并显示警告
-        let lastTokenWarningTime = 0;
         function checkTokenWarning(chat, currentTokens, chatType) {
-            // 防止频繁提示（5分钟内只提示一次）
-            const now = Date.now();
-            if (now - lastTokenWarningTime < 5 * 60 * 1000) {
-                return;
-            }
-            
             const isEnabled = chatType === 'private' ? 
                 (chat.tokenWarningEnabled || false) : 
                 (chat.tokenWarningEnabled || false);
@@ -2117,18 +2131,61 @@
                 (chat.tokenWarningThreshold || 0) : 
                 (chat.tokenWarningThreshold || 0);
             
+            // 检查是否已经为当前阈值提示过
+            const lastWarnedThreshold = chat.lastTokenWarningThreshold || 0;
+            
             if (isEnabled && threshold > 0 && currentTokens >= threshold) {
-                lastTokenWarningTime = now;
-                
-                const chatName = chatType === 'private' ? chat.remarkName : chat.name;
-                const message = `Token数量提醒\n\n当前对话"${chatName}"的Token数已达到 ${currentTokens.toLocaleString()}，超过了您设置的阈值 ${threshold.toLocaleString()}。\n\n建议：\n• 使用"自动总结"功能压缩历史对话\n• 清理不重要的消息\n• 开始新的对话`;
-                
-                if (confirm(message + '\n\n点击"确定"查看聊天设置')) {
-                    // 打开设置侧边栏
-                    if (chatType === 'private') {
-                        document.getElementById('chat-settings-sidebar').classList.add('open');
-                    } else {
-                        document.getElementById('group-settings-sidebar').classList.add('open');
+                // 只有当阈值改变或者从未提示过时才提示
+                if (lastWarnedThreshold !== threshold) {
+                    const chatName = chatType === 'private' ? chat.remarkName : chat.name;
+                    const message = `Token数量提醒\n\n当前对话"${chatName}"的Token数已达到 ${currentTokens.toLocaleString()}，超过了您设置的阈值 ${threshold.toLocaleString()}。\n\n建议：\n• 使用"自动总结"功能压缩历史对话\n• 清理不重要的消息\n• 开始新的对话`;
+                    
+                    // 记录已提示的阈值
+                    chat.lastTokenWarningThreshold = threshold;
+                    saveData();
+                    
+                    if (confirm(message + '\n\n点击"确定"查看聊天设置，点击"取消"表示已知')) {
+                        // 打开设置侧边栏
+                        if (chatType === 'private') {
+                            document.getElementById('chat-settings-sidebar').classList.add('open');
+                        } else {
+                            document.getElementById('group-settings-sidebar').classList.add('open');
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 检查消息条数是否超过阈值并显示警告
+        function checkMessageCountWarning(chat, messageCount, chatType) {
+            const isEnabled = chatType === 'private' ? 
+                (chat.messageCountWarningEnabled || false) : 
+                (chat.messageCountWarningEnabled || false);
+            
+            const threshold = chatType === 'private' ? 
+                (chat.messageCountWarningThreshold || 0) : 
+                (chat.messageCountWarningThreshold || 0);
+            
+            // 检查是否已经为当前阈值提示过
+            const lastWarnedThreshold = chat.lastMessageCountWarningThreshold || 0;
+            
+            if (isEnabled && threshold > 0 && messageCount >= threshold) {
+                // 只有当阈值改变或者从未提示过时才提示
+                if (lastWarnedThreshold !== threshold) {
+                    const chatName = chatType === 'private' ? chat.remarkName : chat.name;
+                    const message = `消息条数提醒\n\n当前对话"${chatName}"的消息条数已达到 ${messageCount} 条，超过了您设置的阈值 ${threshold} 条。\n\n建议：\n• 使用"自动总结"功能压缩历史对话\n• 清理不重要的消息\n• 开始新的对话`;
+                    
+                    // 记录已提示的阈值
+                    chat.lastMessageCountWarningThreshold = threshold;
+                    saveData();
+                    
+                    if (confirm(message + '\n\n点击"确定"查看聊天设置，点击"取消"表示已知')) {
+                        // 打开设置侧边栏
+                        if (chatType === 'private') {
+                            document.getElementById('chat-settings-sidebar').classList.add('open');
+                        } else {
+                            document.getElementById('group-settings-sidebar').classList.add('open');
+                        }
                     }
                 }
             }
@@ -3449,7 +3506,7 @@ ${contextSummary}
                 if (character.worldBookIds && character.worldBookIds.length > 0) {
                     const linkedContents = character.worldBookIds.map(bookId => {
                         const worldBook = db.worldBooks.find(wb => wb.id === bookId);
-                        return worldBook && worldBook.content ? `\n\n## 世界书: ${worldBook.name}\n${worldBook.content}` : '';
+                        return worldBook ? `\n\n## 世界书: ${worldBook.name}\n${getWorldBookRealContent(worldBook)}` : '';
                     }).filter(Boolean).join('');
                     if (linkedContents) {
                         worldBookContent = `\n\n# 核心世界观设定 (你必须严格遵守)\n${linkedContents}\n`;
@@ -10953,8 +11010,9 @@ ${contextSummary}
             addChatBtn.addEventListener('click', async () => {
                 const choice = await showChoiceModal('选择角色创建方式', [
                     { text: '创建新角色', value: 'new' },
-                    { text: '导入角色卡', value: 'import' },
-                    { text: 'AI生成角色', value: 'ai-generate' }
+                    { text: '导入酒馆角色卡', value: 'import' },
+                    { text: 'AI生成角色', value: 'ai-generate' },
+                    { text: '导入小手机角色卡', value: 'import-phone' }
                 ]);
                 if (choice === 'new') {
                     addCharModal.classList.add('visible');
@@ -10967,6 +11025,8 @@ ${contextSummary}
                     fileInput.click();
                 } else if (choice === 'ai-generate') {
                     document.getElementById('ai-generate-char-modal').classList.add('visible');
+                } else if (choice === 'import-phone') {
+                    document.getElementById('import-phone-character-modal').classList.add('visible');
                 }
             });
             chatListContainer.addEventListener('click', async (e) => {
@@ -11488,6 +11548,77 @@ ${contextSummary}
                     cancelMessageEdit();
                 }
             });
+            
+            // 插入新消息功能
+            let insertPosition = null; // 'above' 或 'below'
+            const insertMessageArea = document.getElementById('insert-message-area');
+            const insertMessageAboveBtn = document.getElementById('insert-message-above-btn');
+            const insertMessageBelowBtn = document.getElementById('insert-message-below-btn');
+            const insertMessageRole = document.getElementById('insert-message-role');
+            const insertMessageTextarea = document.getElementById('insert-message-textarea');
+            const confirmInsertMessageBtn = document.getElementById('confirm-insert-message-btn');
+            const cancelInsertMessageBtn = document.getElementById('cancel-insert-message-btn');
+            
+            insertMessageAboveBtn.addEventListener('click', () => {
+                insertPosition = 'above';
+                insertMessageArea.style.display = 'block';
+                insertMessageTextarea.value = '';
+                
+                // 自动滚动到插入区域
+                setTimeout(() => {
+                    const scrollContainer = editMessageModal.querySelector('.modal-window > div:first-of-type');
+                    if (scrollContainer) {
+                        scrollContainer.scrollTo({
+                            top: scrollContainer.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }
+                    insertMessageTextarea.focus();
+                }, 100);
+            });
+            
+            insertMessageBelowBtn.addEventListener('click', () => {
+                insertPosition = 'below';
+                insertMessageArea.style.display = 'block';
+                insertMessageTextarea.value = '';
+                
+                // 自动滚动到插入区域
+                setTimeout(() => {
+                    const scrollContainer = editMessageModal.querySelector('.modal-window > div:first-of-type');
+                    if (scrollContainer) {
+                        scrollContainer.scrollTo({
+                            top: scrollContainer.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }
+                    insertMessageTextarea.focus();
+                }, 100);
+            });
+            
+            cancelInsertMessageBtn.addEventListener('click', () => {
+                insertMessageArea.style.display = 'none';
+                insertPosition = null;
+                insertMessageTextarea.value = '';
+            });
+            
+            confirmInsertMessageBtn.addEventListener('click', async () => {
+                const newMessageContent = insertMessageTextarea.value.trim();
+                if (!newMessageContent) {
+                    showToast('请输入消息内容');
+                    return;
+                }
+                
+                const role = insertMessageRole.value;
+                await insertNewMessage(editingMessageId, insertPosition, role, newMessageContent);
+                
+                // 重置插入区域
+                insertMessageArea.style.display = 'none';
+                insertPosition = null;
+                insertMessageTextarea.value = '';
+                
+                showToast('消息已插入');
+            });
+            
             cancelMultiSelectBtn.addEventListener('click', exitMultiSelectMode);
             deleteSelectedBtn.addEventListener('click', deleteSelectedMessages);
             
@@ -11604,9 +11735,8 @@ ${contextSummary}
             const isInvisibleMessage = /\[.*?(?:接收|退回).*?的转账\]|\[.*?更新状态为：.*?\]|\[.*?已接收礼物\]|\[.*?切歌[:：].*?\]|\[.*?换头像[:：].*?\]|\[system:.*?\]|\[.*?邀请.*?加入了群聊\]|\[.*?修改群名为：.*?\]|\[system-display:.*?\]/.test(message.content);
 
             let menuItems = [];
-            if (!isImageRecognitionMsg && !isVoiceMessage && !isStickerMessage && !isPhotoVideoMessage && !isTransferMessage && !isGiftMessage && !isInvisibleMessage) {
-                menuItems.push({label: '编辑', action: () => startMessageEdit(messageId)});
-            }
+            // 所有类型的消息都可以编辑
+            menuItems.push({label: '编辑', action: () => startMessageEdit(messageId)});
             
             // 添加单句重说选项（仅AI消息）
             if (!isInvisibleMessage && message.type !== 'recalled_message' && (message.role === 'assistant' || message.role === 'char')) {
@@ -11686,8 +11816,12 @@ ${contextSummary}
             editMessageTextarea.value = contentToEdit;
             editMessageModal.classList.add('visible');
             
-            // 聚焦并选中文本
+            // 重置滚动位置到顶部
             setTimeout(() => {
+                const scrollContainer = editMessageModal.querySelector('.modal-window > div:first-of-type');
+                if (scrollContainer) {
+                    scrollContainer.scrollTop = 0;
+                }
                 editMessageTextarea.focus();
                 editMessageTextarea.select();
             }, 100);
@@ -11723,6 +11857,72 @@ ${contextSummary}
             editingMessageId = null;
             const editMessageModal = document.getElementById('edit-message-modal');
             editMessageModal.classList.remove('visible');
+            // 重置插入消息区域
+            const insertMessageArea = document.getElementById('insert-message-area');
+            if (insertMessageArea) {
+                insertMessageArea.style.display = 'none';
+            }
+        }
+        
+        // 插入新消息函数
+        async function insertNewMessage(referenceMessageId, position, role, content) {
+            const chat = (currentChatType === 'private') 
+                ? db.characters.find(c => c.id === currentChatId) 
+                : db.groups.find(g => g.id === currentChatId);
+            
+            if (!chat) return;
+            
+            const referenceIndex = chat.history.findIndex(m => m.id === referenceMessageId);
+            if (referenceIndex === -1) return;
+            
+            // 构建新消息
+            let newMessageContent = content;
+            
+            // 根据角色和聊天类型格式化消息内容
+            if (currentChatType === 'private') {
+                const character = chat;
+                if (role === 'assistant') {
+                    // AI消息格式
+                    if (!content.startsWith('[')) {
+                        newMessageContent = `[${character.realName}的消息：${content}]`;
+                    }
+                } else {
+                    // 用户消息格式
+                    if (!content.startsWith('[')) {
+                        newMessageContent = `[${character.myName}的消息：${content}]`;
+                    }
+                }
+            } else {
+                // 群聊消息
+                const group = chat;
+                if (role === 'user') {
+                    // 用户消息
+                    if (!content.startsWith('[')) {
+                        newMessageContent = `[${group.myName}的消息：${content}]`;
+                    }
+                }
+                // 群聊AI消息保持原样，因为可能包含多个成员的消息
+            }
+            
+            const newMessage = {
+                id: `msg_${Date.now()}_inserted`,
+                role: role,
+                content: newMessageContent,
+                parts: [{type: 'text', text: newMessageContent}],
+                timestamp: Date.now(),
+                isInserted: true // 标记为插入的消息
+            };
+            
+            // 计算插入位置
+            const insertIndex = position === 'above' ? referenceIndex : referenceIndex + 1;
+            
+            // 插入消息
+            chat.history.splice(insertIndex, 0, newMessage);
+            
+            await saveData();
+            currentPage = 1;
+            renderMessages(false, true);
+            renderChatList();
         }
 
         // 撤回消息函数
@@ -13503,11 +13703,20 @@ ${contextSummary}
                 if (message.content.match(transferActionRegex) && message.role === 'assistant') {
                     const action = message.content.match(transferActionRegex)[1];
                     const statusToSet = action === '接收' ? 'received' : 'returned';
-                    const lastPendingTransferIndex = character.history.slice().reverse().findIndex(m => m.role === 'user' && m.content.includes('给你转账：') && m.transferStatus === 'pending');
+                    
+                    // 查找最后一条待处理的转账
+                    const lastPendingTransferIndex = character.history.slice().reverse().findIndex(m => 
+                        m.role === 'user' && 
+                        m.content.includes('给你转账：') && 
+                        m.transferStatus === 'pending'
+                    );
+                    
                     if (lastPendingTransferIndex !== -1) {
                         const actualIndex = character.history.length - 1 - lastPendingTransferIndex;
                         const transferMsg = character.history[actualIndex];
                         transferMsg.transferStatus = statusToSet;
+                        
+                        // 更新界面上的转账卡片
                         const transferCardOnScreen = messageArea.querySelector(`.message-wrapper[data-id="${transferMsg.id}"] .transfer-card`);
                         if (transferCardOnScreen) {
                             transferCardOnScreen.classList.remove('received', 'returned');
@@ -13515,8 +13724,37 @@ ${contextSummary}
                             const statusElem = transferCardOnScreen.querySelector('.transfer-status');
                             if (statusElem) statusElem.textContent = statusToSet === 'received' ? '已收款' : '已退回';
                         }
+                        
+                        // 提取转账信息
+                        const transferMatch = transferMsg.content.match(/\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/);
+                        if (transferMatch) {
+                            const amount = transferMatch[1];
+                            const remark = transferMatch[2];
+                            
+                            // 添加一条可见的转账结果消息，让用户知道AI的操作
+                            const actionText = statusToSet === 'received' ? '收取了' : '退回了';
+                            const resultMessageContent = `[你${actionText}${character.realName}的转账：${amount}元；备注：${remark}]`;
+                            const resultMessage = {
+                                id: `msg_${Date.now()}_result`,
+                                role: 'user',
+                                content: resultMessageContent,
+                                parts: [{type: 'text', text: resultMessageContent}],
+                                timestamp: Date.now(),
+                                relatedTransferTimestamp: transferMsg.timestamp
+                            };
+                            character.history.push(resultMessage);
+                            
+                            // 显示转账结果卡片
+                            const bubbleElement = createMessageBubbleElement(resultMessage);
+                            if (bubbleElement) {
+                                messageArea.appendChild(bubbleElement);
+                                messageArea.scrollTop = messageArea.scrollHeight;
+                            }
+                        }
+                        
                         await saveData();
                     }
+                    return;
                 } else {
                     // 检查时间间隔，超过5分钟显示时间戳
                     const lastMessage = character.history[character.history.length - 2]; // 倒数第二条消息（当前消息已经push了）
@@ -14417,8 +14655,8 @@ ${contextSummary}
                 recognizeAvatar: true,
                 timeAwareness: true
             };
-            const worldBooksBefore = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => wb.content).join('\n');
-            const worldBooksAfter = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => wb.content).join('\n');
+            const worldBooksBefore = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
+            const worldBooksAfter = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
             const now = new Date();
             const currentTime = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日 ${pad(now.getHours())}:${pad(now.getMinutes())}`;
             let prompt = `你正在一个名为"404"的线上聊天软件中扮演一个角色。请严格遵守以下规则：\n`;
@@ -14451,7 +14689,12 @@ ${contextSummary}
 6. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 或 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经处理了你给我的转账，转账已经完成或被拒绝，你【不需要】再次回应这些指令，也【不应该】再让我收取或退回这笔转账。
+    
+    ✨✨✨ 重要说明 ✨✨✨：
+    - 当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经收取了你给我的转账，转账已经完成。你【不需要】再次回应这笔转账，也【不应该】再让我收取这笔转账。
+    - 当你看到 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经退回了你给我的转账，转账已被拒绝。你【不需要】再次回应这笔转账，也【不应该】再让我收取或退回这笔转账。
+    - 每笔转账只能处理一次！如果你已经看到"你收取了"或"你退回了"的消息，说明这笔转账已经被我处理过了，你不要再对同一笔转账发送接收或退回指令。
+    - 如果有多笔转账，请根据转账的金额和备注来区分不同的转账，只对还没有被处理的转账（即你还没有看到"你收取了"或"你退回了"消息的转账）做出回应。
 7. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
 8. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
@@ -14489,8 +14732,8 @@ ${contextSummary}
                 timeAwareness: true
             };
             
-            const worldBooksBefore = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => wb.content).join('\n');
-            const worldBooksAfter = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => wb.content).join('\n');
+            const worldBooksBefore = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
+            const worldBooksAfter = (character.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
             const now = new Date();
             const currentTime = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日 ${pad(now.getHours())}:${pad(now.getMinutes())}`;
             let prompt = `你正在一个名为“404”的线上聊天软件中扮演一个角色。请严格遵守以下规则：\n`;
@@ -14546,7 +14789,12 @@ ${contextSummary}
             prompt += `${ruleNum}. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    注意：当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 或 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经处理了你给我的转账，转账已经完成或被拒绝，你【不需要】再次回应这些指令，也【不应该】再让我收取或退回这笔转账。
+    
+    ✨✨✨ 重要说明 ✨✨✨：
+    - 当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经收取了你给我的转账，转账已经完成。你【不需要】再次回应这笔转账，也【不应该】再让我收取这笔转账。
+    - 当你看到 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经退回了你给我的转账，转账已被拒绝。你【不需要】再次回应这笔转账，也【不应该】再让我收取或退回这笔转账。
+    - 每笔转账只能处理一次！如果你已经看到"你收取了"或"你退回了"的消息，说明这笔转账已经被我处理过了，你不要再对同一笔转账发送接收或退回指令。
+    - 如果有多笔转账，请根据转账的金额和备注来区分不同的转账，只对还没有被处理的转账（即你还没有看到"你收取了"或"你退回了"消息的转账）做出回应。
 `;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。\n`;
@@ -14779,7 +15027,7 @@ ${contextSummary}
                     character.offlineWorldbooks.forEach(wbId => {
                         const wb = db.worldBooks.find(w => w.id === wbId);
                         if (wb) {
-                            prompt += `\n### ${wb.name}\n${wb.content}\n`;
+                            prompt += `\n### ${wb.name}\n${getWorldBookRealContent(wb)}\n`;
                         }
                     });
                     prompt += `\n请严格遵循以上设定和文风要求进行创作。\n\n`;
@@ -14878,8 +15126,8 @@ ${contextSummary}
             // 如果开启简洁模式，群聊也使用简洁 prompt（暂时保持完整功能，因为群聊本身就比较复杂）
             // 可以根据需要后续优化
             
-            const worldBooksBefore = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => wb.content).join('\n');
-            const worldBooksAfter = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => wb.content).join('\n');
+            const worldBooksBefore = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
+            const worldBooksAfter = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
             
             // 获取当前时间
             const now = new Date();
@@ -15256,8 +15504,8 @@ ${contextSummary}
 
         // 旁观者模式群聊系统提示生成
         async function generateObserverGroupSystemPrompt(group, memoryLibrary = null) {
-            const worldBooksBefore = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => wb.content).join('\n');
-            const worldBooksAfter = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => wb.content).join('\n');
+            const worldBooksBefore = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'before')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
+            const worldBooksAfter = (group.worldBookIds || []).map(id => db.worldBooks.find(wb => wb.id === id && wb.position === 'after')).filter(Boolean).map(wb => getWorldBookRealContent(wb)).join('\n');
             
             // 获取当前时间
             const now = new Date();
@@ -17795,18 +18043,7 @@ ${contextSummary}
                     const amount = transferMatch[1];
                     const remark = transferMatch[2];
                     
-                    // 添加上下文消息，让AI知道用户的操作（不显示）
-                    let contextMessageContent = (action === 'received') ? `[${character.myName}接收${character.realName}的转账]` : `[${character.myName}退回${character.realName}的转账]`;
-                    const contextMessage = {
-                        id: `msg_${Date.now()}`,
-                        role: 'user',
-                        content: contextMessageContent,
-                        parts: [{type: 'text', text: contextMessageContent}],
-                        timestamp: Date.now()
-                    };
-                    character.history.push(contextMessage);
-                    
-                    // 添加可见的转账结果卡片消息
+                    // 添加可见的转账结果卡片消息，包含时间戳信息让AI能识别是哪一笔
                     const actionText = (action === 'received') ? '收取了' : '退回了';
                     const visibleMessageContent = `[你${actionText}${character.realName}的转账：${amount}元；备注：${remark}]`;
                     const visibleMessage = {
@@ -17814,7 +18051,8 @@ ${contextSummary}
                         role: 'user',
                         content: visibleMessageContent,
                         parts: [{type: 'text', text: visibleMessageContent}],
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        relatedTransferTimestamp: message.timestamp // 关联原转账的时间戳
                     };
                     character.history.push(visibleMessage);
                     
@@ -19604,7 +19842,10 @@ ${summaryPrompt}`;
                     }
                 }
                 
-                li.innerHTML = `<div class="item-details" style="padding-left: 20px;"><div class="item-name">${book.name}${groupTag}</div><div class="item-preview">${book.content}</div></div>`;
+                // 如果是加密的世界书，显示假内容；否则显示真实内容
+                const displayContent = book.isEncrypted ? book.content : book.content;
+                
+                li.innerHTML = `<div class="item-details" style="padding-left: 20px;"><div class="item-name">${book.name}${groupTag}</div><div class="item-preview">${displayContent}</div></div>`;
                 worldBookListContainer.appendChild(li);
             });
             
@@ -25645,6 +25886,15 @@ ${summaryPrompt}`;
         function loadSettingsToSidebar() {
             const e = db.characters.find(e => e.id === currentChatId);
             if (e) {
+                // 检查是否是加密角色，显示解密按钮
+                if (e.isEncrypted) {
+                    showDecryptButton(e.id);
+                } else {
+                    // 移除解密按钮（如果存在）
+                    const decryptBtn = document.getElementById('decrypt-persona-btn');
+                    if (decryptBtn) decryptBtn.remove();
+                }
+                
                 document.getElementById('setting-char-avatar-preview').src = e.avatar;
                 document.getElementById('setting-char-realname').value = e.realName || '';
                 document.getElementById('setting-char-remark').value = e.remarkName;
@@ -25729,6 +25979,13 @@ ${summaryPrompt}`;
                 document.getElementById('token-warning-enabled').checked = tokenWarningEnabled;
                 document.getElementById('token-warning-threshold').value = tokenWarningThreshold;
                 document.getElementById('token-warning-options').style.display = tokenWarningEnabled ? 'block' : 'none';
+                
+                // Load message count warning settings
+                const messageCountWarningEnabled = e.messageCountWarningEnabled || false;
+                const messageCountWarningThreshold = e.messageCountWarningThreshold || '';
+                document.getElementById('message-count-warning-enabled').checked = messageCountWarningEnabled;
+                document.getElementById('message-count-warning-threshold').value = messageCountWarningThreshold;
+                document.getElementById('message-count-warning-options').style.display = messageCountWarningEnabled ? 'block' : 'none';
                 
                 // Load auto-summary settings
                 const autoSummaryEnabled = e.autoSummaryEnabled || false;
@@ -30713,6 +30970,13 @@ ${summaryPrompt}`;
             document.getElementById('group-token-warning-threshold').value = groupTokenWarningThreshold;
             document.getElementById('group-token-warning-options').style.display = groupTokenWarningEnabled ? 'block' : 'none';
             
+            // Load message count warning settings for group
+            const groupMessageCountWarningEnabled = group.messageCountWarningEnabled || false;
+            const groupMessageCountWarningThreshold = group.messageCountWarningThreshold || '';
+            document.getElementById('group-message-count-warning-enabled').checked = groupMessageCountWarningEnabled;
+            document.getElementById('group-message-count-warning-threshold').value = groupMessageCountWarningThreshold;
+            document.getElementById('group-message-count-warning-options').style.display = groupMessageCountWarningEnabled ? 'block' : 'none';
+            
             // Load auto-summary settings for group
             const groupAutoSummaryEnabled = group.autoSummaryEnabled || false;
             const groupAutoSummaryCount = group.autoSummaryCount || '';
@@ -31574,12 +31838,42 @@ ${summaryPrompt}`;
             }
         });
         
+        // Message count warning toggle event listeners
+        document.getElementById('message-count-warning-enabled').addEventListener('change', async function() {
+            document.getElementById('message-count-warning-options').style.display = this.checked ? 'block' : 'none';
+            // Auto-save when toggle changes
+            if (currentChatId && currentChatType === 'private') {
+                const char = db.characters.find(c => c.id === currentChatId);
+                if (char) {
+                    char.messageCountWarningEnabled = this.checked;
+                    await saveData();
+                }
+            }
+        });
+        
+        document.getElementById('group-message-count-warning-enabled').addEventListener('change', async function() {
+            document.getElementById('group-message-count-warning-options').style.display = this.checked ? 'block' : 'none';
+            // Auto-save when toggle changes
+            if (currentChatId && currentChatType === 'group') {
+                const group = db.groups.find(g => g.id === currentChatId);
+                if (group) {
+                    group.messageCountWarningEnabled = this.checked;
+                    await saveData();
+                }
+            }
+        });
+        
         // Token warning threshold change event listeners
         document.getElementById('token-warning-threshold').addEventListener('change', async function() {
             if (currentChatId && currentChatType === 'private') {
                 const char = db.characters.find(c => c.id === currentChatId);
                 if (char) {
-                    char.tokenWarningThreshold = parseInt(this.value) || 0;
+                    const newThreshold = parseInt(this.value) || 0;
+                    // 如果阈值改变，重置已提示记录
+                    if (char.tokenWarningThreshold !== newThreshold) {
+                        char.lastTokenWarningThreshold = 0;
+                    }
+                    char.tokenWarningThreshold = newThreshold;
                     await saveData();
                 }
             }
@@ -31589,7 +31883,43 @@ ${summaryPrompt}`;
             if (currentChatId && currentChatType === 'group') {
                 const group = db.groups.find(g => g.id === currentChatId);
                 if (group) {
-                    group.tokenWarningThreshold = parseInt(this.value) || 0;
+                    const newThreshold = parseInt(this.value) || 0;
+                    // 如果阈值改变，重置已提示记录
+                    if (group.tokenWarningThreshold !== newThreshold) {
+                        group.lastTokenWarningThreshold = 0;
+                    }
+                    group.tokenWarningThreshold = newThreshold;
+                    await saveData();
+                }
+            }
+        });
+        
+        // Message count warning threshold change event listeners
+        document.getElementById('message-count-warning-threshold').addEventListener('change', async function() {
+            if (currentChatId && currentChatType === 'private') {
+                const char = db.characters.find(c => c.id === currentChatId);
+                if (char) {
+                    const newThreshold = parseInt(this.value) || 0;
+                    // 如果阈值改变，重置已提示记录
+                    if (char.messageCountWarningThreshold !== newThreshold) {
+                        char.lastMessageCountWarningThreshold = 0;
+                    }
+                    char.messageCountWarningThreshold = newThreshold;
+                    await saveData();
+                }
+            }
+        });
+        
+        document.getElementById('group-message-count-warning-threshold').addEventListener('change', async function() {
+            if (currentChatId && currentChatType === 'group') {
+                const group = db.groups.find(g => g.id === currentChatId);
+                if (group) {
+                    const newThreshold = parseInt(this.value) || 0;
+                    // 如果阈值改变，重置已提示记录
+                    if (group.messageCountWarningThreshold !== newThreshold) {
+                        group.lastMessageCountWarningThreshold = 0;
+                    }
+                    group.messageCountWarningThreshold = newThreshold;
                     await saveData();
                 }
             }
@@ -34996,4 +35326,647 @@ ${memoriesText}
         init();
 
         // ===== PWA Service Worker 注册已在前面完成 =====
+        
+        // ========== 导出/导入小手机加密角色卡功能 ==========
+
+        // 导出角色功能
+        document.getElementById('export-character-btn')?.addEventListener('click', async () => {
+            if (!currentChatId || currentChatType !== 'private') {
+                showToast('请先打开一个角色聊天');
+                return;
+            }
+            
+            const character = db.characters.find(c => c.id === currentChatId);
+            if (!character) {
+                showToast('角色不存在');
+                return;
+            }
+            
+            const modal = document.getElementById('export-character-modal');
+            const form = document.getElementById('export-character-form');
+            
+            // 重置表单
+            form.reset();
+            document.querySelectorAll('.export-format-btn').forEach(btn => {
+                btn.style.borderColor = '#ddd';
+                btn.style.background = 'white';
+            });
+            document.querySelector('.export-format-btn[data-format="json"]').style.borderColor = 'var(--primary-color)';
+            document.querySelector('.export-format-btn[data-format="json"]').style.background = '#f0f8ff';
+            
+            // 显示关联的世界书
+            const worldbookList = document.getElementById('export-worldbook-list');
+            if (character.worldBookIds && character.worldBookIds.length > 0) {
+                let html = '';
+                character.worldBookIds.forEach(wbId => {
+                    const wb = db.worldBooks.find(w => w.id === wbId);
+                    if (wb) {
+                        html += `
+                            <label style="display: flex; align-items: center; padding: 8px; margin-bottom: 5px; background: white; border-radius: 6px; cursor: pointer;">
+                                <input type="checkbox" class="export-wb-checkbox" data-wb-id="${wbId}" checked style="margin-right: 10px;">
+                                <span style="flex: 1;">${wb.name}</span>
+                            </label>
+                        `;
+                    }
+                });
+                worldbookList.innerHTML = html;
+            } else {
+                worldbookList.innerHTML = '<p style="text-align: center; color: #999; margin: 0;">该角色未绑定世界书</p>';
+            }
+            
+            // 检查是否有NPC库
+            const hasNpc = character.npcLibrary && character.npcLibrary.length > 0;
+            const npcSection = document.getElementById('export-npc-section');
+            npcSection.style.display = hasNpc ? 'block' : 'none';
+            if (hasNpc) {
+                npcSection.dataset.selected = 'no';
+                document.getElementById('export-npc-yes').style.background = '';
+                document.getElementById('export-npc-no').style.background = 'var(--primary-color)';
+                document.getElementById('export-npc-no').style.color = 'white';
+            }
+            
+            // 检查是否有头像库
+            const hasAvatar = character.avatarLibrary && character.avatarLibrary.length > 0;
+            const avatarSection = document.getElementById('export-avatar-section');
+            avatarSection.style.display = hasAvatar ? 'block' : 'none';
+            if (hasAvatar) {
+                avatarSection.dataset.selected = 'no';
+                document.getElementById('export-avatar-yes').style.background = '';
+                document.getElementById('export-avatar-no').style.background = 'var(--primary-color)';
+                document.getElementById('export-avatar-no').style.color = 'white';
+            }
+            
+            modal.classList.add('visible');
+        });
+
+        // 导出格式选择
+        document.querySelectorAll('.export-format-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.export-format-btn').forEach(b => {
+                    b.style.borderColor = '#ddd';
+                    b.style.background = 'white';
+                });
+                this.style.borderColor = 'var(--primary-color)';
+                this.style.background = '#f0f8ff';
+            });
+        });
+
+        // NPC库选择
+        document.getElementById('export-npc-yes')?.addEventListener('click', function() {
+            const section = document.getElementById('export-npc-section');
+            section.dataset.selected = 'yes';
+            this.style.background = 'var(--primary-color)';
+            this.style.color = 'white';
+            document.getElementById('export-npc-no').style.background = '';
+            document.getElementById('export-npc-no').style.color = '';
+        });
+
+        document.getElementById('export-npc-no')?.addEventListener('click', function() {
+            const section = document.getElementById('export-npc-section');
+            section.dataset.selected = 'no';
+            this.style.background = 'var(--primary-color)';
+            this.style.color = 'white';
+            document.getElementById('export-npc-yes').style.background = '';
+            document.getElementById('export-npc-yes').style.color = '';
+        });
+
+        // 头像库选择
+        document.getElementById('export-avatar-yes')?.addEventListener('click', function() {
+            const section = document.getElementById('export-avatar-section');
+            section.dataset.selected = 'yes';
+            this.style.background = 'var(--primary-color)';
+            this.style.color = 'white';
+            document.getElementById('export-avatar-no').style.background = '';
+            document.getElementById('export-avatar-no').style.color = '';
+        });
+
+        document.getElementById('export-avatar-no')?.addEventListener('click', function() {
+            const section = document.getElementById('export-avatar-section');
+            section.dataset.selected = 'no';
+            this.style.background = 'var(--primary-color)';
+            this.style.color = 'white';
+            document.getElementById('export-avatar-yes').style.background = '';
+            document.getElementById('export-avatar-yes').style.color = '';
+        });
+
+        // 加密类型选择
+        document.getElementById('export-encryption-type')?.addEventListener('change', function() {
+            const customSection = document.getElementById('custom-fake-content-section');
+            const passwordSection = document.getElementById('encryption-password-section');
+            
+            if (this.value === 'custom') {
+                customSection.style.display = 'block';
+                passwordSection.style.display = 'block';
+            } else if (this.value === 'none') {
+                customSection.style.display = 'none';
+                passwordSection.style.display = 'none';
+            } else {
+                customSection.style.display = 'none';
+                passwordSection.style.display = 'block';
+            }
+        });
+
+        // 取消导出
+        document.getElementById('cancel-export-character-btn')?.addEventListener('click', () => {
+            document.getElementById('export-character-modal').classList.remove('visible');
+        });
+
+        // 确认导出
+        document.getElementById('export-character-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const character = db.characters.find(c => c.id === currentChatId);
+            if (!character) {
+                showToast('角色不存在');
+                return;
+            }
+            
+            // 获取导出格式
+            const format = document.querySelector('.export-format-btn[style*="rgb(255, 128, 171)"], .export-format-btn[style*="240, 248, 255"]')?.dataset.format || 'json';
+            
+            // 获取选中的世界书
+            const selectedWorldBooks = [];
+            document.querySelectorAll('.export-wb-checkbox:checked').forEach(checkbox => {
+                const wbId = checkbox.dataset.wbId;
+                const wb = db.worldBooks.find(w => w.id === wbId);
+                if (wb) {
+                    selectedWorldBooks.push(wb);
+                }
+            });
+            
+            // 获取NPC库和头像库选择
+            const exportNpc = document.getElementById('export-npc-section').dataset.selected === 'yes';
+            const exportAvatar = document.getElementById('export-avatar-section').dataset.selected === 'yes';
+            
+            // 获取加密设置
+            const encryptionType = document.getElementById('export-encryption-type').value;
+            const decryptPassword = document.getElementById('export-decrypt-password').value;
+            const customFakePersona = document.getElementById('custom-fake-persona').value;
+            
+            // 验证加密设置
+            if (encryptionType !== 'none' && !decryptPassword) {
+                showToast('请设置解密口令');
+                return;
+            }
+            
+            if (encryptionType === 'custom' && !customFakePersona) {
+                showToast('请输入自定义假内容');
+                return;
+            }
+            
+            // 构建导出数据
+            const exportData = {
+                type: 'phone-character-card',
+                version: '1.0',
+                encrypted: encryptionType !== 'none',
+                encryptionType: encryptionType,
+                character: {
+                    realName: character.realName,
+                    remarkName: character.remarkName,
+                    persona: character.persona,
+                    avatar: character.avatar,
+                    myName: character.myName,
+                    myAvatar: character.myAvatar,
+                    myPersona: character.myPersona,
+                    greetings: character.greetings || []
+                },
+                worldBooks: selectedWorldBooks,
+                npcLibrary: exportNpc ? (character.npcLibrary || []) : [],
+                avatarLibrary: exportAvatar ? (character.avatarLibrary || []) : [],
+                myAvatarLibrary: exportAvatar ? (character.myAvatarLibrary || []) : []
+            };
+            
+            // 如果需要加密
+            if (encryptionType !== 'none') {
+                // 保存真实数据（加密）- 用于解密按钮
+                const realData = JSON.stringify({
+                    persona: character.persona,
+                    worldBooks: selectedWorldBooks,
+                    npcLibrary: exportNpc ? (character.npcLibrary || []) : [],
+                    avatarLibrary: exportAvatar ? (character.avatarLibrary || []) : [],
+                    myAvatarLibrary: exportAvatar ? (character.myAvatarLibrary || []) : []
+                });
+                
+                // 简单的Base64编码（实际应用中应使用更强的加密）
+                exportData.encryptedData = btoa(encodeURIComponent(realData));
+                exportData.passwordHash = btoa(encodeURIComponent(decryptPassword));
+                
+                // 设置假数据（用户看到的）
+                if (encryptionType === 'blank') {
+                    exportData.character.persona = '';
+                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
+                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                        name: wb.name,
+                        content: '',  // 假内容（空白）
+                        group: wb.group,
+                        position: wb.position,
+                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
+                    }));
+                    exportData.npcLibrary = [];
+                    exportData.avatarLibrary = [];
+                    exportData.myAvatarLibrary = [];
+                } else if (encryptionType === 'fake') {
+                    exportData.character.persona = '这是一个神秘的角色，具体信息需要解密后才能查看。';
+                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
+                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                        name: wb.name,
+                        content: '这是加密的世界书内容，需要解密后才能查看。',  // 假内容
+                        group: wb.group,
+                        position: wb.position,
+                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
+                    }));
+                    exportData.npcLibrary = [];
+                    exportData.avatarLibrary = [];
+                    exportData.myAvatarLibrary = [];
+                } else if (encryptionType === 'custom') {
+                    exportData.character.persona = customFakePersona;
+                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
+                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                        name: wb.name,
+                        content: '这是自定义的假世界书内容。',  // 假内容
+                        group: wb.group,
+                        position: wb.position,
+                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
+                    }));
+                    exportData.npcLibrary = [];
+                    exportData.avatarLibrary = [];
+                    exportData.myAvatarLibrary = [];
+                }
+            }
+            
+            // 导出文件
+            const fileName = `${character.remarkName}_小手机角色卡_${Date.now()}`;
+            
+            if (format === 'json') {
+                // 导出为JSON
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${fileName}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                // 导出为PNG（将JSON数据嵌入PNG图片）
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 创建一个带有角色头像的PNG
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    canvas.width = img.width || 512;
+                    canvas.height = img.height || 512;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // 将JSON数据嵌入PNG
+                    canvas.toBlob(async (blob) => {
+                        // 读取blob为ArrayBuffer
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        
+                        // 将JSON数据转换为字节
+                        const jsonStr = JSON.stringify(exportData);
+                        const jsonBytes = new TextEncoder().encode(jsonStr);
+                        
+                        // 创建标记：使用特殊的分隔符
+                        const separator = new TextEncoder().encode('<<<PHONE_CARD_DATA>>>');
+                        
+                        // 创建新的数组：PNG + 分隔符 + JSON数据
+                        const newArray = new Uint8Array(uint8Array.length + separator.length + jsonBytes.length);
+                        newArray.set(uint8Array, 0);
+                        newArray.set(separator, uint8Array.length);
+                        newArray.set(jsonBytes, uint8Array.length + separator.length);
+                        
+                        const newBlob = new Blob([newArray], { type: 'image/png' });
+                        const url = URL.createObjectURL(newBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${fileName}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        
+                        showToast('角色卡导出成功');
+                        document.getElementById('export-character-modal').classList.remove('visible');
+                    }, 'image/png');
+                };
+                img.onerror = () => {
+                    showToast('头像加载失败，改为导出JSON格式');
+                    // 降级为JSON导出
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${fileName}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    document.getElementById('export-character-modal').classList.remove('visible');
+                };
+                img.src = character.avatar || 'https://i.postimg.cc/KYr2qRCK/1.jpg';
+            }
+            
+            if (format === 'json') {
+                showToast('角色卡导出成功');
+                document.getElementById('export-character-modal').classList.remove('visible');
+            }
+        });
+
+        // 导入小手机角色卡
+        document.getElementById('import-phone-character-input')?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                let cardData;
+                
+                if (file.name.endsWith('.json')) {
+                    // 读取JSON文件
+                    const text = await file.text();
+                    cardData = JSON.parse(text);
+                } else if (file.name.endsWith('.png')) {
+                    // 从PNG中提取JSON数据
+                    const arrayBuffer = await file.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    // 查找分隔符
+                    const separator = new TextEncoder().encode('<<<PHONE_CARD_DATA>>>');
+                    let separatorIndex = -1;
+                    
+                    // 从后往前查找分隔符
+                    for (let i = uint8Array.length - separator.length; i >= 0; i--) {
+                        let match = true;
+                        for (let j = 0; j < separator.length; j++) {
+                            if (uint8Array[i + j] !== separator[j]) {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (match) {
+                            separatorIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (separatorIndex === -1) {
+                        throw new Error('无法从PNG中提取角色卡数据，未找到数据分隔符');
+                    }
+                    
+                    // 提取JSON数据
+                    const jsonBytes = uint8Array.slice(separatorIndex + separator.length);
+                    const decoder = new TextDecoder();
+                    const jsonStr = decoder.decode(jsonBytes);
+                    
+                    try {
+                        cardData = JSON.parse(jsonStr);
+                    } catch (e) {
+                        throw new Error('角色卡数据格式错误: ' + e.message);
+                    }
+                } else {
+                    throw new Error('不支持的文件格式');
+                }
+                
+                // 验证数据格式
+                if (cardData.type !== 'phone-character-card') {
+                    throw new Error('不是有效的小手机角色卡');
+                }
+                
+                // 如果是加密的，先显示为加密状态
+                if (cardData.encrypted) {
+                    // 存储待解密的数据
+                    window.pendingEncryptedCard = cardData;
+                    
+                    // 先导入假数据
+                    await importPhoneCharacter(cardData, true);
+                    
+                    showToast('已导入加密角色卡，可在角色人设处解密');
+                } else {
+                    // 直接导入
+                    await importPhoneCharacter(cardData, false);
+                    showToast('角色卡导入成功');
+                }
+                
+                document.getElementById('import-phone-character-modal').classList.remove('visible');
+                e.target.value = '';
+                
+            } catch (error) {
+                console.error('导入失败:', error);
+                showToast(`导入失败: ${error.message}`);
+            }
+        });
+
+        // 导入角色卡函数
+        async function importPhoneCharacter(cardData, isEncrypted) {
+            const character = cardData.character;
+            
+            // 创建新角色
+            const newChar = {
+                id: `char_${Date.now()}`,
+                realName: character.realName,
+                remarkName: character.remarkName,
+                persona: character.persona,
+                avatar: character.avatar,
+                myName: character.myName,
+                myAvatar: character.myAvatar,
+                myPersona: character.myPersona,
+                greetings: character.greetings || [],
+                history: [],
+                worldBookIds: [],
+                npcLibrary: cardData.npcLibrary || [],
+                avatarLibrary: cardData.avatarLibrary || [],
+                myAvatarLibrary: cardData.myAvatarLibrary || [],
+                themeColor: 'white_pink',
+                isPinned: false,
+                status: '在线',
+                unreadCount: 0,
+                isEncrypted: isEncrypted,
+                encryptedData: isEncrypted ? cardData.encryptedData : null,
+                passwordHash: isEncrypted ? cardData.passwordHash : null,
+                encryptionType: isEncrypted ? cardData.encryptionType : null
+            };
+            
+            // 导入世界书（加密的也要导入，但内容是假的，真实内容在encryptedData中）
+            if (cardData.worldBooks && cardData.worldBooks.length > 0) {
+                for (const wb of cardData.worldBooks) {
+                    const newWb = {
+                        id: `wb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        name: wb.name,
+                        content: wb.content,  // 如果是加密的，这里是假内容
+                        group: wb.group || '',
+                        isGlobal: false,
+                        position: wb.position || 'before',
+                        // 如果是加密的角色卡，标记世界书也是加密的
+                        isEncrypted: isEncrypted,
+                        encryptedContent: isEncrypted ? wb.encryptedContent : null
+                    };
+                    db.worldBooks.push(newWb);
+                    newChar.worldBookIds.push(newWb.id);
+                }
+            }
+            
+            // 添加角色到数据库
+            db.characters.push(newChar);
+            await saveData();
+            renderChatList();
+        }
+        
+        // 辅助函数：获取世界书的真实内容（AI使用）
+        function getWorldBookRealContent(worldBook) {
+            if (!worldBook) return '';
+            
+            // 如果世界书是加密的，返回解密后的真实内容供AI使用
+            if (worldBook.isEncrypted && worldBook.encryptedContent) {
+                try {
+                    return decodeURIComponent(atob(worldBook.encryptedContent));
+                } catch (e) {
+                    console.error('世界书解密失败:', e);
+                    return worldBook.content;  // 解密失败则返回假内容
+                }
+            }
+            
+            // 如果不是加密的，直接返回内容
+            return worldBook.content;
+        }
+
+        // 取消导入
+        document.getElementById('cancel-import-phone-character-btn')?.addEventListener('click', () => {
+            document.getElementById('import-phone-character-modal').classList.remove('visible');
+        });
+
+        // 在角色人设区域添加解密按钮（需要在loadSettingsToSidebar函数中添加）
+        // 这部分需要修改现有的loadSettingsToSidebar函数，在角色人设textarea上方添加解密按钮
+
+        // 解密功能
+        let currentDecryptCharacterId = null;
+
+        function showDecryptButton(characterId) {
+            const character = db.characters.find(c => c.id === characterId);
+            if (!character || !character.isEncrypted) return;
+            
+            const personaTextarea = document.getElementById('setting-char-persona');
+            if (!personaTextarea) return;
+            
+            // 检查是否已经有解密按钮
+            let decryptBtn = document.getElementById('decrypt-persona-btn');
+            if (!decryptBtn) {
+                decryptBtn = document.createElement('button');
+                decryptBtn.id = 'decrypt-persona-btn';
+                decryptBtn.type = 'button';
+                decryptBtn.className = 'btn btn-primary';
+                decryptBtn.textContent = '解密角色卡';
+                decryptBtn.style.width = '100%';
+                decryptBtn.style.marginBottom = '10px';
+                
+                decryptBtn.addEventListener('click', () => {
+                    currentDecryptCharacterId = characterId;
+                    document.getElementById('decrypt-character-modal').classList.add('visible');
+                });
+                
+                personaTextarea.parentNode.insertBefore(decryptBtn, personaTextarea);
+            }
+        }
+
+        // 确认解密
+        document.getElementById('confirm-decrypt-btn')?.addEventListener('click', async () => {
+            const password = document.getElementById('decrypt-password-input').value;
+            if (!password) {
+                showToast('请输入解密口令');
+                return;
+            }
+            
+            const character = db.characters.find(c => c.id === currentDecryptCharacterId);
+            if (!character || !character.isEncrypted) {
+                showToast('角色不存在或未加密');
+                return;
+            }
+            
+            // 验证密码
+            const correctPasswordHash = character.passwordHash;
+            const inputPasswordHash = btoa(encodeURIComponent(password));
+            
+            if (inputPasswordHash !== correctPasswordHash) {
+                showToast('解密口令错误');
+                return;
+            }
+            
+            try {
+                // 解密数据
+                const encryptedData = character.encryptedData;
+                const decryptedStr = decodeURIComponent(atob(encryptedData));
+                const realData = JSON.parse(decryptedStr);
+                
+                // 恢复真实数据
+                character.persona = realData.persona;
+                character.isEncrypted = false;
+                character.encryptedData = null;
+                character.passwordHash = null;
+                character.encryptionType = null;
+                
+                // 删除旧的加密世界书
+                if (character.worldBookIds && character.worldBookIds.length > 0) {
+                    const oldWorldBookIds = [...character.worldBookIds];
+                    oldWorldBookIds.forEach(wbId => {
+                        const wbIndex = db.worldBooks.findIndex(wb => wb.id === wbId);
+                        if (wbIndex !== -1) {
+                            db.worldBooks.splice(wbIndex, 1);
+                        }
+                    });
+                    character.worldBookIds = [];
+                }
+                
+                // 恢复世界书（真实内容）
+                if (realData.worldBooks && realData.worldBooks.length > 0) {
+                    for (let i = 0; i < realData.worldBooks.length; i++) {
+                        const wb = realData.worldBooks[i];
+                        // 添加延迟以确保ID唯一
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                        const newWb = {
+                            id: `wb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            name: wb.name,
+                            content: wb.content,
+                            group: wb.group || '',
+                            isGlobal: false,
+                            position: wb.position || 'before',
+                            isEncrypted: false,
+                            encryptedContent: null
+                        };
+                        db.worldBooks.push(newWb);
+                        character.worldBookIds.push(newWb.id);
+                    }
+                }
+                
+                // 恢复NPC库和头像库
+                if (realData.npcLibrary) character.npcLibrary = realData.npcLibrary;
+                if (realData.avatarLibrary) character.avatarLibrary = realData.avatarLibrary;
+                if (realData.myAvatarLibrary) character.myAvatarLibrary = realData.myAvatarLibrary;
+                
+                await saveData();
+                
+                // 刷新设置界面
+                loadSettingsToSidebar();
+                
+                // 移除解密按钮
+                const decryptBtn = document.getElementById('decrypt-persona-btn');
+                if (decryptBtn) decryptBtn.remove();
+                
+                showToast('解密成功！');
+                document.getElementById('decrypt-character-modal').classList.remove('visible');
+                document.getElementById('decrypt-password-input').value = '';
+                
+            } catch (error) {
+                console.error('解密失败:', error);
+                showToast('解密失败，数据可能已损坏');
+            }
+        });
+
+        // 取消解密
+        document.getElementById('cancel-decrypt-btn')?.addEventListener('click', () => {
+            document.getElementById('decrypt-character-modal').classList.remove('visible');
+            document.getElementById('decrypt-password-input').value = '';
+        });
+
+        // 将showDecryptButton函数暴露给loadSettingsToSidebar使用
+        window.showDecryptButton = showDecryptButton;
+
+        console.log('✅ 小手机加密角色卡功能已加载');
     });
+
