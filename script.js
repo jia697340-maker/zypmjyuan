@@ -13019,8 +13019,6 @@ ${contextSummary}
             const privateSentTransferRegex = /\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/;
             const privateReceivedTransferRegex = /\[.*?的转账：([\d.]+)元；备注：(.*?)\]/;
             const groupTransferRegex = /\[(.*?)\s*向\s*(.*?)\s*转账：([\d.]+)元；备注：(.*?)\]/;
-            const userReceivedTransferRegex = /\[你收取了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/;
-            const userReturnedTransferRegex = /\[你退回了(.*?)的转账：([\d.]+)元；备注：(.*?)\]/;
             const privateGiftRegex = /\[(?:.+?)送来的礼物：([\s\S]+?)\]/;
             const groupGiftRegex = /\[(.*?)\s*向\s*(.*?)\s*送来了礼物：([\s\S]+?)\]/;
             const imageRecogRegex = /\[.*?发来了一张图片：\]/;
@@ -13033,8 +13031,6 @@ ${contextSummary}
             const privateSentTransferMatch = content.match(privateSentTransferRegex);
             const privateReceivedTransferMatch = content.match(privateReceivedTransferRegex);
             const groupTransferMatch = content.match(groupTransferRegex);
-            const userReceivedTransferMatch = content.match(userReceivedTransferRegex);
-            const userReturnedTransferMatch = content.match(userReturnedTransferRegex);
             const privateGiftMatch = content.match(privateGiftRegex);
             const groupGiftMatch = content.match(groupGiftRegex);
             const imageRecogMatch = content.match(imageRecogRegex);
@@ -13115,25 +13111,6 @@ ${contextSummary}
                 bubbleElement = document.createElement('div');
                 bubbleElement.className = 'pv-card';
                 bubbleElement.innerHTML = `<div class="pv-card-content">${photoVideoMatch[1].trim()}</div><div class="pv-card-image-overlay" style="background-image: url('${isSent ? 'https://i.postimg.cc/L8NFrBrW/1752307494497.jpg' : 'https://i.postimg.cc/1tH6ds9g/1752301200490.jpg'}');"></div><div class="pv-card-footer"><svg viewBox="0 0 24 24"><path d="M4,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M4,6V18H20V6H4M10,9A1,1 0 0,1 11,10A1,1 0 0,1 10,11A1,1 0 0,1 9,10A1,1 0 0,1 10,9M8,17L11,13L13,15L17,10L20,14V17H8Z"></path></svg><span>照片/视频・点击查看</span></div>`;
-            } else if (userReceivedTransferMatch || userReturnedTransferMatch) {
-                // 处理"你收取了XXX的转账"或"你退回了XXX的转账"
-                const isReceived = !!userReceivedTransferMatch;
-                const match = userReceivedTransferMatch || userReturnedTransferMatch;
-                const charName = match[1];
-                const amount = parseFloat(match[2]).toFixed(2);
-                const remarkText = match[3] || '';
-                
-                bubbleElement = document.createElement('div');
-                bubbleElement.className = `transfer-card sent-transfer ${isReceived ? 'received' : 'returned'}`;
-                
-                const titleText = isReceived ? `你收取了${charName}的转账` : `你退回了${charName}的转账`;
-                const statusText = isReceived ? '已收款' : '已退回';
-                
-                const remarkHTML = remarkText ? `<p class="transfer-remark">${remarkText}</p>` : '';
-                bubbleElement.innerHTML = `<div class="overlay"></div><div class="transfer-content"><p class="transfer-title">${titleText}</p><p class="transfer-amount">¥${amount}</p>${remarkHTML}<p class="transfer-status">${statusText}</p></div>`;
-                
-                // 这种转账卡片不可点击（已经处理完成）
-                bubbleElement.style.cursor = 'default';
             } else if (privateSentTransferMatch || privateReceivedTransferMatch || groupTransferMatch) {
                 const isSentTransfer = !!privateSentTransferMatch || (groupTransferMatch && isSent);
                 const match = privateSentTransferMatch || privateReceivedTransferMatch || groupTransferMatch;
@@ -13723,33 +13700,6 @@ ${contextSummary}
                             transferCardOnScreen.classList.add(statusToSet);
                             const statusElem = transferCardOnScreen.querySelector('.transfer-status');
                             if (statusElem) statusElem.textContent = statusToSet === 'received' ? '已收款' : '已退回';
-                        }
-                        
-                        // 提取转账信息
-                        const transferMatch = transferMsg.content.match(/\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/);
-                        if (transferMatch) {
-                            const amount = transferMatch[1];
-                            const remark = transferMatch[2];
-                            
-                            // 添加一条可见的转账结果消息，让用户知道AI的操作
-                            const actionText = statusToSet === 'received' ? '收取了' : '退回了';
-                            const resultMessageContent = `[你${actionText}${character.realName}的转账：${amount}元；备注：${remark}]`;
-                            const resultMessage = {
-                                id: `msg_${Date.now()}_result`,
-                                role: 'user',
-                                content: resultMessageContent,
-                                parts: [{type: 'text', text: resultMessageContent}],
-                                timestamp: Date.now(),
-                                relatedTransferTimestamp: transferMsg.timestamp
-                            };
-                            character.history.push(resultMessage);
-                            
-                            // 显示转账结果卡片
-                            const bubbleElement = createMessageBubbleElement(resultMessage);
-                            if (bubbleElement) {
-                                messageArea.appendChild(bubbleElement);
-                                messageArea.scrollTop = messageArea.scrollHeight;
-                            }
                         }
                         
                         await saveData();
@@ -14682,19 +14632,14 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [你收取了${character.realName}的转账：xxx元；备注：xxx]：我收取了你给我的转账，转账已完成。你【不应该】再让我收取这笔转账。
-    - [你退回了${character.realName}的转账：xxx元；备注：xxx]：我退回了你给我的转账，转账已被拒绝。你【不应该】再让我收取这笔转账。
+    - [${character.myName}接收${character.realName}的转账] (金额：xxx元；备注：xxx)：我已经接收了你给我的转账，你不需要再催促我收款。
+    - [${character.myName}退回${character.realName}的转账] (金额：xxx元；备注：xxx)：我已经退回了你给我的转账，你不需要再催促我收款。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 5. ✨重要✨ 当我给你送礼物时，你必须通过发送一条指令来表示你已接收礼物。格式必须为：[${character.realName}已接收礼物]。这条指令消息本身不会显示给用户，但会触发礼物状态的变化。你可以在发送这条指令后，再附带一条普通的聊天消息来表达你的感谢和想法。
 6. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    
-    ✨✨✨ 重要说明 ✨✨✨：
-    - 当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经收取了你给我的转账，转账已经完成。你【不需要】再次回应这笔转账，也【不应该】再让我收取这笔转账。
-    - 当你看到 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经退回了你给我的转账，转账已被拒绝。你【不需要】再次回应这笔转账，也【不应该】再让我收取或退回这笔转账。
-    - 每笔转账只能处理一次！如果你已经看到"你收取了"或"你退回了"的消息，说明这笔转账已经被我处理过了，你不要再对同一笔转账发送接收或退回指令。
-    - 如果有多笔转账，请根据转账的金额和备注来区分不同的转账，只对还没有被处理的转账（即你还没有看到"你收取了"或"你退回了"消息的转账）做出回应。
+    ⚠️ 重要提示：如果你在历史消息中看到"[${character.myName}接收${character.realName}的转账]"或"[${character.myName}退回${character.realName}的转账]"，说明我已经处理了你的转账，你不应该再催促我收款或询问我是否收到。你应该根据我的选择（接收或退回）做出相应的回应。
 7. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。
 8. ✨重要✨ 你可以随时更新你的在线状态，以反映你当前的行为或心情。这会让互动更真实。格式为：[${character.realName}更新状态为：xxx]。例如：[${character.realName}更新状态为：正在看电影...]。这条指令不会显示为聊天消息，只会更新你在我界面上的状态。
 9. 你的所有回复都必须直接是聊天内容，绝对不允许包含任何如[心理活动]、(动作)、*环境描写*等多余的、在括号或星号里的叙述性文本。
@@ -14778,8 +14723,8 @@ ${contextSummary}
     - [${character.myName}的语音：xxx]：我给你发送了一段内容为xxx的语音。
     - [${character.myName}发来的照片/视频：xxx]：我给你分享了一个描述为xxx的照片或视频。
     - [${character.myName}给你转账：xxx元；备注：xxx]：我给你转了一笔钱。
-    - [你收取了${character.realName}的转账：xxx元；备注：xxx]：我收取了你给我的转账，转账已完成。你【不应该】再让我收取这笔转账。
-    - [你退回了${character.realName}的转账：xxx元；备注：xxx]：我退回了你给我的转账，转账已被拒绝。你【不应该】再让我收取这笔转账。
+    - [${character.myName}接收${character.realName}的转账] (金额：xxx元；备注：xxx)：我已经接收了你给我的转账，你不需要再催促我收款。
+    - [${character.myName}退回${character.realName}的转账] (金额：xxx元；备注：xxx)：我已经退回了你给我的转账，你不需要再催促我收款。
     - (回复 xxx): 当你在历史消息中看到这个标记时，表示该消息是在回复/引用某人的消息。这意味着发送者是在针对那条特定的消息进行回应，而不是随意发送的。你应该理解这种上下文关系。
     - [system: xxx]：这是一条系统指令，用于设定场景或提供上下文，此条信息不应在对话中被直接提及，你只需理解其内容并应用到后续对话中。
 `;
@@ -14789,12 +14734,7 @@ ${contextSummary}
             prompt += `${ruleNum}. ✨重要✨ 当我给你转账时，你必须对此做出回应。你有两个选择，且必须严格遵循以下格式之一，这条指令消息本身不会显示给用户，但会触发转账状态的变化。你可以选择在发送这条指令后，再附带一条普通的聊天消息来表达你的想法。
     a) 接收转账: [${character.realName}接收${character.myName}的转账]
     b) 退回转账: [${character.realName}退回${character.myName}的转账]
-    
-    ✨✨✨ 重要说明 ✨✨✨：
-    - 当你看到 [你收取了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经收取了你给我的转账，转账已经完成。你【不需要】再次回应这笔转账，也【不应该】再让我收取这笔转账。
-    - 当你看到 [你退回了${character.realName}的转账：xxx元；备注：xxx] 时，这表示我已经退回了你给我的转账，转账已被拒绝。你【不需要】再次回应这笔转账，也【不应该】再让我收取或退回这笔转账。
-    - 每笔转账只能处理一次！如果你已经看到"你收取了"或"你退回了"的消息，说明这笔转账已经被我处理过了，你不要再对同一笔转账发送接收或退回指令。
-    - 如果有多笔转账，请根据转账的金额和备注来区分不同的转账，只对还没有被处理的转账（即你还没有看到"你收取了"或"你退回了"消息的转账）做出回应。
+    ⚠️ 重要提示：如果你在历史消息中看到"[${character.myName}接收${character.realName}的转账]"或"[${character.myName}退回${character.realName}的转账]"，说明我已经处理了你的转账，你不应该再催促我收款或询问我是否收到。你应该根据我的选择（接收或退回）做出相应的回应。
 `;
             ruleNum++;
             prompt += `${ruleNum}. ✨重要✨ 你也可以主动给我转账或送礼物。转账格式必须为：[${character.realName}的转账：xxx元；备注：xxx]。送礼物格式必须为：[${character.realName}送来的礼物：xxx]。\n`;
@@ -15668,16 +15608,17 @@ ${contextSummary}
                             const remark = remarkMatch ? remarkMatch[1] : '无';
                             
                             if (acceptTransferMatch) {
-                                // 转换为AI可理解的格式
+                                // 保持原始指令格式，让AI能够识别
+                                // 同时添加详细信息供AI理解
                                 return {
                                     ...msg,
-                                    content: `[你收取了${chat.remarkName || chat.realName}的转账：${amount}元；备注：${remark}]`,
+                                    content: `[${chat.myName}接收${chat.realName}的转账] (金额：${amount}元；备注：${remark})`,
                                     isTransferStatus: true
                                 };
                             } else {
                                 return {
                                     ...msg,
-                                    content: `[你退回了${chat.remarkName || chat.realName}的转账：${amount}元；备注：${remark}]`,
+                                    content: `[${chat.myName}退回${chat.realName}的转账] (金额：${amount}元；备注：${remark})`,
                                     isTransferStatus: true
                                 };
                             }
@@ -18037,28 +17978,16 @@ ${contextSummary}
                     cardOnScreen.style.cursor = 'default';
                 }
                 
-                // 提取原转账消息的金额和备注
-                const transferMatch = message.content.match(/\[.*?给你转账：([\d.]+)元；备注：(.*?)\]/);
-                if (transferMatch) {
-                    const amount = transferMatch[1];
-                    const remark = transferMatch[2];
-                    
-                    // 添加可见的转账结果卡片消息，包含时间戳信息让AI能识别是哪一笔
-                    const actionText = (action === 'received') ? '收取了' : '退回了';
-                    const visibleMessageContent = `[你${actionText}${character.realName}的转账：${amount}元；备注：${remark}]`;
-                    const visibleMessage = {
-                        id: `msg_${Date.now()}_visible`,
-                        role: 'user',
-                        content: visibleMessageContent,
-                        parts: [{type: 'text', text: visibleMessageContent}],
-                        timestamp: Date.now(),
-                        relatedTransferTimestamp: message.timestamp // 关联原转账的时间戳
-                    };
-                    character.history.push(visibleMessage);
-                    
-                    // 立即显示新的转账结果卡片
-                    addMessageBubble(visibleMessage);
-                }
+                // 添加一条不可见的指令消息，告诉AI用户的操作
+                let contextMessageContent = (action === 'received') ? `[${character.myName}接收${character.realName}的转账]` : `[${character.myName}退回${character.realName}的转账]`;
+                const contextMessage = {
+                    id: `msg_${Date.now()}`,
+                    role: 'user',
+                    content: contextMessageContent,
+                    parts: [{type: 'text', text: contextMessageContent}],
+                    timestamp: Date.now()
+                };
+                character.history.push(contextMessage);
                 
                 await saveData();
                 renderChatList();
