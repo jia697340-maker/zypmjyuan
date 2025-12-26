@@ -4178,12 +4178,26 @@
                 <div class="form-group">
                     <label style="font-weight: bold; margin-bottom: 10px; display: block; color: var(--primary-color);">加密设置</label>
                     <p style="font-size: 13px; color: #666; margin-bottom: 10px;">选择加密方式，让导入者看不到真实内容，但AI能正常处理</p>
-                    <select id="export-encryption-type" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                    
+                    <label style="font-size: 13px; margin-bottom: 5px; display: block; font-weight: 600;">加密类型</label>
+                    <select id="export-encryption-type" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px;">
                         <option value="none">不加密</option>
                         <option value="blank">导入后显示空白</option>
                         <option value="fake">导入后显示假角色</option>
                         <option value="custom">自定义假内容</option>
                     </select>
+
+                    <div id="encryption-method-section" style="display: none; margin-bottom: 15px;">
+                        <label style="font-size: 13px; margin-bottom: 5px; display: block; font-weight: 600;">加密方法</label>
+                        <select id="export-encryption-method" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                            <option value="aes-gcm">AES-256-GCM 高强度（推荐）</option>
+                            <option value="aes-gcm-ultra">AES-256-GCM 超高强度（最安全，速度较慢）</option>
+                        </select>
+                        <small style="font-size: 11px; color: #888; display: block; margin-top: 5px;">
+                            AES-256-GCM：军用级加密，10万次密钥派生<br>
+                            超高强度：60万次密钥派生，破解难度极高
+                        </small>
+                    </div>
                     
                     <div id="custom-fake-content-section" style="display: none; margin-top: 10px;">
                         <label for="custom-fake-persona" style="font-size: 13px; margin-bottom: 5px; display: block;">自定义假角色人设</label>
@@ -4191,9 +4205,11 @@
                     </div>
                     
                     <div id="encryption-password-section" style="display: none; margin-top: 10px;">
-                        <label for="export-decrypt-password" style="font-size: 13px; margin-bottom: 5px; display: block;">解密口令（必填）</label>
-                        <input type="text" id="export-decrypt-password" placeholder="设置解密口令，不限格式和字数" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
-                        <small style="font-size: 12px; color: #888; display: block; margin-top: 5px;">导入者需要输入此口令才能看到真实内容</small>
+                        <label for="export-decrypt-password" style="font-size: 13px; margin-bottom: 5px; display: block; font-weight: 600;">解密口令（必填）</label>
+                        <input type="text" id="export-decrypt-password" placeholder="设置解密口令，建议8位以上" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                        <small style="font-size: 12px; color: #ff5722; display: block; margin-top: 5px;">
+                            重要提示：密码只有作者知道，请务必妥善保管。密码丢失后无法恢复，建议使用密码管理器。推荐使用8位以上的复杂密码。
+                        </small>
                     </div>
                 </div>
                 

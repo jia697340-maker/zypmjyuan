@@ -6002,39 +6002,6 @@ ${contextSummary}
                             </div>
                         </div>
                     `
-                },
-                {
-                    title: '更新日志',
-                    isChangelog: true,
-                    changelog: [
-                        {
-                            date: '2025-12-07',
-                            version: '粘包狗版本',
-                            changes: [
-                                { type: 'new', content: '新增顶部状态栏功能，显示实时时间和电量信息，支持电池充电状态显示' },
-                                { type: 'new', content: '新增锁屏功能，支持上滑解锁、数字密码和手势密码三种解锁方式' },
-                                { type: 'new', content: '新增锁屏壁纸自定义功能，可设置独立的锁屏背景' },
-                                { type: 'new', content: '新增锁屏时间日期显示，实时更新当前时间' },
-                                { type: 'new', content: '新增NovelAI图像生成功能，支持V4.5模型，可生成高质量动漫风格图像' },
-                                { type: 'new', content: '新增NovelAI生成设置面板，支持详细参数配置' },
-                                { type: 'new', content: '新增NovelAI测试生成功能，可快速测试API配置' },
-                                { type: 'new', content: '新增NovelAI图片双击下载功能' },
-                                { type: 'new', content: '新增Token计数功能，实时显示当前对话的Token使用量' },
-                                { type: 'new', content: '新增Token超限警告，当Token数超过阈值时自动提醒用户' },
-                                { type: 'new', content: '新增系统时间戳功能，消息间隔超过5分钟自动显示时间分隔' },
-                                { type: 'new', content: '新增弹窗通知栏，新消息到达时顶部弹出通知，点击可快速跳转' },
-                                { type: 'new', content: '新增未读消息计数显示，聊天列表显示未读消息数量红点' },
-                                { type: 'new', content: '新增Minimax API支持，可使用Minimax系列模型进行对话' },
-                                { type: 'new', content: '新增Minimax预设管理功能，可保存和切换多套Minimax配置' },
-                                { type: 'new', content: '新增主题预设功能，可保存和快速切换多套主屏幕外观配置' },
-                                { type: 'new', content: '新增全局字体大小调节，支持12px到20px范围调节' },
-                                { type: 'new', content: '新增底栏应用名称显示开关，可选择隐藏底栏图标名称' },
-                                { type: 'new', content: '新增外观设置一键重置功能，可快速恢复默认外观' },
-                                { type: 'new', content: '新增备份文件自定义命名功能，导出数据时可自定义文件名' },
-                                { type: 'new', content: '新增语音消息播放动画效果，播放时显示脉冲动画' }
-                            ]
-                        }
-                    ]
                 }
             ];
             tutorialContentArea.innerHTML = '';
@@ -6043,36 +6010,7 @@ ${contextSummary}
                 item.className = 'tutorial-item';
                 let contentHtml = '';
                 
-                if (tutorial.isChangelog) {
-                    // 渲染更新日志
-                    contentHtml = `
-                        <div class="changelog-container">
-                            <div class="changelog-filters" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                                <button class="changelog-filter-btn active" data-filter="all" style="padding: 8px 16px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">全部</button>
-                                <button class="changelog-filter-btn" data-filter="new" style="padding: 8px 16px; border: 2px solid var(--primary-color); background: white; color: var(--primary-color); border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">新增</button>
-                                <button class="changelog-filter-btn" data-filter="fix" style="padding: 8px 16px; border: 2px solid var(--primary-color); background: white; color: var(--primary-color); border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">修复</button>
-                            </div>
-                            <div class="changelog-list">
-                                ${tutorial.changelog.map(log => `
-                                    <div class="changelog-version" style="margin-bottom: 25px;">
-                                        <div class="changelog-version-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(255, 128, 171, 0.3);">
-                                            <span style="font-size: 16px; font-weight: bold;">${log.version}</span>
-                                            <span style="font-size: 13px; opacity: 0.9;">${log.date}</span>
-                                        </div>
-                                        <div class="changelog-items">
-                                            ${log.changes.map(change => `
-                                                <div class="changelog-item" data-type="${change.type}" style="display: flex; align-items: flex-start; padding: 10px 15px; margin-bottom: 8px; background: ${change.type === 'new' ? '#e8f5e9' : '#fff3e0'}; border-left: 4px solid ${change.type === 'new' ? '#4caf50' : '#ff9800'}; border-radius: 8px; transition: all 0.2s;">
-                                                    <span style="display: inline-block; min-width: 50px; padding: 2px 8px; background: ${change.type === 'new' ? '#4caf50' : '#ff9800'}; color: white; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 12px; text-align: center;">${change.type === 'new' ? '新增' : '修复'}</span>
-                                                    <span style="flex: 1; line-height: 1.6; color: #333; font-size: 14px;">${change.content}</span>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                } else if (tutorial.content) {
+                if (tutorial.content) {
                     contentHtml = tutorial.content;
                 } else if (tutorial.imageUrls && tutorial.imageUrls.length > 0) {
                     contentHtml = tutorial.imageUrls.map(url => `<img src="${url}" alt="${tutorial.title}教程图片">`).join('');
@@ -6080,37 +6018,6 @@ ${contextSummary}
                 
                 item.innerHTML = `<div class="tutorial-header">${tutorial.title}</div><div class="tutorial-content">${contentHtml}</div>`;
                 tutorialContentArea.appendChild(item);
-                
-                // 如果是更新日志，添加筛选功能
-                if (tutorial.isChangelog) {
-                    const filterBtns = item.querySelectorAll('.changelog-filter-btn');
-                    const changelogItems = item.querySelectorAll('.changelog-item');
-                    
-                    filterBtns.forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const filter = btn.dataset.filter;
-                            
-                            // 更新按钮状态
-                            filterBtns.forEach(b => {
-                                b.classList.remove('active');
-                                b.style.background = 'white';
-                                b.style.color = 'var(--primary-color)';
-                            });
-                            btn.classList.add('active');
-                            btn.style.background = 'var(--primary-color)';
-                            btn.style.color = 'white';
-                            
-                            // 筛选内容
-                            changelogItems.forEach(changeItem => {
-                                if (filter === 'all') {
-                                    changeItem.style.display = 'flex';
-                                } else {
-                                    changeItem.style.display = changeItem.dataset.type === filter ? 'flex' : 'none';
-                                }
-                            });
-                        });
-                    });
-                }
             });
 
             const backupDataBtn = document.createElement('button');
@@ -6675,16 +6582,39 @@ ${contextSummary}
                 streamImportBtn.textContent = '正在导入...';
                 
                 try {
-                    // 使用文件选择器API
-                    const [fileHandle] = await window.showOpenFilePicker({
-                        types: [{
-                            description: '章鱼喷墨备份文件',
-                            accept: {'application/octet-stream': ['.ee', '.json']},
-                        }],
-                        multiple: false,
-                    });
+                    // 检查是否支持 File System Access API
+                    const supportsFileSystemAccess = 'showOpenFilePicker' in window;
                     
-                    const file = await fileHandle.getFile();
+                    let file;
+                    if (supportsFileSystemAccess) {
+                        // 使用文件选择器API
+                        const [fileHandle] = await window.showOpenFilePicker({
+                            types: [{
+                                description: '章鱼喷墨备份文件',
+                                accept: {'application/octet-stream': ['.ee', '.json']},
+                            }],
+                            multiple: false,
+                        });
+                        file = await fileHandle.getFile();
+                    } else {
+                        // 降级方案：使用传统的 input file 元素
+                        showToast('您的浏览器不支持新版文件选择器，将使用传统方式...');
+                        file = await new Promise((resolve, reject) => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = '.ee,.json';
+                            input.onchange = (e) => {
+                                const selectedFile = e.target.files[0];
+                                if (selectedFile) {
+                                    resolve(selectedFile);
+                                } else {
+                                    reject(new Error('未选择文件'));
+                                }
+                            };
+                            input.oncancel = () => reject(new Error('用户取消选择'));
+                            input.click();
+                        });
+                    }
                     showToast('正在使用流式方式导入大数据，请稍候...');
                     
                     // 判断文件类型
@@ -6899,89 +6829,286 @@ ${contextSummary}
                             return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
                         };
                         
-                        // 计算百分比
-                        const storagePercent = ((info.storageSize / info.totalSize) * 100).toFixed(1);
-                        const messagePercent = ((info.messageSize / info.totalSize) * 100).toFixed(1);
-                        
-                        // 创建进度条
-                        const createProgressBar = (percent, color) => {
-                            const filled = Math.round(percent / 5);
-                            const empty = 20 - filled;
-                            return `[${'█'.repeat(filled)}${'░'.repeat(empty)}] ${percent}%`;
-                        };
-                        
                         // 统计详细数据类型
                         let characterCount = 0;
                         let groupCount = 0;
                         let otherCount = 0;
+                        const characterItems = [];
+                        const groupItems = [];
+                        const systemItems = [];
                         
                         info.items.forEach(item => {
-                            if (item.key.startsWith('character_')) characterCount++;
-                            else if (item.key.startsWith('group_')) groupCount++;
-                            else otherCount++;
+                            if (item.key.startsWith('character_')) {
+                                characterCount++;
+                                characterItems.push(item);
+                            } else if (item.key.startsWith('group_')) {
+                                groupCount++;
+                                groupItems.push(item);
+                            } else {
+                                otherCount++;
+                                systemItems.push(item);
+                            }
                         });
                         
+                        // 显示详情的函数 - 创建独立的详情弹窗
+                        const showDetailDialog = async (title, items, type) => {
+                            // 创建详情弹窗遮罩层
+                            const detailOverlay = document.createElement('div');
+                            detailOverlay.style.cssText = `
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                background: rgba(0, 0, 0, 0.5);
+                                display: flex;
+                                justify-content: center;
+                                align-items: center;
+                                z-index: 10001;
+                                animation: fadeIn 0.2s ease;
+                            `;
+                            
+                            let detailContent = `
+                                <div style="font-size: 14px; color: #666; margin-bottom: 15px;">共 ${items.length} 项数据</div>
+                            `;
+                            
+                            if (type === 'storage') {
+                                detailContent += `<div style="font-size: 13px; line-height: 1.8;">`;
+                                for (const item of items) {
+                                    const data = await dataStorage.getData(item.key);
+                                    const size = data ? JSON.stringify(data).length : 0;
+                                    detailContent += `
+                                        <div style="padding: 8px; margin-bottom: 6px; background: #f5f5f5; border-radius: 4px;">
+                                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${item.key}</div>
+                                            <div style="color: #666; font-size: 12px;">大小: ${formatSize(size)}</div>
+                                        </div>
+                                    `;
+                                }
+                                detailContent += `</div>`;
+                            } else if (type === 'messages') {
+                                detailContent += `
+                                    <div style="font-size: 13px; color: #666; line-height: 1.8;">
+                                        <div style="padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">
+                                            <div>消息块总数: ${info.chunkCount} 块</div>
+                                            <div>消息总大小: ${formatSize(info.messageSize)}</div>
+                                        </div>
+                                        <div style="color: #999; font-size: 12px;">
+                                            消息数据按角色和群组分块存储，每个聊天会话的消息独立保存
+                                        </div>
+                                    </div>
+                                `;
+                            } else if (type === 'characters') {
+                                detailContent += `<div style="font-size: 13px; line-height: 1.8;">`;
+                                for (const item of items) {
+                                    const charData = await dataStorage.getData(item.key);
+                                    const size = charData ? JSON.stringify(charData).length : 0;
+                                    const charId = item.key.replace('character_', '');
+                                    const char = db.characters.find(c => c.id === charId);
+                                    const name = char ? char.name : '未知角色';
+                                    detailContent += `
+                                        <div style="padding: 8px; margin-bottom: 6px; background: #f5f5f5; border-radius: 4px;">
+                                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${name}</div>
+                                            <div style="color: #666; font-size: 12px;">ID: ${charId}</div>
+                                            <div style="color: #666; font-size: 12px;">大小: ${formatSize(size)}</div>
+                                        </div>
+                                    `;
+                                }
+                                detailContent += `</div>`;
+                            } else if (type === 'groups') {
+                                detailContent += `<div style="font-size: 13px; line-height: 1.8;">`;
+                                for (const item of items) {
+                                    const groupData = await dataStorage.getData(item.key);
+                                    const size = groupData ? JSON.stringify(groupData).length : 0;
+                                    const groupId = item.key.replace('group_', '');
+                                    const group = db.groups.find(g => g.id === groupId);
+                                    const name = group ? group.name : '未知群组';
+                                    detailContent += `
+                                        <div style="padding: 8px; margin-bottom: 6px; background: #f5f5f5; border-radius: 4px;">
+                                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${name}</div>
+                                            <div style="color: #666; font-size: 12px;">ID: ${groupId}</div>
+                                            <div style="color: #666; font-size: 12px;">大小: ${formatSize(size)}</div>
+                                        </div>
+                                    `;
+                                }
+                                detailContent += `</div>`;
+                            } else if (type === 'system') {
+                                detailContent += `<div style="font-size: 13px; line-height: 1.8;">`;
+                                for (const item of items) {
+                                    const data = await dataStorage.getData(item.key);
+                                    const size = data ? JSON.stringify(data).length : 0;
+                                    detailContent += `
+                                        <div style="padding: 8px; margin-bottom: 6px; background: #f5f5f5; border-radius: 4px;">
+                                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${item.key}</div>
+                                            <div style="color: #666; font-size: 12px;">大小: ${formatSize(size)}</div>
+                                        </div>
+                                    `;
+                                }
+                                detailContent += `</div>`;
+                            } else if (type === 'cache') {
+                                detailContent += `
+                                    <div style="font-size: 13px; color: #666; line-height: 1.8;">
+                                        <div style="padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">
+                                            <div>缓存项数: ${info.cacheSize} 项</div>
+                                        </div>
+                                        <div style="color: #999; font-size: 12px;">
+                                            缓存用于加速数据访问，存储在内存中，重启应用后会清空
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                            
+                            // 创建详情弹窗内容
+                            const detailModal = document.createElement('div');
+                            detailModal.style.cssText = `
+                                background: white;
+                                border-radius: 12px;
+                                padding: 24px;
+                                max-width: 500px;
+                                width: 90%;
+                                max-height: 80vh;
+                                overflow: hidden;
+                                display: flex;
+                                flex-direction: column;
+                                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                                animation: slideUp 0.3s ease;
+                            `;
+                            
+                            detailModal.innerHTML = `
+                                <div style="font-size: 18px; font-weight: 600; color: #333; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+                                    ${title}
+                                </div>
+                                <div style="flex: 1; overflow-y: auto; margin-bottom: 16px;">
+                                    ${detailContent}
+                                </div>
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button id="detail-close-btn" style="
+                                        padding: 10px 24px;
+                                        background: #42a5f5;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 6px;
+                                        font-size: 14px;
+                                        cursor: pointer;
+                                        transition: all 0.2s;
+                                    " onmouseover="this.style.background='#1e88e5'" onmouseout="this.style.background='#42a5f5'">确定</button>
+                                </div>
+                            `;
+                            
+                            detailOverlay.appendChild(detailModal);
+                            document.body.appendChild(detailOverlay);
+                            
+                            // 关闭详情弹窗
+                            const closeDetail = () => {
+                                detailOverlay.style.animation = 'fadeOut 0.2s ease';
+                                setTimeout(() => {
+                                    document.body.removeChild(detailOverlay);
+                                }, 200);
+                            };
+                            
+                            // 点击确定按钮关闭
+                            document.getElementById('detail-close-btn').addEventListener('click', closeDetail);
+                            
+                            // 点击遮罩层关闭
+                            detailOverlay.addEventListener('click', (e) => {
+                                if (e.target === detailOverlay) {
+                                    closeDetail();
+                                }
+                            });
+                        };
+                        
                         const message = `
-                            <div style="text-align: left; max-height: 320px; overflow-y: auto; padding: 5px;">
+                            <div style="text-align: left; max-height: 400px; overflow-y: auto; padding: 5px;">
                                 <div style="margin-bottom: 15px;">
-                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 8px;">📦 总数据大小</div>
-                                    <div style="font-size: 20px; font-weight: bold; color: #ff80ab;">${formatSize(info.totalSize)}</div>
+                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 8px;">总数据大小</div>
+                                    <div style="font-size: 24px; font-weight: bold; color: #ff80ab;">${formatSize(info.totalSize)}</div>
                                 </div>
                                 
                                 <div style="border-top: 1px solid #f0f0f0; padding-top: 12px; margin-bottom: 15px;">
-                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px;">📂 数据分布</div>
-                                    <div style="margin-bottom: 8px;">
-                                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                            <span style="font-size: 13px; color: #666;">💾 存储数据</span>
-                                            <span style="font-size: 13px; font-weight: 600; color: #42a5f5;">${formatSize(info.storageSize)}</span>
+                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px;">数据分布</div>
+                                    <div class="data-item" data-type="storage" style="margin-bottom: 8px; padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-size: 14px; color: #495057; font-weight: 500;">存储数据</span>
+                                            <span style="font-size: 14px; font-weight: 600; color: #42a5f5;">${formatSize(info.storageSize)}</span>
                                         </div>
+                                        <div style="font-size: 11px; color: #868e96; margin-top: 4px;">点击查看详情</div>
                                     </div>
-                                    <div style="margin-bottom: 8px;">
-                                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                            <span style="font-size: 13px; color: #666;">💬 消息记录</span>
-                                            <span style="font-size: 13px; font-weight: 600; color: #66bb6a;">${formatSize(info.messageSize)}</span>
+                                    <div class="data-item" data-type="messages" style="margin-bottom: 8px; padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-size: 14px; color: #495057; font-weight: 500;">消息记录</span>
+                                            <span style="font-size: 14px; font-weight: 600; color: #66bb6a;">${formatSize(info.messageSize)}</span>
                                         </div>
+                                        <div style="font-size: 11px; color: #868e96; margin-top: 4px;">点击查看详情</div>
                                     </div>
                                 </div>
                                 
                                 <div style="border-top: 1px solid #f0f0f0; padding-top: 12px; margin-bottom: 15px;">
-                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px;">📋 数据类型统计</div>
+                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px;">数据类型统计</div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span style="color: #666;">👤 角色数据</span>
-                                            <span style="font-weight: 600; color: #ff80ab;">${characterCount} 个</span>
+                                        <div class="data-item" data-type="characters" style="padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #495057; font-weight: 500;">角色数据</span>
+                                                <span style="font-weight: 600; color: #ff80ab;">${characterCount}</span>
+                                            </div>
+                                            <div style="font-size: 10px; color: #868e96; margin-top: 4px;">点击查看</div>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span style="color: #666;">👥 群组数据</span>
-                                            <span style="font-weight: 600; color: #ff80ab;">${groupCount} 个</span>
+                                        <div class="data-item" data-type="groups" style="padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #495057; font-weight: 500;">群组数据</span>
+                                                <span style="font-weight: 600; color: #ff80ab;">${groupCount}</span>
+                                            </div>
+                                            <div style="font-size: 10px; color: #868e96; margin-top: 4px;">点击查看</div>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span style="color: #666;">⚙️ 系统数据</span>
-                                            <span style="font-weight: 600; color: #ff80ab;">${otherCount} 个</span>
+                                        <div class="data-item" data-type="system" style="padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #495057; font-weight: 500;">系统数据</span>
+                                                <span style="font-weight: 600; color: #ff80ab;">${otherCount}</span>
+                                            </div>
+                                            <div style="font-size: 10px; color: #868e96; margin-top: 4px;">点击查看</div>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span style="color: #666;">📦 消息块数</span>
-                                            <span style="font-weight: 600; color: #ff80ab;">${info.chunkCount} 块</span>
+                                        <div class="data-item" data-type="chunks" style="padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #495057; font-weight: 500;">消息块数</span>
+                                                <span style="font-weight: 600; color: #ff80ab;">${info.chunkCount}</span>
+                                            </div>
+                                            <div style="font-size: 10px; color: #868e96; margin-top: 4px;">点击查看</div>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span style="color: #666;">缓存项数</span>
-                                            <span style="font-weight: 600; color: #ff80ab;">${info.cacheSize} 项</span>
+                                        <div class="data-item" data-type="cache" style="padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; transition: all 0.2s; grid-column: span 2;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #495057; font-weight: 500;">缓存项数</span>
+                                                <span style="font-weight: 600; color: #ff80ab;">${info.cacheSize}</span>
+                                            </div>
+                                            <div style="font-size: 10px; color: #868e96; margin-top: 4px;">点击查看</div>
                                         </div>
-                                    </div>
-                                </div>
-                                
-                                <div style="border-top: 1px solid #f0f0f0; padding-top: 12px;">
-                                    <div style="font-size: 15px; font-weight: 600; color: #333; margin-bottom: 8px;">💡 数据管理建议</div>
-                                    <div style="font-size: 12px; color: #666; line-height: 1.6;">
-                                        • 定期清除缓存数据<br>
-                                        • 导出重要数据备份<br>
-                                        • 删除不需要的角色和群组
                                     </div>
                                 </div>
                             </div>
                         `;
                         
-                        await showCustomAlert('📊 数据统计', message);
+                        await showCustomAlert('数据统计', message);
+                        
+                        // 添加点击事件监听
+                        setTimeout(() => {
+                            document.querySelectorAll('.data-item').forEach(item => {
+                                item.addEventListener('click', async () => {
+                                    const type = item.getAttribute('data-type');
+                                    if (type === 'storage') {
+                                        await showDetailDialog('存储数据详情', info.items, 'storage');
+                                    } else if (type === 'messages') {
+                                        await showDetailDialog('消息记录详情', [], 'messages');
+                                    } else if (type === 'characters') {
+                                        await showDetailDialog('角色数据详情', characterItems, 'characters');
+                                    } else if (type === 'groups') {
+                                        await showDetailDialog('群组数据详情', groupItems, 'groups');
+                                    } else if (type === 'system') {
+                                        await showDetailDialog('系统数据详情', systemItems, 'system');
+                                    } else if (type === 'chunks') {
+                                        await showDetailDialog('消息块详情', [], 'messages');
+                                    } else if (type === 'cache') {
+                                        await showDetailDialog('缓存详情', [], 'cache');
+                                    }
+                                });
+                            });
+                        }, 100);
                     } else {
                         showToast('无法获取存储信息');
                     }
@@ -35382,16 +35509,20 @@ ${memoriesText}
         document.getElementById('export-encryption-type')?.addEventListener('change', function() {
             const customSection = document.getElementById('custom-fake-content-section');
             const passwordSection = document.getElementById('encryption-password-section');
+            const methodSection = document.getElementById('encryption-method-section');
             
             if (this.value === 'custom') {
                 customSection.style.display = 'block';
                 passwordSection.style.display = 'block';
+                methodSection.style.display = 'block';
             } else if (this.value === 'none') {
                 customSection.style.display = 'none';
                 passwordSection.style.display = 'none';
+                methodSection.style.display = 'none';
             } else {
                 customSection.style.display = 'none';
                 passwordSection.style.display = 'block';
+                methodSection.style.display = 'block';
             }
         });
 
@@ -35399,6 +35530,123 @@ ${memoriesText}
         document.getElementById('cancel-export-character-btn')?.addEventListener('click', () => {
             document.getElementById('export-character-modal').classList.remove('visible');
         });
+
+        // ===== 高级加密系统 =====
+        // AES-256-GCM 加密函数
+        async function encryptDataAES(data, password, method = 'aes-gcm') {
+            try {
+                const encoder = new TextEncoder();
+                const dataBytes = encoder.encode(JSON.stringify(data));
+                
+                // 生成随机盐值（用于密钥派生）
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                
+                // 使用PBKDF2从密码派生密钥
+                const passwordKey = await crypto.subtle.importKey(
+                    'raw',
+                    encoder.encode(password),
+                    'PBKDF2',
+                    false,
+                    ['deriveBits', 'deriveKey']
+                );
+                
+                // 派生AES-256密钥
+                const key = await crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: salt,
+                        iterations: method === 'aes-gcm-ultra' ? 600000 : 100000, // 超高难度使用更多迭代
+                        hash: 'SHA-256'
+                    },
+                    passwordKey,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt']
+                );
+                
+                // 生成随机初始化向量
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                
+                // 加密数据
+                const encryptedData = await crypto.subtle.encrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: iv,
+                        tagLength: 128
+                    },
+                    key,
+                    dataBytes
+                );
+                
+                // 组合：盐值 + IV + 加密数据
+                const combined = new Uint8Array(salt.length + iv.length + encryptedData.byteLength);
+                combined.set(salt, 0);
+                combined.set(iv, salt.length);
+                combined.set(new Uint8Array(encryptedData), salt.length + iv.length);
+                
+                // 转换为Base64
+                return btoa(String.fromCharCode(...combined));
+            } catch (error) {
+                console.error('加密失败:', error);
+                throw new Error('加密失败');
+            }
+        }
+        
+        // AES-256-GCM 解密函数
+        async function decryptDataAES(encryptedBase64, password, method = 'aes-gcm') {
+            try {
+                const encoder = new TextEncoder();
+                const decoder = new TextDecoder();
+                
+                // 从Base64解码
+                const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+                
+                // 提取盐值、IV和加密数据
+                const salt = combined.slice(0, 16);
+                const iv = combined.slice(16, 28);
+                const encryptedData = combined.slice(28);
+                
+                // 使用PBKDF2从密码派生密钥
+                const passwordKey = await crypto.subtle.importKey(
+                    'raw',
+                    encoder.encode(password),
+                    'PBKDF2',
+                    false,
+                    ['deriveBits', 'deriveKey']
+                );
+                
+                // 派生AES-256密钥
+                const key = await crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: salt,
+                        iterations: method === 'aes-gcm-ultra' ? 600000 : 100000,
+                        hash: 'SHA-256'
+                    },
+                    passwordKey,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['decrypt']
+                );
+                
+                // 解密数据
+                const decryptedData = await crypto.subtle.decrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: iv,
+                        tagLength: 128
+                    },
+                    key,
+                    encryptedData
+                );
+                
+                // 转换为JSON对象
+                return JSON.parse(decoder.decode(decryptedData));
+            } catch (error) {
+                console.error('解密失败:', error);
+                throw new Error('密码错误或数据损坏');
+            }
+        }
 
         // 确认导出
         document.getElementById('export-character-form')?.addEventListener('submit', async (e) => {
@@ -35429,6 +35677,7 @@ ${memoriesText}
             
             // 获取加密设置
             const encryptionType = document.getElementById('export-encryption-type').value;
+            const encryptionMethod = document.getElementById('export-encryption-method')?.value || 'aes-gcm';
             const decryptPassword = document.getElementById('export-decrypt-password').value;
             const customFakePersona = document.getElementById('custom-fake-persona').value;
             
@@ -35443,12 +35692,20 @@ ${memoriesText}
                 return;
             }
             
+            // 密码强度检查
+            if (encryptionType !== 'none' && decryptPassword.length < 8) {
+                if (!confirm('密码长度少于8位，安全性较低。是否继续？')) {
+                    return;
+                }
+            }
+            
             // 构建导出数据
             const exportData = {
                 type: 'phone-character-card',
-                version: '1.0',
+                version: '2.0', // 升级版本号
                 encrypted: encryptionType !== 'none',
                 encryptionType: encryptionType,
+                encryptionMethod: encryptionMethod, // 新增：加密方法
                 character: {
                     realName: character.realName,
                     remarkName: character.remarkName,
@@ -35467,59 +35724,62 @@ ${memoriesText}
             
             // 如果需要加密
             if (encryptionType !== 'none') {
-                // 保存真实数据（加密）- 用于解密按钮
-                const realData = JSON.stringify({
-                    persona: character.persona,
-                    worldBooks: selectedWorldBooks,
-                    npcLibrary: exportNpc ? (character.npcLibrary || []) : [],
-                    avatarLibrary: exportAvatar ? (character.avatarLibrary || []) : [],
-                    myAvatarLibrary: exportAvatar ? (character.myAvatarLibrary || []) : []
-                });
+                showToast('正在加密数据，请稍候...');
                 
-                // 简单的Base64编码（实际应用中应使用更强的加密）
-                exportData.encryptedData = btoa(encodeURIComponent(realData));
-                exportData.passwordHash = btoa(encodeURIComponent(decryptPassword));
-                
-                // 设置假数据（用户看到的）
-                if (encryptionType === 'blank') {
-                    exportData.character.persona = '';
-                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
-                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
-                        name: wb.name,
-                        content: '',  // 假内容（空白）
-                        group: wb.group,
-                        position: wb.position,
-                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
-                    }));
-                    exportData.npcLibrary = [];
-                    exportData.avatarLibrary = [];
-                    exportData.myAvatarLibrary = [];
-                } else if (encryptionType === 'fake') {
-                    exportData.character.persona = '这是一个神秘的角色，具体信息需要解密后才能查看。';
-                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
-                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
-                        name: wb.name,
-                        content: '这是加密的世界书内容，需要解密后才能查看。',  // 假内容
-                        group: wb.group,
-                        position: wb.position,
-                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
-                    }));
-                    exportData.npcLibrary = [];
-                    exportData.avatarLibrary = [];
-                    exportData.myAvatarLibrary = [];
-                } else if (encryptionType === 'custom') {
-                    exportData.character.persona = customFakePersona;
-                    // 世界书保留结构，但内容是假的，同时保存真实内容供AI使用
-                    exportData.worldBooks = selectedWorldBooks.map(wb => ({
-                        name: wb.name,
-                        content: '这是自定义的假世界书内容。',  // 假内容
-                        group: wb.group,
-                        position: wb.position,
-                        encryptedContent: btoa(encodeURIComponent(wb.content))  // 真实内容（加密）
-                    }));
-                    exportData.npcLibrary = [];
-                    exportData.avatarLibrary = [];
-                    exportData.myAvatarLibrary = [];
+                try {
+                    // 保存真实数据（加密）
+                    const realData = {
+                        persona: character.persona,
+                        worldBooks: selectedWorldBooks,
+                        npcLibrary: exportNpc ? (character.npcLibrary || []) : [],
+                        avatarLibrary: exportAvatar ? (character.avatarLibrary || []) : [],
+                        myAvatarLibrary: exportAvatar ? (character.myAvatarLibrary || []) : []
+                    };
+                    
+                    // 使用选择的加密方法
+                    exportData.encryptedData = await encryptDataAES(realData, decryptPassword, encryptionMethod);
+                    
+                    // 不再保存密码哈希，只有作者知道密码
+                    // exportData.passwordHash = ''; // 移除密码哈希
+                    
+                    // 设置假数据（用户看到的）
+                    if (encryptionType === 'blank') {
+                        exportData.character.persona = '';
+                        exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                            name: wb.name,
+                            content: '',
+                            group: wb.group,
+                            position: wb.position
+                        }));
+                        exportData.npcLibrary = [];
+                        exportData.avatarLibrary = [];
+                        exportData.myAvatarLibrary = [];
+                    } else if (encryptionType === 'fake') {
+                        exportData.character.persona = '这是一个神秘的角色，具体信息需要解密后才能查看。';
+                        exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                            name: wb.name,
+                            content: '这是加密的世界书内容，需要解密后才能查看。',
+                            group: wb.group,
+                            position: wb.position
+                        }));
+                        exportData.npcLibrary = [];
+                        exportData.avatarLibrary = [];
+                        exportData.myAvatarLibrary = [];
+                    } else if (encryptionType === 'custom') {
+                        exportData.character.persona = customFakePersona;
+                        exportData.worldBooks = selectedWorldBooks.map(wb => ({
+                            name: wb.name,
+                            content: '这是自定义的假世界书内容。',
+                            group: wb.group,
+                            position: wb.position
+                        }));
+                        exportData.npcLibrary = [];
+                        exportData.avatarLibrary = [];
+                        exportData.myAvatarLibrary = [];
+                    }
+                } catch (error) {
+                    showToast('加密失败: ' + error.message);
+                    return;
                 }
             }
             
@@ -35808,20 +36068,28 @@ ${memoriesText}
                 return;
             }
             
-            // 验证密码
-            const correctPasswordHash = character.passwordHash;
-            const inputPasswordHash = btoa(encodeURIComponent(password));
-            
-            if (inputPasswordHash !== correctPasswordHash) {
-                showToast('解密口令错误');
-                return;
-            }
-            
             try {
-                // 解密数据
-                const encryptedData = character.encryptedData;
-                const decryptedStr = decodeURIComponent(atob(encryptedData));
-                const realData = JSON.parse(decryptedStr);
+                let realData;
+                
+                // 检测加密版本
+                if (character.version === '2.0' || character.encryptionMethod) {
+                    // 新版AES加密
+                    showToast('正在解密，请稍候...');
+                    const method = character.encryptionMethod || 'aes-gcm';
+                    realData = await decryptDataAES(character.encryptedData, password, method);
+                } else {
+                    // 旧版Base64加密（兼容性）
+                    const correctPasswordHash = character.passwordHash;
+                    const inputPasswordHash = btoa(encodeURIComponent(password));
+                    
+                    if (inputPasswordHash !== correctPasswordHash) {
+                        showToast('解密口令错误');
+                        return;
+                    }
+                    
+                    const decryptedStr = decodeURIComponent(atob(character.encryptedData));
+                    realData = JSON.parse(decryptedStr);
+                }
                 
                 // 恢复真实数据
                 character.persona = realData.persona;
@@ -35829,6 +36097,8 @@ ${memoriesText}
                 character.encryptedData = null;
                 character.passwordHash = null;
                 character.encryptionType = null;
+                character.encryptionMethod = null;
+                character.version = null;
                 
                 // 删除旧的加密世界书
                 if (character.worldBookIds && character.worldBookIds.length > 0) {
@@ -35883,7 +36153,7 @@ ${memoriesText}
                 
             } catch (error) {
                 console.error('解密失败:', error);
-                showToast('解密失败，数据可能已损坏');
+                showToast('解密失败：密码错误或数据损坏');
             }
         });
 
