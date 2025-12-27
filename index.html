@@ -483,6 +483,12 @@
     <div id="customize-screen" class="screen"></div>
     <div id="tutorial-screen" class="screen"></div>
     <div id="toast-notification" class="toast"></div>
+    
+    <!-- 图片大图查看器 -->
+    <div id="image-viewer" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10001; justify-content: center; align-items: center; cursor: zoom-out; animation: fadeIn 0.3s ease;">
+        <img id="image-viewer-img" src="" alt="查看大图" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; animation: zoomIn 0.3s ease;">
+    </div>
+    
     <input type="file" id="image-upload-input" accept="image/*" style="display:none;">
     <input type="file" id="camera-capture-input" accept="image/*" capture="environment" style="display:none;">
     <div id="add-char-modal" class="modal-overlay">

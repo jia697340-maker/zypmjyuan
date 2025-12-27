@@ -1755,6 +1755,18 @@
             if (!db.worldBooks) db.worldBooks = [];
             if (!db.fontUrl) db.fontUrl = '';
             if (!db.customIcons) db.customIcons = {};
+            if (db.enableLanguageSwitch === undefined) db.enableLanguageSwitch = false;
+            if (!db.appLanguage) db.appLanguage = 'zh-CN';
+            if (!db.timeDividerSettings) {
+                db.timeDividerSettings = {
+                    bgColor: 'rgba(200, 200, 200, 0.5)',
+                    textColor: '#666666',
+                    language: 'zh',
+                    bgOpacity: 50,
+                    textOpacity: 100,
+                    borderRadius: 10
+                };
+            }
 
             // 重建characters和groups列表
             // 由于saveData时这两个字段被排除，需要从存储中重新构建
@@ -1909,6 +1921,9 @@
             const hours = String(date.getHours()).padStart(2, '0');
             const minutes = String(date.getMinutes()).padStart(2, '0');
             const timeString = `${hours}:${minutes}`;
+            
+            // 获取语言设置
+            const language = db.timeDividerSettings?.language || 'zh';
 
             // 如果是今天
             if (now.toDateString() === date.toDateString()) {
@@ -1919,19 +1934,90 @@
             const yesterday = new Date();
             yesterday.setDate(now.getDate() - 1);
             if (yesterday.toDateString() === date.toDateString()) {
-                return `昨天 ${timeString}`;
+                const yesterdayText = {
+                    'zh': '昨天',
+                    'en': 'Yesterday',
+                    'ja': '昨日',
+                    'ko': '어제',
+                    'es': 'Ayer',
+                    'fr': 'Hier',
+                    'de': 'Gestern',
+                    'it': 'Ieri',
+                    'pt': 'Ontem',
+                    'ru': 'Вчера'
+                };
+                return `${yesterdayText[language] || yesterdayText['zh']} ${timeString}`;
             }
             
             // 更早的时间
             const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
 
             if (now.getFullYear() === year) {
-                return `${month}月${day}日 ${timeString}`;
+                // 今年的日期
+                if (language === 'zh') {
+                    return `${month}月${day}日 ${timeString}`;
+                } else if (language === 'ja') {
+                    return `${month}月${day}日 ${timeString}`;
+                } else if (language === 'ko') {
+                    return `${month}월 ${day}일 ${timeString}`;
+                } else if (language === 'en') {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${monthNames[month - 1]} ${day} ${timeString}`;
+                } else if (language === 'es') {
+                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                    return `${day} ${monthNames[month - 1]} ${timeString}`;
+                } else if (language === 'fr') {
+                    const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                    return `${day} ${monthNames[month - 1]} ${timeString}`;
+                } else if (language === 'de') {
+                    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+                    return `${day}. ${monthNames[month - 1]} ${timeString}`;
+                } else if (language === 'it') {
+                    const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+                    return `${day} ${monthNames[month - 1]} ${timeString}`;
+                } else if (language === 'pt') {
+                    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                    return `${day} ${monthNames[month - 1]} ${timeString}`;
+                } else if (language === 'ru') {
+                    const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+                    return `${day} ${monthNames[month - 1]} ${timeString}`;
+                }
             } else {
-                return `${year}年${month}月${day}日 ${timeString}`;
+                // 更早年份的日期
+                if (language === 'zh') {
+                    return `${year}年${month}月${day}日 ${timeString}`;
+                } else if (language === 'ja') {
+                    return `${year}年${month}月${day}日 ${timeString}`;
+                } else if (language === 'ko') {
+                    return `${year}년 ${month}월 ${day}일 ${timeString}`;
+                } else if (language === 'en') {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${monthNames[month - 1]} ${day}, ${year} ${timeString}`;
+                } else if (language === 'es') {
+                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                    return `${day} ${monthNames[month - 1]} ${year} ${timeString}`;
+                } else if (language === 'fr') {
+                    const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                    return `${day} ${monthNames[month - 1]} ${year} ${timeString}`;
+                } else if (language === 'de') {
+                    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+                    return `${day}. ${monthNames[month - 1]} ${year} ${timeString}`;
+                } else if (language === 'it') {
+                    const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+                    return `${day} ${monthNames[month - 1]} ${year} ${timeString}`;
+                } else if (language === 'pt') {
+                    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                    return `${day} ${monthNames[month - 1]} ${year} ${timeString}`;
+                } else if (language === 'ru') {
+                    const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+                    return `${day} ${monthNames[month - 1]} ${year} ${timeString}`;
+                }
             }
+            
+            // 默认返回中文格式
+            return `${year}年${month}月${day}日 ${timeString}`;
         }
 
         /**
@@ -1982,13 +2068,19 @@
          */
         function createSystemTimestampElement(timestamp) {
             const wrapper = document.createElement('div');
-            // 复用系统消息的居中样式
             wrapper.className = 'message-wrapper system-notification'; 
             
             const bubble = document.createElement('div');
-            // 复用系统消息的气泡样式
             bubble.className = 'system-notification-bubble'; 
             bubble.textContent = formatSystemTimestamp(timestamp);
+            
+            const bgColor = db.timeDividerSettings?.bgColor || 'rgba(200, 200, 200, 0.5)';
+            const textColor = db.timeDividerSettings?.textColor || '#666';
+            const borderRadius = db.timeDividerSettings?.borderRadius !== undefined ? db.timeDividerSettings.borderRadius : 10;
+            
+            bubble.style.backgroundColor = bgColor;
+            bubble.style.color = textColor;
+            bubble.style.borderRadius = borderRadius + 'px';
             
             wrapper.appendChild(bubble);
             return wrapper;
@@ -2469,6 +2561,15 @@
 
         const init = async () => {
             await loadData();
+            
+            // 图片大图查看器关闭事件
+            const imageViewer = document.getElementById('image-viewer');
+            if (imageViewer) {
+                imageViewer.addEventListener('click', () => {
+                    imageViewer.style.display = 'none';
+                });
+            }
+            
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.context-menu')) {
                     e.stopPropagation();
@@ -2514,6 +2615,12 @@
             applyGlobalFontSize(db.fontSize);
             initStatusBar(); // 初始化顶部状态栏
             initLockScreen(); // 初始化锁屏页面
+            
+            // 应用语言设置
+            if (db.enableLanguageSwitch && db.appLanguage) {
+                applyLanguage(db.appLanguage);
+            }
+            
             setupHomeScreen();
             setupChatListScreen();
             setupAddCharModal();
@@ -2595,14 +2702,26 @@
          */
         function startBackgroundSimulation() {
             if (simulationIntervalId) return;
-            // 使用最小的检测间隔（全局或角色专属中的最小值）
-            let minInterval = db.backgroundActivityInterval || 60;
+            
+            // 【修复】收集所有可能的检测间隔
+            const intervals = [];
+            
+            // 如果全局启用了后台活动，添加全局间隔
+            if (db.enableBackgroundActivity && db.backgroundActivityInterval) {
+                intervals.push(db.backgroundActivityInterval);
+            }
+            
+            // 收集所有启用了后台活动的角色的间隔
             const allCharacters = db.characters || [];
             allCharacters.forEach(char => {
                 if (char.enableBackgroundActivity && char.backgroundActivityInterval) {
-                    minInterval = Math.min(minInterval, char.backgroundActivityInterval);
+                    intervals.push(char.backgroundActivityInterval);
                 }
             });
+            
+            // 如果没有任何间隔设置，使用默认值60秒
+            const minInterval = intervals.length > 0 ? Math.min(...intervals) : 60;
+            
             simulationIntervalId = setInterval(runBackgroundSimulationTick, minInterval * 1000);
             console.log(`后台活动已启动，检测间隔: ${minInterval}秒`);
         }
@@ -4536,7 +4655,30 @@ ${contextSummary}
         // --- App Setup Functions ---
         function setupHomeScreen() {
             const getIcon = (id) => db.customIcons[id] || defaultIcons[id].url;
-            const getName = (id) => db.customIconNames[id] || defaultIcons[id].name;
+            const getName = (id) => {
+                // 如果用户自定义了名称，使用自定义名称
+                if (db.customIconNames[id]) return db.customIconNames[id];
+                
+                // 如果启用了语言切换，使用翻译
+                if (db.enableLanguageSwitch) {
+                    const keyMap = {
+                        'chat-list-screen': 'chat',
+                        'world-book-screen': 'worldBook',
+                        'api-settings-screen': 'apiSettings',
+                        'wallpaper-screen': 'wallpaper',
+                        'font-settings-screen': 'fontSettings',
+                        'customize-screen': 'customize',
+                        'tutorial-screen': 'tutorial',
+                        'day-mode-btn': 'dayMode',
+                        'night-mode-btn': 'nightMode'
+                    };
+                    const key = keyMap[id];
+                    if (key) return t(key);
+                }
+                
+                // 否则使用默认名称
+                return defaultIcons[id].name;
+            };
             const homeScreenHTML = `
             <div class="home-pages-container" id="home-pages-container">
                 <!-- 第一页 -->
@@ -4846,6 +4988,25 @@ ${contextSummary}
                     showToast(db.showDockAppNames ? '底栏APP名称已显示' : '底栏APP名称已隐藏');
                 }
                 
+                // 本机语言切换开关
+                if (e.target.id === 'enable-language-switch-toggle') {
+                    db.enableLanguageSwitch = e.target.checked;
+                    const languageSelectContainer = document.getElementById('language-select-container');
+                    if (languageSelectContainer) {
+                        languageSelectContainer.style.display = e.target.checked ? 'block' : 'none';
+                    }
+                    await saveData();
+                    showToast(e.target.checked ? '语言切换已启用' : '语言切换已关闭');
+                }
+                
+                // 语言选择
+                if (e.target.id === 'app-language-select') {
+                    db.appLanguage = e.target.value;
+                    await saveData();
+                    applyLanguage(e.target.value);
+                    showToast(t('languageChanged'));
+                }
+                
                 // 顶部状态栏开关
                 if (e.target.id === 'show-status-bar-toggle') {
                     db.showStatusBar = e.target.checked;
@@ -5138,6 +5299,492 @@ ${contextSummary}
                     showToast('所有悬浮歌词设置已重置');
                 }
             });
+            
+            // 时间旁白设置事件监听器
+            customizeForm.addEventListener('input', async (e) => {
+                // 背景颜色选择器
+                if (e.target.id === 'time-divider-bg-color') {
+                    const value = e.target.value;
+                    const opacity = db.timeDividerSettings.bgOpacity !== undefined ? db.timeDividerSettings.bgOpacity : 50;
+                    const rgba = hexToRgba(value, opacity / 100);
+                    document.getElementById('time-divider-bg-color-text').value = rgba;
+                    db.timeDividerSettings.bgColor = rgba;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+                
+                // 背景颜色文本输入
+                if (e.target.id === 'time-divider-bg-color-text') {
+                    const value = e.target.value;
+                    if (/^#[0-9A-F]{6}$/i.test(value) || /^rgba?\(/.test(value)) {
+                        if (value.startsWith('#')) {
+                            const opacity = db.timeDividerSettings.bgOpacity !== undefined ? db.timeDividerSettings.bgOpacity : 50;
+                            const rgba = hexToRgba(value, opacity / 100);
+                            db.timeDividerSettings.bgColor = rgba;
+                            document.getElementById('time-divider-bg-color').value = value;
+                        } else {
+                            db.timeDividerSettings.bgColor = value;
+                            const hex = rgbaToHex(value);
+                            if (hex) document.getElementById('time-divider-bg-color').value = hex;
+                        }
+                        await saveData();
+                        updateTimeDividerPreview();
+                    }
+                }
+                
+                // 背景透明度滑动条
+                if (e.target.id === 'time-divider-bg-opacity') {
+                    const value = parseInt(e.target.value);
+                    document.getElementById('time-divider-bg-opacity-value').textContent = value + '%';
+                    db.timeDividerSettings.bgOpacity = value;
+                    const colorInput = document.getElementById('time-divider-bg-color');
+                    const rgba = hexToRgba(colorInput.value, value / 100);
+                    db.timeDividerSettings.bgColor = rgba;
+                    document.getElementById('time-divider-bg-color-text').value = rgba;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+                
+                // 文字颜色选择器
+                if (e.target.id === 'time-divider-text-color') {
+                    const value = e.target.value;
+                    const opacity = db.timeDividerSettings.textOpacity !== undefined ? db.timeDividerSettings.textOpacity : 100;
+                    const rgba = hexToRgba(value, opacity / 100);
+                    document.getElementById('time-divider-text-color-text').value = rgba;
+                    db.timeDividerSettings.textColor = rgba;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+                
+                // 文字颜色文本输入
+                if (e.target.id === 'time-divider-text-color-text') {
+                    const value = e.target.value;
+                    if (/^#[0-9A-F]{6}$/i.test(value) || /^rgba?\(/.test(value)) {
+                        if (value.startsWith('#')) {
+                            const opacity = db.timeDividerSettings.textOpacity !== undefined ? db.timeDividerSettings.textOpacity : 100;
+                            const rgba = hexToRgba(value, opacity / 100);
+                            db.timeDividerSettings.textColor = rgba;
+                            document.getElementById('time-divider-text-color').value = value;
+                        } else {
+                            db.timeDividerSettings.textColor = value;
+                            const hex = rgbaToHex(value);
+                            if (hex) document.getElementById('time-divider-text-color').value = hex;
+                        }
+                        await saveData();
+                        updateTimeDividerPreview();
+                    }
+                }
+                
+                // 文字透明度滑动条
+                if (e.target.id === 'time-divider-text-opacity') {
+                    const value = parseInt(e.target.value);
+                    document.getElementById('time-divider-text-opacity-value').textContent = value + '%';
+                    db.timeDividerSettings.textOpacity = value;
+                    const colorInput = document.getElementById('time-divider-text-color');
+                    const rgba = hexToRgba(colorInput.value, value / 100);
+                    db.timeDividerSettings.textColor = rgba;
+                    document.getElementById('time-divider-text-color-text').value = rgba;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+                
+                // 圆角大小滑动条
+                if (e.target.id === 'time-divider-radius-slider') {
+                    const value = parseInt(e.target.value);
+                    document.getElementById('time-divider-radius-value').textContent = value + 'px';
+                    db.timeDividerSettings.borderRadius = value;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+                
+                // 语言选择
+                if (e.target.id === 'time-divider-language') {
+                    const value = e.target.value;
+                    db.timeDividerSettings.language = value;
+                    await saveData();
+                    updateTimeDividerPreview();
+                }
+            });
+            
+            // 时间旁白重置按钮事件监听器
+            customizeForm.addEventListener('click', async (e) => {
+                // 重置背景颜色
+                if (e.target.id === 'reset-time-divider-bg-color-btn') {
+                    db.timeDividerSettings.bgColor = 'rgba(200, 200, 200, 0.5)';
+                    db.timeDividerSettings.bgOpacity = 50;
+                    document.getElementById('time-divider-bg-color').value = '#c8c8c8';
+                    document.getElementById('time-divider-bg-color-text').value = 'rgba(200, 200, 200, 0.5)';
+                    document.getElementById('time-divider-bg-opacity').value = 50;
+                    document.getElementById('time-divider-bg-opacity-value').textContent = '50%';
+                    await saveData();
+                    updateTimeDividerPreview();
+                    showToast('旁白背景颜色已重置');
+                }
+                
+                // 重置文字颜色
+                if (e.target.id === 'reset-time-divider-text-color-btn') {
+                    db.timeDividerSettings.textColor = '#666666';
+                    db.timeDividerSettings.textOpacity = 100;
+                    document.getElementById('time-divider-text-color').value = '#666666';
+                    document.getElementById('time-divider-text-color-text').value = '#666666';
+                    document.getElementById('time-divider-text-opacity').value = 100;
+                    document.getElementById('time-divider-text-opacity-value').textContent = '100%';
+                    await saveData();
+                    updateTimeDividerPreview();
+                    showToast('旁白文字颜色已重置');
+                }
+                
+                // 重置圆角大小
+                if (e.target.id === 'reset-time-divider-radius-btn') {
+                    db.timeDividerSettings.borderRadius = 10;
+                    document.getElementById('time-divider-radius-slider').value = 10;
+                    document.getElementById('time-divider-radius-value').textContent = '10px';
+                    await saveData();
+                    updateTimeDividerPreview();
+                    showToast('圆角大小已重置');
+                }
+                
+                // 重置所有时间旁白设置
+                if (e.target.id === 'reset-all-time-divider-btn') {
+                    if (!confirm('确定要重置所有时间旁白设置吗？')) return;
+                    
+                    db.timeDividerSettings = {
+                        bgColor: 'rgba(200, 200, 200, 0.5)',
+                        textColor: '#666666',
+                        language: 'zh',
+                        bgOpacity: 50,
+                        textOpacity: 100,
+                        borderRadius: 10
+                    };
+                    await saveData();
+                    renderCustomizeForm();
+                    showToast('所有时间旁白设置已重置');
+                }
+            });
+        }
+
+        // 颜色转换辅助函数
+        function hexToRgba(hex, alpha = 1) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function rgbaToHex(rgba) {
+            const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (!match) return null;
+            const r = parseInt(match[1]).toString(16).padStart(2, '0');
+            const g = parseInt(match[2]).toString(16).padStart(2, '0');
+            const b = parseInt(match[3]).toString(16).padStart(2, '0');
+            return `#${r}${g}${b}`;
+        }
+
+        // 语言翻译字典
+        const i18n = {
+            'zh-CN': {
+                // 主屏幕
+                'chat': '聊天',
+                'worldBook': '世界书',
+                'apiSettings': 'API 设置',
+                'wallpaper': '更换壁纸',
+                'fontSettings': '字体设置',
+                'customize': '主屏幕自定义',
+                'tutorial': '教程',
+                'dayMode': '日间',
+                'nightMode': '夜间',
+                
+                // 通用按钮
+                'back': '返回',
+                'save': '保存',
+                'cancel': '取消',
+                'delete': '删除',
+                'edit': '编辑',
+                'add': '添加',
+                'settings': '设置',
+                'confirm': '确认',
+                'reset': '重置',
+                'apply': '应用',
+                'close': '关闭',
+                'ok': '确定',
+                
+                // 聊天界面
+                'chatList': '聊天列表',
+                'newChat': '新建聊天',
+                'groupChat': '群聊',
+                'sendMessage': '发送消息',
+                'inputMessage': '输入消息...',
+                'online': '在线',
+                'offline': '离线',
+                'typing': '正在输入...',
+                
+                // 设置相关
+                'languageSwitch': '本机语言切换',
+                'selectLanguage': '选择语言',
+                'showDockNames': '底栏APP显示名字',
+                'showStatusBar': '显示顶部电量栏和时间',
+                'enableLockScreen': '启用锁屏页面',
+                'resetAppearance': '重置主页面所有外观设置',
+                
+                // 提示信息
+                'languageChanged': '语言已切换',
+                'saved': '已保存',
+                'deleted': '已删除',
+                'resetSuccess': '重置成功',
+                'confirmDelete': '确定要删除吗？',
+                'confirmReset': '确定要重置吗？',
+                
+                // 时间相关
+                'today': '今天',
+                'yesterday': '昨天',
+                'justNow': '刚刚',
+                'minutesAgo': '分钟前',
+                'hoursAgo': '小时前',
+                'daysAgo': '天前'
+            },
+            'zh-TW': {
+                'chat': '聊天',
+                'worldBook': '世界書',
+                'apiSettings': 'API 設置',
+                'wallpaper': '更換壁紙',
+                'fontSettings': '字體設置',
+                'customize': '主屏幕自定義',
+                'tutorial': '教程',
+                'dayMode': '日間',
+                'nightMode': '夜間',
+                'back': '返回',
+                'save': '保存',
+                'cancel': '取消',
+                'delete': '刪除',
+                'edit': '編輯',
+                'add': '添加',
+                'settings': '設置',
+                'confirm': '確認',
+                'reset': '重置',
+                'apply': '應用',
+                'close': '關閉',
+                'ok': '確定',
+                'chatList': '聊天列表',
+                'newChat': '新建聊天',
+                'groupChat': '群聊',
+                'sendMessage': '發送消息',
+                'inputMessage': '輸入消息...',
+                'online': '在線',
+                'offline': '離線',
+                'typing': '正在輸入...',
+                'languageSwitch': '本機語言切換',
+                'selectLanguage': '選擇語言',
+                'showDockNames': '底欄APP顯示名字',
+                'showStatusBar': '顯示頂部電量欄和時間',
+                'enableLockScreen': '啟用鎖屏頁面',
+                'resetAppearance': '重置主頁面所有外觀設置',
+                'languageChanged': '語言已切換',
+                'saved': '已保存',
+                'deleted': '已刪除',
+                'resetSuccess': '重置成功',
+                'confirmDelete': '確定要刪除嗎？',
+                'confirmReset': '確定要重置嗎？',
+                'today': '今天',
+                'yesterday': '昨天',
+                'justNow': '剛剛',
+                'minutesAgo': '分鐘前',
+                'hoursAgo': '小時前',
+                'daysAgo': '天前'
+            },
+            'en': {
+                'chat': 'Chat',
+                'worldBook': 'World Book',
+                'apiSettings': 'API Settings',
+                'wallpaper': 'Wallpaper',
+                'fontSettings': 'Font Settings',
+                'customize': 'Customize',
+                'tutorial': 'Tutorial',
+                'dayMode': 'Day',
+                'nightMode': 'Night',
+                'back': 'Back',
+                'save': 'Save',
+                'cancel': 'Cancel',
+                'delete': 'Delete',
+                'edit': 'Edit',
+                'add': 'Add',
+                'settings': 'Settings',
+                'confirm': 'Confirm',
+                'reset': 'Reset',
+                'apply': 'Apply',
+                'close': 'Close',
+                'ok': 'OK',
+                'chatList': 'Chat List',
+                'newChat': 'New Chat',
+                'groupChat': 'Group Chat',
+                'sendMessage': 'Send Message',
+                'inputMessage': 'Type a message...',
+                'online': 'Online',
+                'offline': 'Offline',
+                'typing': 'Typing...',
+                'languageSwitch': 'Language Switch',
+                'selectLanguage': 'Select Language',
+                'showDockNames': 'Show Dock App Names',
+                'showStatusBar': 'Show Status Bar',
+                'enableLockScreen': 'Enable Lock Screen',
+                'resetAppearance': 'Reset All Appearance Settings',
+                'languageChanged': 'Language Changed',
+                'saved': 'Saved',
+                'deleted': 'Deleted',
+                'resetSuccess': 'Reset Successfully',
+                'confirmDelete': 'Are you sure to delete?',
+                'confirmReset': 'Are you sure to reset?',
+                'today': 'Today',
+                'yesterday': 'Yesterday',
+                'justNow': 'Just now',
+                'minutesAgo': 'minutes ago',
+                'hoursAgo': 'hours ago',
+                'daysAgo': 'days ago'
+            },
+            'ja': {
+                'chat': 'チャット',
+                'worldBook': 'ワールドブック',
+                'apiSettings': 'API設定',
+                'wallpaper': '壁紙',
+                'fontSettings': 'フォント設定',
+                'customize': 'カスタマイズ',
+                'tutorial': 'チュートリアル',
+                'dayMode': '昼',
+                'nightMode': '夜',
+                'back': '戻る',
+                'save': '保存',
+                'cancel': 'キャンセル',
+                'delete': '削除',
+                'edit': '編集',
+                'add': '追加',
+                'settings': '設定',
+                'confirm': '確認',
+                'reset': 'リセット',
+                'apply': '適用',
+                'close': '閉じる',
+                'ok': 'OK',
+                'chatList': 'チャットリスト',
+                'newChat': '新しいチャット',
+                'groupChat': 'グループチャット',
+                'sendMessage': 'メッセージを送信',
+                'inputMessage': 'メッセージを入力...',
+                'online': 'オンライン',
+                'offline': 'オフライン',
+                'typing': '入力中...',
+                'languageSwitch': '言語切替',
+                'selectLanguage': '言語を選択',
+                'showDockNames': 'ドックアプリ名を表示',
+                'showStatusBar': 'ステータスバーを表示',
+                'enableLockScreen': 'ロック画面を有効化',
+                'resetAppearance': 'すべての外観設定をリセット',
+                'languageChanged': '言語が変更されました',
+                'saved': '保存しました',
+                'deleted': '削除しました',
+                'resetSuccess': 'リセットしました',
+                'confirmDelete': '削除してもよろしいですか？',
+                'confirmReset': 'リセットしてもよろしいですか？',
+                'today': '今日',
+                'yesterday': '昨日',
+                'justNow': 'たった今',
+                'minutesAgo': '分前',
+                'hoursAgo': '時間前',
+                'daysAgo': '日前'
+            },
+            'ko': {
+                'chat': '채팅',
+                'worldBook': '월드북',
+                'apiSettings': 'API 설정',
+                'wallpaper': '배경화면',
+                'fontSettings': '글꼴 설정',
+                'customize': '사용자 지정',
+                'tutorial': '튜토리얼',
+                'dayMode': '낮',
+                'nightMode': '밤',
+                'back': '뒤로',
+                'save': '저장',
+                'cancel': '취소',
+                'delete': '삭제',
+                'edit': '편집',
+                'add': '추가',
+                'settings': '설정',
+                'confirm': '확인',
+                'reset': '재설정',
+                'apply': '적용',
+                'close': '닫기',
+                'ok': '확인',
+                'chatList': '채팅 목록',
+                'newChat': '새 채팅',
+                'groupChat': '그룹 채팅',
+                'sendMessage': '메시지 보내기',
+                'inputMessage': '메시지 입력...',
+                'online': '온라인',
+                'offline': '오프라인',
+                'typing': '입력 중...',
+                'languageSwitch': '언어 전환',
+                'selectLanguage': '언어 선택',
+                'showDockNames': '독 앱 이름 표시',
+                'showStatusBar': '상태 표시줄 표시',
+                'enableLockScreen': '잠금 화면 활성화',
+                'resetAppearance': '모든 외관 설정 재설정',
+                'languageChanged': '언어가 변경되었습니다',
+                'saved': '저장됨',
+                'deleted': '삭제됨',
+                'resetSuccess': '재설정 완료',
+                'confirmDelete': '삭제하시겠습니까?',
+                'confirmReset': '재설정하시겠습니까?',
+                'today': '오늘',
+                'yesterday': '어제',
+                'justNow': '방금',
+                'minutesAgo': '분 전',
+                'hoursAgo': '시간 전',
+                'daysAgo': '일 전'
+            }
+        };
+
+        // 获取翻译文本
+        function t(key, lang = null) {
+            if (!db.enableLanguageSwitch) return key;
+            const currentLang = lang || db.appLanguage || 'zh-CN';
+            return i18n[currentLang]?.[key] || i18n['zh-CN']?.[key] || key;
+        }
+
+        // 应用语言翻译
+        function applyLanguage(lang) {
+            if (!db.enableLanguageSwitch) return;
+            
+            document.documentElement.lang = lang;
+            
+            // 翻译所有带data-i18n属性的元素
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                const text = t(key, lang);
+                if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password')) {
+                    el.placeholder = text;
+                } else {
+                    el.textContent = text;
+                }
+            });
+            
+            // 重新渲染主屏幕以应用翻译
+            setupHomeScreen();
+        }
+
+        // 更新时间旁白预览
+        function updateTimeDividerPreview() {
+            const preview = document.getElementById('time-divider-preview');
+            if (!preview) return;
+            
+            const bgColor = db.timeDividerSettings?.bgColor || 'rgba(200, 200, 200, 0.5)';
+            const textColor = db.timeDividerSettings?.textColor || '#666666';
+            const borderRadius = db.timeDividerSettings?.borderRadius !== undefined ? db.timeDividerSettings.borderRadius : 10;
+            const language = db.timeDividerSettings?.language || 'zh';
+            
+            preview.style.backgroundColor = bgColor;
+            preview.style.color = textColor;
+            preview.style.borderRadius = borderRadius + 'px';
+            
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            preview.textContent = formatSystemTimestamp(yesterday.getTime());
         }
 
         function renderCustomizeForm() {
@@ -5170,6 +5817,18 @@ ${contextSummary}
                 };
             }
             
+            // 确保 timeDividerSettings 对象存在
+            if (!db.timeDividerSettings) {
+                db.timeDividerSettings = {
+                    bgColor: 'rgba(200, 200, 200, 0.5)',
+                    textColor: '#666666',
+                    language: 'zh',
+                    bgOpacity: 50,
+                    textOpacity: 100,
+                    borderRadius: 10
+                };
+            }
+            
             Object.entries(defaultIcons).forEach(([id, {name, url}]) => {
                 const currentIcon = db.customIcons[id] || url;
                 const currentName = db.customIconNames[id] || name;
@@ -5191,6 +5850,58 @@ ${contextSummary}
             // 添加底栏APP显示名字开关
             const dockNamesToggleHTML = `
                 <hr style="border:none; border-top:2px solid #f0f0f0; margin: 30px 0 20px 0;">
+                
+                <!-- 本机语言切换 -->
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <div style="padding: 15px; background-color: #fff8fa; border-radius: 12px; border: 1px solid #fce4ec;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <label for="enable-language-switch-toggle" style="font-weight: 600; margin: 0; color: var(--text-color); flex-grow: 1;">本机语言切换</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="enable-language-switch-toggle" ${db.enableLanguageSwitch ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div id="language-select-container" style="display: ${db.enableLanguageSwitch ? 'block' : 'none'}; margin-top: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block; font-size: 14px;">选择语言</label>
+                            <select id="app-language-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                                <option value="zh-CN" ${!db.appLanguage || db.appLanguage === 'zh-CN' ? 'selected' : ''}>简体中文</option>
+                                <option value="zh-TW" ${db.appLanguage === 'zh-TW' ? 'selected' : ''}>繁體中文</option>
+                                <option value="en" ${db.appLanguage === 'en' ? 'selected' : ''}>English</option>
+                                <option value="ja" ${db.appLanguage === 'ja' ? 'selected' : ''}>日本語</option>
+                                <option value="ko" ${db.appLanguage === 'ko' ? 'selected' : ''}>한국어</option>
+                                <option value="es" ${db.appLanguage === 'es' ? 'selected' : ''}>Español</option>
+                                <option value="fr" ${db.appLanguage === 'fr' ? 'selected' : ''}>Français</option>
+                                <option value="de" ${db.appLanguage === 'de' ? 'selected' : ''}>Deutsch</option>
+                                <option value="it" ${db.appLanguage === 'it' ? 'selected' : ''}>Italiano</option>
+                                <option value="pt" ${db.appLanguage === 'pt' ? 'selected' : ''}>Português</option>
+                                <option value="ru" ${db.appLanguage === 'ru' ? 'selected' : ''}>Русский</option>
+                                <option value="ar" ${db.appLanguage === 'ar' ? 'selected' : ''}>العربية</option>
+                                <option value="hi" ${db.appLanguage === 'hi' ? 'selected' : ''}>हिन्दी</option>
+                                <option value="th" ${db.appLanguage === 'th' ? 'selected' : ''}>ไทย</option>
+                                <option value="vi" ${db.appLanguage === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
+                                <option value="id" ${db.appLanguage === 'id' ? 'selected' : ''}>Bahasa Indonesia</option>
+                                <option value="ms" ${db.appLanguage === 'ms' ? 'selected' : ''}>Bahasa Melayu</option>
+                                <option value="tr" ${db.appLanguage === 'tr' ? 'selected' : ''}>Türkçe</option>
+                                <option value="pl" ${db.appLanguage === 'pl' ? 'selected' : ''}>Polski</option>
+                                <option value="nl" ${db.appLanguage === 'nl' ? 'selected' : ''}>Nederlands</option>
+                                <option value="sv" ${db.appLanguage === 'sv' ? 'selected' : ''}>Svenska</option>
+                                <option value="da" ${db.appLanguage === 'da' ? 'selected' : ''}>Dansk</option>
+                                <option value="no" ${db.appLanguage === 'no' ? 'selected' : ''}>Norsk</option>
+                                <option value="fi" ${db.appLanguage === 'fi' ? 'selected' : ''}>Suomi</option>
+                                <option value="cs" ${db.appLanguage === 'cs' ? 'selected' : ''}>Čeština</option>
+                                <option value="el" ${db.appLanguage === 'el' ? 'selected' : ''}>Ελληνικά</option>
+                                <option value="he" ${db.appLanguage === 'he' ? 'selected' : ''}>עברית</option>
+                                <option value="uk" ${db.appLanguage === 'uk' ? 'selected' : ''}>Українська</option>
+                                <option value="ro" ${db.appLanguage === 'ro' ? 'selected' : ''}>Română</option>
+                                <option value="hu" ${db.appLanguage === 'hu' ? 'selected' : ''}>Magyar</option>
+                            </select>
+                            <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0;">
+                                注意：语言切换功能目前仅影响界面显示，不影响AI对话内容
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="form-group" style="margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #fff8fa; border-radius: 12px; border: 1px solid #fce4ec;">
                         <label for="show-dock-names-toggle" style="font-weight: 600; margin: 0; color: var(--text-color); flex-grow: 1;">底栏APP显示名字</label>
@@ -5304,6 +6015,91 @@ ${contextSummary}
                 </div>
             `;
             customizeForm.insertAdjacentHTML('beforeend', presetSectionHTML);
+            
+            // 添加时间旁白样式设置区域
+            const timeDividerSettingsHTML = `
+                <hr style="border:none; border-top:2px solid #f0f0f0; margin: 30px 0 20px 0;">
+                <div class="time-divider-settings-section">
+                    <h3 style="font-size: 18px; font-weight: 600; color: var(--primary-color); margin-bottom: 15px;">时间旁白样式</h3>
+                    
+                    <!-- 背景颜色设置 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">旁白背景颜色</label>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                            <input type="color" id="time-divider-bg-color" value="${(db.timeDividerSettings?.bgColor || 'rgba(200, 200, 200, 0.5)').replace(/rgba?\((\d+),\s*(\d+),\s*(\d+).*\)/, (m, r, g, b) => '#' + [r, g, b].map(x => parseInt(x).toString(16).padStart(2, '0')).join(''))}" style="width: 60px; height: 40px; border: none; border-radius: 8px; cursor: pointer;">
+                            <input type="text" id="time-divider-bg-color-text" value="${db.timeDividerSettings?.bgColor || 'rgba(200, 200, 200, 0.5)'}" placeholder="rgba(200, 200, 200, 0.5)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
+                            <button type="button" id="reset-time-divider-bg-color-btn" style="background: var(--secondary-color); color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-size: 12px; color: #666; min-width: 60px;">透明度:</label>
+                            <input type="range" id="time-divider-bg-opacity" min="0" max="100" value="${db.timeDividerSettings?.bgOpacity !== undefined ? db.timeDividerSettings.bgOpacity : 50}" style="flex: 1; cursor: pointer;">
+                            <span id="time-divider-bg-opacity-value" style="font-size: 12px; color: var(--primary-color); font-weight: 600; min-width: 40px;">${db.timeDividerSettings?.bgOpacity !== undefined ? db.timeDividerSettings.bgOpacity : 50}%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 文字颜色设置 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">旁白文字颜色</label>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                            <input type="color" id="time-divider-text-color" value="${(db.timeDividerSettings?.textColor || '#666666').replace(/rgba?\((\d+),\s*(\d+),\s*(\d+).*\)/, (m, r, g, b) => '#' + [r, g, b].map(x => parseInt(x).toString(16).padStart(2, '0')).join(''))}" style="width: 60px; height: 40px; border: none; border-radius: 8px; cursor: pointer;">
+                            <input type="text" id="time-divider-text-color-text" value="${db.timeDividerSettings?.textColor || '#666666'}" placeholder="#666666" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
+                            <button type="button" id="reset-time-divider-text-color-btn" style="background: var(--secondary-color); color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-size: 12px; color: #666; min-width: 60px;">透明度:</label>
+                            <input type="range" id="time-divider-text-opacity" min="0" max="100" value="${db.timeDividerSettings?.textOpacity !== undefined ? db.timeDividerSettings.textOpacity : 100}" style="flex: 1; cursor: pointer;">
+                            <span id="time-divider-text-opacity-value" style="font-size: 12px; color: var(--primary-color); font-weight: 600; min-width: 40px;">${db.timeDividerSettings?.textOpacity !== undefined ? db.timeDividerSettings.textOpacity : 100}%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 圆角大小设置 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600;">圆角大小</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span id="time-divider-radius-value" style="color: var(--primary-color); font-weight: 600;">${db.timeDividerSettings?.borderRadius !== undefined ? db.timeDividerSettings.borderRadius : 10}px</span>
+                                <button type="button" id="reset-time-divider-radius-btn" style="background: var(--secondary-color); color: white; border: none; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                            </div>
+                        </label>
+                        <input type="range" id="time-divider-radius-slider" min="0" max="20" value="${db.timeDividerSettings?.borderRadius !== undefined ? db.timeDividerSettings.borderRadius : 10}" step="1" style="width: 100%; cursor: pointer;">
+                    </div>
+                    
+                    <!-- 语言选择 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">时间显示语言</label>
+                        <select id="time-divider-language" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                            <option value="zh" ${!db.timeDividerSettings?.language || db.timeDividerSettings?.language === 'zh' ? 'selected' : ''}>中文</option>
+                            <option value="en" ${db.timeDividerSettings?.language === 'en' ? 'selected' : ''}>English</option>
+                            <option value="ja" ${db.timeDividerSettings?.language === 'ja' ? 'selected' : ''}>日本語</option>
+                            <option value="ko" ${db.timeDividerSettings?.language === 'ko' ? 'selected' : ''}>한국어</option>
+                            <option value="es" ${db.timeDividerSettings?.language === 'es' ? 'selected' : ''}>Español</option>
+                            <option value="fr" ${db.timeDividerSettings?.language === 'fr' ? 'selected' : ''}>Français</option>
+                            <option value="de" ${db.timeDividerSettings?.language === 'de' ? 'selected' : ''}>Deutsch</option>
+                            <option value="it" ${db.timeDividerSettings?.language === 'it' ? 'selected' : ''}>Italiano</option>
+                            <option value="pt" ${db.timeDividerSettings?.language === 'pt' ? 'selected' : ''}>Português</option>
+                            <option value="ru" ${db.timeDividerSettings?.language === 'ru' ? 'selected' : ''}>Русский</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 预览效果 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">预览效果</label>
+                        <div style="text-align: center; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+                            <div id="time-divider-preview" style="display: inline-block; padding: 4px 10px; font-size: 12px; background-color: ${db.timeDividerSettings?.bgColor || 'rgba(200, 200, 200, 0.5)'}; color: ${db.timeDividerSettings?.textColor || '#666666'}; border-radius: ${db.timeDividerSettings?.borderRadius !== undefined ? db.timeDividerSettings.borderRadius : 10}px;">
+                                昨天 21:13
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 重置按钮 -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <button type="button" class="btn btn-danger" id="reset-all-time-divider-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
+                            重置所有时间旁白设置
+                        </button>
+                    </div>
+                </div>
+            `;
+            customizeForm.insertAdjacentHTML('beforeend', timeDividerSettingsHTML);
             
             // 添加悬浮歌词设置区域
             const floatingLyricsSettingsHTML = `
@@ -11545,6 +12341,16 @@ ${contextSummary}
                     return;
                 }
                 // --- 修复结束 ---
+                
+                // 处理图片点击查看大图
+                if (e.target.tagName === 'IMG' && e.target.closest('.image-bubble') && !e.target.closest('.pv-card')) {
+                    e.stopPropagation();
+                    const imageViewer = document.getElementById('image-viewer');
+                    const imageViewerImg = document.getElementById('image-viewer-img');
+                    imageViewerImg.src = e.target.src;
+                    imageViewer.style.display = 'flex';
+                    return;
+                }
 
                 if (e.target && e.target.id === 'load-more-btn') {
                     loadMoreMessages();
@@ -26215,6 +27021,15 @@ ${summaryPrompt}`;
                 }
                 
                 await saveData();
+                
+                // 【修复】保存角色设置后，检查是否需要启动后台活动
+                stopBackgroundSimulation();
+                const hasAnyBackgroundActivity = db.enableBackgroundActivity || db.characters.some(c => c.enableBackgroundActivity);
+                if (hasAnyBackgroundActivity) {
+                    startBackgroundSimulation();
+                    console.log('角色后台活动设置已更新，后台模拟已重新启动');
+                }
+                
                 showToast('设置已保存！');
                 chatRoomTitle.textContent = e.remarkName;
                 renderChatList();
@@ -35380,6 +36195,21 @@ ${memoriesText}
         // ===== NovelAI 功能结束 =====
 
         init();
+        
+        // 【修复】页面加载后，检查是否需要启动后台活动
+        // 等待 init() 完成后再检查
+        (async () => {
+            // 等待一小段时间确保 loadData 完成
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const hasAnyBackgroundActivity = db.enableBackgroundActivity || (db.characters && db.characters.some(c => c.enableBackgroundActivity));
+            if (hasAnyBackgroundActivity) {
+                startBackgroundSimulation();
+                console.log('页面加载完成，后台活动已自动启动');
+            } else {
+                console.log('页面加载完成，无需启动后台活动');
+            }
+        })();
 
         // ===== PWA Service Worker 注册已在前面完成 =====
         
