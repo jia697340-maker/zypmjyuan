@@ -33009,50 +33009,151 @@ ${summaryPrompt}`;
             // 调用AI生成总结
             let summaryContent = '';
             try {
-                const apiUrl = db.apiSettings?.url;
-                const apiKey = db.apiSettings?.key;
-                const model = db.apiSettings?.model;
+                // 优先使用副API（如果配置了），否则使用主API
+                let apiUrl, apiKey, model, usingSecondary = false;
+                
+                if (db.secondaryApiSettings?.url && db.secondaryApiSettings?.key && db.secondaryApiSettings?.model) {
+                    // 使用副API
+                    apiUrl = db.secondaryApiSettings.url;
+                    apiKey = db.secondaryApiSettings.key;
+                    model = db.secondaryApiSettings.model;
+                    usingSecondary = true;
+                    console.log('✅ 使用副API进行总结');
+                    console.log('副API URL:', apiUrl);
+                    console.log('副API Model:', model);
+                } else {
+                    // 使用主API
+                    apiUrl = db.apiSettings?.url;
+                    apiKey = db.apiSettings?.key;
+                    model = db.apiSettings?.model;
+                    console.log('✅ 使用主API进行总结');
+                    console.log('主API URL:', apiUrl);
+                    console.log('主API Model:', model);
+                }
                 
                 if (!apiUrl || !apiKey || !model) {
                     throw new Error('未找到可用的API配置，请先在设置中配置API');
                 }
                 
-                const systemPrompt = `你是一个专业的对话总结助手。你的任务是总结对话内容，提取关键信息和重要细节。
+                const systemPrompt = `你是一个专业的对话总结助手。
 
-要求：
-1. 用简洁的文字叙述对话中发生的重要事情
-2. 保留关键信息、人物关系、情感变化等重要细节
-3. 不要简单列出消息，而是用连贯的叙述方式总结
+【严格要求】你必须用自己的语言重新组织和叙述，绝对不能直接复制粘贴原对话内容！
+【严格要求】禁止使用 "[用户名]: 消息内容" 这种格式！
+【严格要求】必须用第三人称叙述的方式重新描述！
+
+总结要求：
+1. 必须用第三人称叙述的方式重新描述对话内容，不能直接引用原文
+2. 用简洁连贯的段落叙述对话中发生的重要事情
+3. 保留关键信息、人物关系、情感变化等重要细节
 4. 总结中必须使用对话者的真实名字（${userName}、${charName}等），不要用"用户"、"AI"等代称
 5. 总结应该让角色能够快速了解之前发生了什么
 6. 字数控制在200-500字之间
+7. 禁止使用"[用户名]: 消息内容"这种格式，必须用叙述性语言
+
+示例（错误）：
+[张三]: 你好
+[李四]: 你好啊
+
+示例（正确）：
+张三向李四打招呼，李四友好地回应了他。
 
 ${summaryPrompt}`;
 
-                const userPrompt = `请总结以下对话内容：\n\n${messageText}`;
+                const userPrompt = `请用叙述性的语言总结以下对话。
 
-                const response = await fetch(`${apiUrl}/v1/chat/completions`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: userPrompt }
-                        ],
-                        temperature: 0.7
-                    })
-                });
+【重要提醒】不要直接复制原文，不要使用 "[用户名]: 消息" 格式，要用你自己的话重新组织成连贯的叙述！
 
-                if (!response.ok) {
-                    throw new Error(`API请求失败: ${response.status}`);
+对话内容：
+${messageText}
+
+请开始总结（记住：用叙述性语言，不要复制原文）：`;
+
+                // 添加重试机制（最多重试3次）
+                let retryCount = 0;
+                let maxRetries = 3;
+                let lastError = null;
+                
+                // 修复 API URL 拼接问题：确保不重复 /v1
+                let finalApiUrl = apiUrl.trim();
+                if (finalApiUrl.endsWith('/v1')) {
+                    finalApiUrl = finalApiUrl.slice(0, -3);
+                } else if (finalApiUrl.endsWith('/v1/')) {
+                    finalApiUrl = finalApiUrl.slice(0, -4);
+                } else if (finalApiUrl.endsWith('/')) {
+                    finalApiUrl = finalApiUrl.slice(0, -1);
                 }
+                
+                console.log('📡 最终请求 URL:', `${finalApiUrl}/v1/chat/completions`);
+                console.log('📝 System Prompt 长度:', systemPrompt.length, '字符');
+                console.log('📝 User Prompt 长度:', userPrompt.length, '字符');
+                console.log('📝 要总结的消息数量:', messages.length, '条');
+                
+                while (retryCount < maxRetries) {
+                    try {
+                        console.log(`🔄 第 ${retryCount + 1} 次尝试请求...`);
+                        
+                        const response = await fetch(`${finalApiUrl}/v1/chat/completions`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: model,
+                                messages: [
+                                    { role: 'system', content: systemPrompt },
+                                    { role: 'user', content: userPrompt }
+                                ],
+                                temperature: 0.7
+                            })
+                        });
 
-                const data = await response.json();
-                summaryContent = data.choices[0].message.content.trim();
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error('❌ API 响应错误:', response.status, errorText);
+                            throw new Error(`API请求失败 (${response.status}): ${errorText}`);
+                        }
+
+                        const data = await response.json();
+                        summaryContent = data.choices[0].message.content.trim();
+                        
+                        console.log('✅ 总结成功！返回内容长度:', summaryContent.length, '字符');
+                        console.log('📄 返回内容预览:', summaryContent.substring(0, 100) + '...');
+                        
+                        // 检查返回内容是否包含原始消息格式（说明模型没有按要求总结）
+                        const hasOriginalFormat = summaryContent.includes('[') && summaryContent.includes(']:');
+                        if (hasOriginalFormat) {
+                            console.warn('⚠️ 警告：返回内容包含原始消息格式，模型没有按要求总结！');
+                            
+                            // 如果还有重试机会，强制重试
+                            if (retryCount < maxRetries - 1) {
+                                console.log('🔄 强制重试，要求模型重新总结...');
+                                throw new Error('模型返回了原始消息格式，需要重试');
+                            } else {
+                                console.error('❌ 已达到最大重试次数，但模型仍返回原始格式');
+                            }
+                        }
+                        
+                        // 成功获取，跳出循环
+                        break;
+                        
+                    } catch (err) {
+                        lastError = err;
+                        retryCount++;
+                        
+                        console.warn(`总结请求失败 (尝试 ${retryCount}/${maxRetries}):`, err.message);
+                        
+                        // 如果还有重试机会，等待后重试
+                        if (retryCount < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 递增等待时间
+                        }
+                    }
+                }
+                
+                // 如果所有重试都失败了，抛出最后的错误
+                if (retryCount >= maxRetries && !summaryContent) {
+                    throw lastError;
+                }
 
             } catch (error) {
                 console.error('生成总结失败:', error);
@@ -33255,7 +33356,13 @@ ${summaryPrompt}`;
             const messagesToSummarize = messages.slice(0, Math.min(count, messages.length));
             document.getElementById('manual-summary-modal').classList.remove('visible');
             
-            await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            const summary = await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            
+            // 如果总结失败（用户取消或API错误），不删除消息
+            if (!summary) {
+                showToast('总结已取消，消息未被删除');
+                return;
+            }
             
             // Update last summary index (reuse chat variable)
             chat = currentManualSummaryChatType === 'private'
@@ -33266,9 +33373,20 @@ ${summaryPrompt}`;
                 await saveData();
             }
             
-            // Remove summarized messages
-            const remainingMessages = messages.slice(messagesToSummarize.length);
-            await dataStorage.saveChatMessages(currentManualSummaryChatId, currentManualSummaryChatType, remainingMessages);
+            // 询问是否删除已总结的消息
+            const shouldDelete = await showCustomConfirm(
+                '删除消息',
+                `总结已完成！\n\n是否删除已总结的前 ${messagesToSummarize.length} 条消息？\n\n点击"确定"：删除这些消息\n点击"取消"：保留所有消息`
+            );
+            
+            if (shouldDelete) {
+                // Remove summarized messages
+                const remainingMessages = messages.slice(messagesToSummarize.length);
+                await dataStorage.saveChatMessages(currentManualSummaryChatId, currentManualSummaryChatType, remainingMessages);
+                showToast(`已删除前 ${messagesToSummarize.length} 条消息`);
+            } else {
+                showToast('消息已保留');
+            }
             
             // Refresh display
             currentPage = 1;
@@ -33288,15 +33406,17 @@ ${summaryPrompt}`;
             e.preventDefault();
             
             const rangeInput = document.getElementById('summary-range-input').value.trim();
-            const match = rangeInput.match(/^(\d+)-(\d+)$/);
+            
+            // 修复：支持更灵活的范围格式，包括大数字
+            const match = rangeInput.match(/^(\d+)\s*-\s*(\d+)$/);
             
             if (!match) {
-                showToast('格式错误，请使用"起始-结束"格式，例如：1-20');
+                showToast('格式错误，请使用"起始-结束"格式，例如：1-20 或 1-1000');
                 return;
             }
             
-            const start = parseInt(match[1]);
-            const end = parseInt(match[2]);
+            const start = parseInt(match[1], 10);
+            const end = parseInt(match[2], 10);
             
             if (start < 1 || end < start) {
                 showToast('范围无效，起始必须≥1，结束必须≥起始');
@@ -33313,9 +33433,17 @@ ${summaryPrompt}`;
             const actualEnd = Math.min(end, messages.length);
             const messagesToSummarize = messages.slice(start - 1, actualEnd);
             
+            console.log(`总结范围：${start}-${end}，实际总结：${start}-${actualEnd}，共 ${messagesToSummarize.length} 条消息`);
+            
             document.getElementById('custom-range-summary-modal').classList.remove('visible');
             
-            await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            const summary = await createMemorySummary(currentManualSummaryChatId, currentManualSummaryChatType, messagesToSummarize);
+            
+            // 如果总结失败（用户取消或API错误），不删除消息
+            if (!summary) {
+                showToast('总结已取消，消息未被删除');
+                return;
+            }
             
             // Update last summary index
             const chat = currentManualSummaryChatType === 'private'
@@ -33326,9 +33454,20 @@ ${summaryPrompt}`;
                 await saveData();
             }
             
-            // Remove summarized messages
-            const remainingMessages = [...messages.slice(0, start - 1), ...messages.slice(actualEnd)];
-            await dataStorage.saveChatMessages(currentManualSummaryChatId, currentManualSummaryChatType, remainingMessages);
+            // 询问是否删除已总结的消息
+            const shouldDelete = await showCustomConfirm(
+                '删除消息',
+                `总结已完成！\n\n是否删除已总结的消息（第 ${start}-${actualEnd} 楼）？\n\n点击"确定"：删除这些消息\n点击"取消"：保留所有消息`
+            );
+            
+            if (shouldDelete) {
+                // Remove summarized messages
+                const remainingMessages = [...messages.slice(0, start - 1), ...messages.slice(actualEnd)];
+                await dataStorage.saveChatMessages(currentManualSummaryChatId, currentManualSummaryChatType, remainingMessages);
+                showToast(`已删除第 ${start}-${actualEnd} 楼的消息`);
+            } else {
+                showToast('消息已保留');
+            }
             
             // Refresh display
             currentPage = 1;
