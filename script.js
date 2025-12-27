@@ -1,4 +1,8 @@
-﻿// gemini如果是多个密钥, 那么随机获取一个
+﻿// ===== 版本信息 =====
+    const APP_VERSION = '0.0.1';
+    const APP_BUILD_DATE = '2024-12-28';
+
+    // gemini如果是多个密钥, 那么随机获取一个
     function getRandomValue(str) {
         // 检查字符串是否包含逗号
         if (str.includes(',')) {
