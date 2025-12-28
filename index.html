@@ -338,16 +338,16 @@
             <!-- 世界书管理菜单 -->
             <div class="wb-float-menu" id="wb-float-menu" style="display: none;">
                 <button class="wb-menu-item" id="wb-group-manage-btn">
-                    <span>📁</span> 分组管理
+                    <span>分组管理</span>
                 </button>
                 <button class="wb-menu-item" id="wb-import-btn">
-                    <span>📥</span> 导入
+                    <span>导入</span>
                 </button>
                 <button class="wb-menu-item" id="wb-export-btn">
-                    <span>📤</span> 导出
+                    <span>导出</span>
                 </button>
                 <button class="wb-menu-item wb-danger" id="wb-delete-btn">
-                    <span>🗑️</span> 删除
+                    <span>删除</span>
                 </button>
             </div>
         </main>
@@ -4191,7 +4191,26 @@
                         <option value="blank">导入后显示空白</option>
                         <option value="fake">导入后显示假角色</option>
                         <option value="custom">自定义假内容</option>
+                        <option value="device-bound">设备绑定加密（推荐）</option>
+                        <option value="author-authorized">作者授权加密（新）</option>
                     </select>
+                    <small id="device-bound-hint" style="display: none; font-size: 12px; color: #2196F3; background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: block;">
+                        <strong>🔒 设备绑定加密说明：</strong><br>
+                        • 角色卡将绑定到当前设备/浏览器<br>
+                        • 只有在本设备上才能解密，其他设备无法导入<br>
+                        • 即使别人知道加密算法也无法破解<br>
+                        • 适合保护私密角色卡<br>
+                        • 当前设备ID: <span id="current-device-id" style="font-family: monospace; color: #1976d2;">加载中...</span>
+                    </small>
+                    <small id="author-authorized-hint" style="display: none; font-size: 12px; color: #9c27b0; background: #f3e5f5; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: block;">
+                        <strong>👑 作者授权加密说明：</strong><br>
+                        • 导入者需要向你提供他们的设备码<br>
+                        • 你可以为每个设备码生成专属解密密钥<br>
+                        • 每个密钥只能在对应设备上使用<br>
+                        • 你可以随时撤销任何人的授权<br>
+                        • 不同角色的授权密钥互不通用<br>
+                        • 导出后可在"聊天设置"中管理授权
+                    </small>
 
                     <div id="encryption-method-section" style="display: none; margin-bottom: 15px;">
                         <label style="font-size: 13px; margin-bottom: 5px; display: block; font-weight: 600;">加密方法</label>
@@ -4245,15 +4264,79 @@
         <div class="modal-window" style="max-width: 400px;">
             <h3>解密角色卡</h3>
             <div style="padding: 20px;">
-                <p style="color: #666; margin-bottom: 15px;">该角色卡已加密，请输入作者设置的解密口令</p>
+                <p id="decrypt-hint-text" style="color: #666; margin-bottom: 15px;">该角色卡已加密，请输入作者设置的解密口令</p>
+                <div id="device-bound-decrypt-hint" style="display: none; background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #2196F3;">
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: #1976d2; line-height: 1.5;">
+                        <strong>🔒 设备绑定加密</strong><br>
+                        此角色卡使用设备绑定加密，只能在指定设备上解密。<br>
+                        绑定设备ID: <span id="bound-device-id" style="font-family: monospace; font-weight: bold;">未知</span><br>
+                        当前设备ID: <span id="current-decrypt-device-id" style="font-family: monospace; font-weight: bold;">加载中...</span>
+                    </p>
+                </div>
+                <div id="author-authorized-decrypt-hint" style="display: none; background: #f3e5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #9c27b0;">
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: #6a1b9a; line-height: 1.5;">
+                        <strong>👑 作者授权加密</strong><br>
+                        此角色卡需要作者授权才能解密。<br>
+                        你的设备码: <span id="user-device-code" style="font-family: monospace; font-weight: bold; color: #9c27b0;">加载中...</span><br>
+                        <small style="color: #888;">请将设备码发送给作者以获取授权密钥</small>
+                    </p>
+                </div>
                 <div class="form-group">
-                    <label for="decrypt-password-input" style="font-size: 14px; margin-bottom: 8px; display: block;">解密口令</label>
-                    <input type="text" id="decrypt-password-input" placeholder="输入解密口令" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <label for="decrypt-password-input" style="font-size: 14px; margin-bottom: 8px; display: block;">解密口令<span id="password-optional-hint" style="display: none; color: #999; font-weight: normal;">（可选）</span></label>
+                    <input type="text" id="decrypt-password-input" placeholder="输入解密口令或授权密钥" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="button" class="btn btn-primary" id="confirm-decrypt-btn" style="flex: 1;">解密</button>
                     <button type="button" class="btn btn-secondary" id="cancel-decrypt-btn" style="flex: 1;">取消</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 授权管理弹窗 -->
+    <div id="authorization-manager-modal" class="modal-overlay">
+        <div class="modal-window" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 15px 0;">授权管理</h3>
+            <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <div style="background: #f3e5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                    <p style="margin: 0; font-size: 13px; color: #6a1b9a; line-height: 1.5;">
+                        <strong>👑 作者授权系统</strong><br>
+                        为特定设备生成专属解密密钥，每个密钥只能在对应设备上使用。
+                    </p>
+                </div>
+                
+                <div class="form-group">
+                    <label style="font-size: 14px; margin-bottom: 8px; display: block; font-weight: 600;">主密码验证</label>
+                    <input type="password" id="auth-master-password" placeholder="输入导出时设置的主密码" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                    <button type="button" class="btn btn-primary" id="verify-master-password-btn" style="width: 100%;">验证主密码</button>
+                </div>
+                
+                <div id="auth-manager-content" style="display: none;">
+                    <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+                    
+                    <div class="form-group">
+                        <label style="font-size: 14px; margin-bottom: 8px; display: block; font-weight: 600;">生成新授权</label>
+                        <input type="text" id="new-device-code" placeholder="输入用户的设备码" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                        <input type="text" id="auth-user-note" placeholder="备注（可选，如：张三）" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                        <button type="button" class="btn btn-success" id="generate-auth-key-btn" style="width: 100%;">生成授权密钥</button>
+                    </div>
+                    
+                    <div id="generated-auth-key-display" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 8px; margin-top: 15px; border: 2px solid #4caf50;">
+                        <p style="margin: 0 0 10px 0; font-size: 13px; color: #2e7d32; font-weight: 600;">✅ 授权密钥已生成</p>
+                        <div style="background: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; word-break: break-all; margin-bottom: 10px;" id="auth-key-text"></div>
+                        <button type="button" class="btn btn-secondary" id="copy-auth-key-btn" style="width: 100%;">复制密钥</button>
+                    </div>
+                    
+                    <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+                    
+                    <div class="form-group">
+                        <label style="font-size: 14px; margin-bottom: 8px; display: block; font-weight: 600;">已授权设备列表</label>
+                        <div id="authorized-devices-list" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                <button type="button" class="btn btn-secondary" id="close-auth-manager-btn" style="width: 100%;">关闭</button>
             </div>
         </div>
     </div>

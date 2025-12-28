@@ -1,5 +1,5 @@
 ﻿// ===== 版本信息 =====
-    const APP_VERSION = '0.0.1';
+    const APP_VERSION = '0.0.2';
     const APP_BUILD_DATE = '2025-12-28';
     
     // 在控制台输出版本信息
@@ -539,6 +539,18 @@
                 previousColor: '#787878',
                 upcomingColor: '#787878',
                 lineGap: 8
+            },
+            transferBubbleSettings: {
+                user: {
+                    borderRadius: 18,
+                    backgroundImage: null,
+                    fixedText: '转账'
+                },
+                char: {
+                    borderRadius: 18,
+                    backgroundImage: null,
+                    fixedText: '转账'
+                }
             }
         };
         let currentChatId = null, currentChatType = null, isGenerating = false, currentAbortController = null, longPressTimer = null,
@@ -1769,6 +1781,8 @@
             if (!db.customIcons) db.customIcons = {};
             if (db.enableLanguageSwitch === undefined) db.enableLanguageSwitch = false;
             if (!db.appLanguage) db.appLanguage = 'zh-CN';
+            if (db.showSecondsInTime === undefined) db.showSecondsInTime = false;
+            if (!db.customTimeFormat) db.customTimeFormat = '{HH}:{MM}:{SS}';
             if (!db.timeDividerSettings) {
                 db.timeDividerSettings = {
                     bgColor: 'rgba(200, 200, 200, 0.5)',
@@ -1777,6 +1791,20 @@
                     bgOpacity: 50,
                     textOpacity: 100,
                     borderRadius: 10
+                };
+            }
+            if (!db.transferBubbleSettings) {
+                db.transferBubbleSettings = {
+                    user: {
+                        borderRadius: 18,
+                        backgroundImage: null,
+                        fixedText: '转账'
+                    },
+                    char: {
+                        borderRadius: 18,
+                        backgroundImage: null,
+                        fixedText: '转账'
+                    }
                 };
             }
 
@@ -4624,6 +4652,13 @@ ${contextSummary}
                         if (importData.homeScreenPresets) db.homeScreenPresets = importData.homeScreenPresets;
                         if (importData.homeScreenBg !== undefined) db.homeScreenBg = importData.homeScreenBg;
                         if (importData.lockScreenBg !== undefined) db.lockScreenBg = importData.lockScreenBg;
+                        // 修复：添加锁屏壁纸、全局聊天背景和壁纸库的导入
+                        if (importData.lockScreenWallpaper !== undefined) db.lockScreenWallpaper = importData.lockScreenWallpaper;
+                        if (importData.globalChatBg !== undefined) db.globalChatBg = importData.globalChatBg;
+                        if (importData.wallpaperLibrary) db.wallpaperLibrary = importData.wallpaperLibrary;
+                        // 修复：添加简洁模式设置的导入
+                        if (importData.simplePromptMode !== undefined) db.simplePromptMode = importData.simplePromptMode;
+                        if (importData.simplePromptFeatures) db.simplePromptFeatures = importData.simplePromptFeatures;
                         if (importData.showDockAppNames !== undefined) db.showDockAppNames = importData.showDockAppNames;
                         if (importData.showStatusBar !== undefined) db.showStatusBar = importData.showStatusBar;
                         
@@ -4647,6 +4682,18 @@ ${contextSummary}
                             const lockScreen = document.getElementById('lock-screen');
                             if (lockScreen) {
                                 lockScreen.style.backgroundImage = `url(${db.lockScreenBg})`;
+                            }
+                        }
+                        
+                        // 修复：应用锁屏壁纸
+                        if (db.lockScreenWallpaper) {
+                            const lockScreen = document.getElementById('lock-screen');
+                            if (lockScreen) {
+                                if (db.lockScreenWallpaper.startsWith('linear-gradient') || db.lockScreenWallpaper.startsWith('radial-gradient')) {
+                                    lockScreen.style.background = db.lockScreenWallpaper;
+                                } else {
+                                    lockScreen.style.backgroundImage = `url(${db.lockScreenWallpaper})`;
+                                }
                             }
                         }
                         
@@ -4926,6 +4973,13 @@ ${contextSummary}
                             homeScreenPresets: db.homeScreenPresets || [],
                             homeScreenBg: db.homeScreenBg || '',
                             lockScreenBg: db.lockScreenBg || '',
+                            // 修复：添加锁屏壁纸、全局聊天背景和壁纸库
+                            lockScreenWallpaper: db.lockScreenWallpaper || '',
+                            globalChatBg: db.globalChatBg || '',
+                            wallpaperLibrary: db.wallpaperLibrary || [],
+                            // 修复：添加简洁模式设置
+                            simplePromptMode: db.simplePromptMode || false,
+                            simplePromptFeatures: db.simplePromptFeatures || {},
                             showDockAppNames: db.showDockAppNames !== undefined ? db.showDockAppNames : true,
                             showStatusBar: db.showStatusBar !== undefined ? db.showStatusBar : true
                         };
@@ -5472,7 +5526,243 @@ ${contextSummary}
                     renderCustomizeForm();
                     showToast('所有时间旁白设置已重置');
                 }
+                
+                // ===== 转账气泡样式事件监听器 =====
+                
+                // USER转账圆角大小
+                if (e.target.id === 'user-transfer-radius-slider') {
+                    const value = parseInt(e.target.value);
+                    document.getElementById('user-transfer-radius-value').textContent = value + 'px';
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                    db.transferBubbleSettings.user.borderRadius = value;
+                    await saveData();
+                    updateTransferBubblePreview('user');
+                }
+                
+                // CHAR转账圆角大小
+                if (e.target.id === 'char-transfer-radius-slider') {
+                    const value = parseInt(e.target.value);
+                    document.getElementById('char-transfer-radius-value').textContent = value + 'px';
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                    db.transferBubbleSettings.char.borderRadius = value;
+                    await saveData();
+                    updateTransferBubblePreview('char');
+                }
+                
+                // USER转账固定文字
+                if (e.target.id === 'user-transfer-text-input') {
+                    const value = e.target.value;
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                    db.transferBubbleSettings.user.fixedText = value;
+                    await saveData();
+                    updateTransferBubblePreview('user');
+                }
+                
+                // CHAR转账固定文字
+                if (e.target.id === 'char-transfer-text-input') {
+                    const value = e.target.value;
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                    db.transferBubbleSettings.char.fixedText = value;
+                    await saveData();
+                    updateTransferBubblePreview('char');
+                }
+                
+                // USER转账底图URL按钮
+                if (e.target.id === 'user-transfer-bg-url-btn') {
+                    const urlInput = document.getElementById('user-transfer-bg-url-input');
+                    if (urlInput.style.display === 'none') {
+                        urlInput.style.display = 'block';
+                        e.target.textContent = '确认URL';
+                    } else {
+                        const url = urlInput.value.trim();
+                        if (url) {
+                            if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                            if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                            db.transferBubbleSettings.user.backgroundImage = url;
+                            await saveData();
+                            updateTransferBubblePreview('user');
+                            renderCustomizeForm();
+                            showToast('USER转账底图已设置');
+                        }
+                        urlInput.style.display = 'none';
+                        e.target.textContent = 'URL上传';
+                    }
+                }
+                
+                // CHAR转账底图URL按钮
+                if (e.target.id === 'char-transfer-bg-url-btn') {
+                    const urlInput = document.getElementById('char-transfer-bg-url-input');
+                    if (urlInput.style.display === 'none') {
+                        urlInput.style.display = 'block';
+                        e.target.textContent = '确认URL';
+                    } else {
+                        const url = urlInput.value.trim();
+                        if (url) {
+                            if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                            if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                            db.transferBubbleSettings.char.backgroundImage = url;
+                            await saveData();
+                            updateTransferBubblePreview('char');
+                            renderCustomizeForm();
+                            showToast('CHAR转账底图已设置');
+                        }
+                        urlInput.style.display = 'none';
+                        e.target.textContent = 'URL上传';
+                    }
+                }
+                
+                // 重置USER转账圆角
+                if (e.target.id === 'reset-user-transfer-radius-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                    db.transferBubbleSettings.user.borderRadius = 18;
+                    document.getElementById('user-transfer-radius-slider').value = 18;
+                    document.getElementById('user-transfer-radius-value').textContent = '18px';
+                    await saveData();
+                    updateTransferBubblePreview('user');
+                    showToast('USER转账圆角已重置');
+                }
+                
+                // 重置CHAR转账圆角
+                if (e.target.id === 'reset-char-transfer-radius-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                    db.transferBubbleSettings.char.borderRadius = 18;
+                    document.getElementById('char-transfer-radius-slider').value = 18;
+                    document.getElementById('char-transfer-radius-value').textContent = '18px';
+                    await saveData();
+                    updateTransferBubblePreview('char');
+                    showToast('CHAR转账圆角已重置');
+                }
+                
+                // 重置USER转账底图
+                if (e.target.id === 'reset-user-transfer-bg-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                    db.transferBubbleSettings.user.backgroundImage = null;
+                    await saveData();
+                    updateTransferBubblePreview('user');
+                    renderCustomizeForm();
+                    showToast('USER转账底图已重置');
+                }
+                
+                // 重置CHAR转账底图
+                if (e.target.id === 'reset-char-transfer-bg-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                    db.transferBubbleSettings.char.backgroundImage = null;
+                    await saveData();
+                    updateTransferBubblePreview('char');
+                    renderCustomizeForm();
+                    showToast('CHAR转账底图已重置');
+                }
+                
+                // 重置USER转账文字
+                if (e.target.id === 'reset-user-transfer-text-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                    db.transferBubbleSettings.user.fixedText = '转账';
+                    document.getElementById('user-transfer-text-input').value = '转账';
+                    await saveData();
+                    updateTransferBubblePreview('user');
+                    showToast('USER转账文字已重置');
+                }
+                
+                // 重置CHAR转账文字
+                if (e.target.id === 'reset-char-transfer-text-btn') {
+                    if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                    if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                    db.transferBubbleSettings.char.fixedText = '转账';
+                    document.getElementById('char-transfer-text-input').value = '转账';
+                    await saveData();
+                    updateTransferBubblePreview('char');
+                    showToast('CHAR转账文字已重置');
+                }
+                
+                // 重置所有转账气泡设置
+                if (e.target.id === 'reset-all-transfer-bubble-btn') {
+                    if (!confirm('确定要重置所有转账气泡设置吗？')) return;
+                    
+                    db.transferBubbleSettings = {
+                        user: {
+                            borderRadius: 18,
+                            backgroundImage: null,
+                            fixedText: '转账'
+                        },
+                        char: {
+                            borderRadius: 18,
+                            backgroundImage: null,
+                            fixedText: '转账'
+                        }
+                    };
+                    await saveData();
+                    renderCustomizeForm();
+                    showToast('所有转账气泡设置已重置');
+                }
             });
+            
+            // USER转账底图本地上传
+            document.getElementById('user-transfer-bg-upload')?.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const compressedDataUrl = await compressImage(file, { quality: 0.7, maxWidth: 600, maxHeight: 600 });
+                        if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                        if (!db.transferBubbleSettings.user) db.transferBubbleSettings.user = {};
+                        db.transferBubbleSettings.user.backgroundImage = compressedDataUrl;
+                        await saveData();
+                        updateTransferBubblePreview('user');
+                        renderCustomizeForm();
+                        showToast('USER转账底图已上传');
+                    } catch (error) {
+                        showToast('图片上传失败：' + error.message);
+                    }
+                }
+            });
+            
+            // CHAR转账底图本地上传
+            document.getElementById('char-transfer-bg-upload')?.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const compressedDataUrl = await compressImage(file, { quality: 0.7, maxWidth: 600, maxHeight: 600 });
+                        if (!db.transferBubbleSettings) db.transferBubbleSettings = {};
+                        if (!db.transferBubbleSettings.char) db.transferBubbleSettings.char = {};
+                        db.transferBubbleSettings.char.backgroundImage = compressedDataUrl;
+                        await saveData();
+                        updateTransferBubblePreview('char');
+                        renderCustomizeForm();
+                        showToast('CHAR转账底图已上传');
+                    } catch (error) {
+                        showToast('图片上传失败：' + error.message);
+                    }
+                }
+            });
+        }
+        
+        // 更新转账气泡预览
+        function updateTransferBubblePreview(type) {
+            const preview = document.getElementById(`${type}-transfer-preview`);
+            if (!preview) return;
+            
+            const settings = db.transferBubbleSettings?.[type] || {};
+            const borderRadius = settings.borderRadius !== undefined ? settings.borderRadius : 18;
+            const backgroundImage = settings.backgroundImage || (type === 'user' ? 'https://i.postimg.cc/sxN893WF/IMG-20250712.png' : 'https://i.postimg.cc/FzR8LY7g/IMG-20250712-170703.png');
+            const fixedText = settings.fixedText || '转账';
+            
+            preview.style.borderRadius = `${borderRadius}px`;
+            const bgDiv = preview.querySelector('div[style*="background-image"]');
+            if (bgDiv) {
+                bgDiv.style.backgroundImage = `url('${backgroundImage}')`;
+            }
+            const textDiv = preview.querySelector('div[style*="font-size: 14px"]');
+            if (textDiv) {
+                textDiv.textContent = fixedText;
+            }
         }
 
         // 颜色转换辅助函数
@@ -6112,6 +6402,131 @@ ${contextSummary}
                 </div>
             `;
             customizeForm.insertAdjacentHTML('beforeend', timeDividerSettingsHTML);
+            
+            // 添加转账气泡样式设置区域
+            const transferBubbleSettingsHTML = `
+                <hr style="border:none; border-top:2px solid #f0f0f0; margin: 30px 0 20px 0;">
+                <div class="transfer-bubble-settings-section">
+                    <h3 style="font-size: 18px; font-weight: 600; color: var(--primary-color); margin-bottom: 15px;">转账气泡样式</h3>
+                    <p style="font-size: 14px; color: #666; background-color: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                        分别自定义USER（你）和CHAR（角色）的转账气泡样式
+                    </p>
+                    
+                    <!-- USER转账气泡设置 -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                        <h4 style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 15px;">USER 转账气泡</h4>
+                        
+                        <!-- 圆角大小 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-weight: 600;">圆角大小</span>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span id="user-transfer-radius-value" style="color: var(--primary-color); font-weight: 600;">${db.transferBubbleSettings?.user?.borderRadius !== undefined ? db.transferBubbleSettings.user.borderRadius : 18}px</span>
+                                    <button type="button" id="reset-user-transfer-radius-btn" style="background: var(--secondary-color); color: white; border: none; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                                </div>
+                            </label>
+                            <input type="range" id="user-transfer-radius-slider" min="0" max="30" value="${db.transferBubbleSettings?.user?.borderRadius !== undefined ? db.transferBubbleSettings.user.borderRadius : 18}" step="1" style="width: 100%; cursor: pointer;">
+                        </div>
+                        
+                        <!-- 底图设置 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">底图</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="file" id="user-transfer-bg-upload" accept="image/*" style="display: none;">
+                                <label for="user-transfer-bg-upload" class="btn btn-secondary" style="flex: 1; text-align: center;">本地上传</label>
+                                <button type="button" id="user-transfer-bg-url-btn" class="btn btn-secondary" style="flex: 1;">URL上传</button>
+                            </div>
+                            <input type="url" id="user-transfer-bg-url-input" placeholder="输入图片URL" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: none;">
+                            <button type="button" id="reset-user-transfer-bg-btn" class="btn btn-danger" style="width: 100%;">重置底图</button>
+                            ${db.transferBubbleSettings?.user?.backgroundImage ? `<p style="font-size: 12px; color: #4CAF50; margin-top: 5px;">✓ 已设置自定义底图</p>` : ''}
+                        </div>
+                        
+                        <!-- 固定文字 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">固定文字</label>
+                            <input type="text" id="user-transfer-text-input" value="${db.transferBubbleSettings?.user?.fixedText || '转账'}" placeholder="转账" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                            <button type="button" id="reset-user-transfer-text-btn" class="btn btn-secondary" style="width: 100%;">重置文字</button>
+                        </div>
+                        
+                        <!-- 预览 -->
+                        <div class="form-group">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">预览效果</label>
+                            <div style="text-align: center; padding: 20px; background: #fff; border-radius: 8px;">
+                                <div id="user-transfer-preview" class="transfer-card sent-transfer" style="display: inline-block; width: 240px; height: auto; border-radius: ${db.transferBubbleSettings?.user?.borderRadius !== undefined ? db.transferBubbleSettings.user.borderRadius : 18}px; position: relative; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
+                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: url('${db.transferBubbleSettings?.user?.backgroundImage || 'https://i.postimg.cc/sxN893WF/IMG-20250712.png'}'); background-size: cover; background-position: center; filter: blur(4px); transform: scale(1.1); z-index: 1;"></div>
+                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.3); z-index: 2;"></div>
+                                    <div style="position: relative; z-index: 3; padding: 15px; color: white;">
+                                        <div style="font-size: 14px; margin-bottom: 8px;">${db.transferBubbleSettings?.user?.fixedText || '转账'}</div>
+                                        <div style="font-size: 24px; font-weight: 600; margin-bottom: 8px;">¥100.00</div>
+                                        <div style="font-size: 12px; opacity: 0.9;">备注：示例转账</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- CHAR转账气泡设置 -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                        <h4 style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 15px;">CHAR 转账气泡</h4>
+                        
+                        <!-- 圆角大小 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-weight: 600;">圆角大小</span>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span id="char-transfer-radius-value" style="color: var(--primary-color); font-weight: 600;">${db.transferBubbleSettings?.char?.borderRadius !== undefined ? db.transferBubbleSettings.char.borderRadius : 18}px</span>
+                                    <button type="button" id="reset-char-transfer-radius-btn" style="background: var(--secondary-color); color: white; border: none; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                                </div>
+                            </label>
+                            <input type="range" id="char-transfer-radius-slider" min="0" max="30" value="${db.transferBubbleSettings?.char?.borderRadius !== undefined ? db.transferBubbleSettings.char.borderRadius : 18}" step="1" style="width: 100%; cursor: pointer;">
+                        </div>
+                        
+                        <!-- 底图设置 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">底图</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="file" id="char-transfer-bg-upload" accept="image/*" style="display: none;">
+                                <label for="char-transfer-bg-upload" class="btn btn-secondary" style="flex: 1; text-align: center;">本地上传</label>
+                                <button type="button" id="char-transfer-bg-url-btn" class="btn btn-secondary" style="flex: 1;">URL上传</button>
+                            </div>
+                            <input type="url" id="char-transfer-bg-url-input" placeholder="输入图片URL" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: none;">
+                            <button type="button" id="reset-char-transfer-bg-btn" class="btn btn-danger" style="width: 100%;">重置底图</button>
+                            ${db.transferBubbleSettings?.char?.backgroundImage ? `<p style="font-size: 12px; color: #4CAF50; margin-top: 5px;">✓ 已设置自定义底图</p>` : ''}
+                        </div>
+                        
+                        <!-- 固定文字 -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">固定文字</label>
+                            <input type="text" id="char-transfer-text-input" value="${db.transferBubbleSettings?.char?.fixedText || '转账'}" placeholder="转账" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                            <button type="button" id="reset-char-transfer-text-btn" class="btn btn-secondary" style="width: 100%;">重置文字</button>
+                        </div>
+                        
+                        <!-- 预览 -->
+                        <div class="form-group">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">预览效果</label>
+                            <div style="text-align: center; padding: 20px; background: #fff; border-radius: 8px;">
+                                <div id="char-transfer-preview" class="transfer-card received-transfer" style="display: inline-block; width: 240px; height: auto; border-radius: ${db.transferBubbleSettings?.char?.borderRadius !== undefined ? db.transferBubbleSettings.char.borderRadius : 18}px; position: relative; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
+                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: url('${db.transferBubbleSettings?.char?.backgroundImage || 'https://i.postimg.cc/FzR8LY7g/IMG-20250712-170703.png'}'); background-size: cover; background-position: center; filter: blur(4px); transform: scale(1.1); z-index: 1;"></div>
+                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.3); z-index: 2;"></div>
+                                    <div style="position: relative; z-index: 3; padding: 15px; color: white;">
+                                        <div style="font-size: 14px; margin-bottom: 8px;">${db.transferBubbleSettings?.char?.fixedText || '转账'}</div>
+                                        <div style="font-size: 24px; font-weight: 600; margin-bottom: 8px;">¥100.00</div>
+                                        <div style="font-size: 12px; opacity: 0.9;">备注：示例转账</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 重置所有转账样式按钮 -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <button type="button" class="btn btn-danger" id="reset-all-transfer-bubble-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
+                            重置所有转账气泡设置
+                        </button>
+                    </div>
+                </div>
+            `;
+            customizeForm.insertAdjacentHTML('beforeend', transferBubbleSettingsHTML);
             
             // 添加悬浮歌词设置区域
             const floatingLyricsSettingsHTML = `
@@ -14075,8 +14490,21 @@ ${contextSummary}
 
                 bubbleElement = document.createElement('div');
                 bubbleElement.className = `transfer-card ${isSentTransfer ? 'sent-transfer' : 'received-transfer'}`;
+                
+                // 应用自定义样式
+                const transferSettings = isSentTransfer 
+                    ? (db.transferBubbleSettings?.user || {})
+                    : (db.transferBubbleSettings?.char || {});
+                
+                if (transferSettings.borderRadius !== undefined) {
+                    bubbleElement.style.borderRadius = `${transferSettings.borderRadius}px`;
+                }
+                
+                if (transferSettings.backgroundImage) {
+                    bubbleElement.style.setProperty('--custom-bg-image', `url('${transferSettings.backgroundImage}')`);
+                }
 
-                let statusText = isSentTransfer ? '待查收' : '转账给你';
+                let statusText = isSentTransfer ? '待查收' : (transferSettings.fixedText || '转账给你');
                 if (groupTransferMatch && !isSent) statusText = '转账给Ta'; // AI to AI
                 if (transferStatus === 'received') {
                     statusText = '已收款';
@@ -20622,7 +21050,7 @@ ${summaryPrompt}`;
                         showToast(`❌ 精简失败: ${error.message}`);
                     } finally {
                         // 恢复按钮状态
-                        btnText.textContent = '🗜️ 精简目前总结';
+                        btnText.textContent = '精简目前总结';
                         spinner.style.display = 'none';
                         compressSummaryBtn.disabled = false;
                     }
@@ -32384,6 +32812,13 @@ ${summaryPrompt}`;
                     groups: [],
                     // 确保 personaPresets 被包含（修复：user人设预设无法跟随导出的问题）
                     personaPresets: db.personaPresets || [],
+                    // 修复：确保壁纸相关数据被包含
+                    lockScreenWallpaper: db.lockScreenWallpaper || '',
+                    globalChatBg: db.globalChatBg || '',
+                    wallpaperLibrary: db.wallpaperLibrary || [],
+                    // 修复：确保简洁模式设置被包含
+                    simplePromptMode: db.simplePromptMode || false,
+                    simplePromptFeatures: db.simplePromptFeatures || {},
                     // 添加版本信息用于兼容性检测
                     _exportVersion: '2.0',
                     _exportTimestamp: Date.now(),
@@ -32457,7 +32892,14 @@ ${summaryPrompt}`;
                     worldBooks: data.worldBooks || [],
                     fontUrl: data.fontUrl || '',
                     customIcons: data.customIcons || {},
-                    personaPresets: data.personaPresets || []
+                    personaPresets: data.personaPresets || [],
+                    // 修复：确保壁纸相关数据被导入
+                    lockScreenWallpaper: data.lockScreenWallpaper || '',
+                    globalChatBg: data.globalChatBg || '',
+                    wallpaperLibrary: data.wallpaperLibrary || [],
+                    // 修复：确保简洁模式设置被导入
+                    simplePromptMode: data.simplePromptMode || false,
+                    simplePromptFeatures: data.simplePromptFeatures || {}
                 };
 
                 let importStats = {
@@ -33069,6 +33511,7 @@ ${summaryPrompt}`;
 示例（正确）：
 张三向李四打招呼，李四友好地回应了他。
 
+用户自定义的总结要求：
 ${summaryPrompt}`;
 
                 const userPrompt = `请用叙述性的语言总结以下对话。
@@ -36366,6 +36809,82 @@ ${memoriesText}
         
         // ========== 导出/导入小手机加密角色卡功能 ==========
 
+        // 生成设备指纹（用于设备绑定加密）
+        async function generateDeviceFingerprint() {
+            const components = [];
+            
+            // 1. 用户代理
+            components.push(navigator.userAgent);
+            
+            // 2. 语言
+            components.push(navigator.language);
+            
+            // 3. 屏幕分辨率
+            components.push(`${screen.width}x${screen.height}x${screen.colorDepth}`);
+            
+            // 4. 时区
+            components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
+            
+            // 5. 平台
+            components.push(navigator.platform);
+            
+            // 6. 硬件并发数
+            components.push(navigator.hardwareConcurrency || 'unknown');
+            
+            // 7. Canvas指纹
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillText('Device Fingerprint', 2, 2);
+                components.push(canvas.toDataURL());
+            } catch (e) {
+                components.push('canvas-error');
+            }
+            
+            // 8. WebGL指纹
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+                        components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+                    }
+                }
+            } catch (e) {
+                components.push('webgl-error');
+            }
+            
+            // 9. 获取或生成持久化的设备ID
+            let persistentId = localStorage.getItem('device-persistent-id');
+            if (!persistentId) {
+                persistentId = 'device-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('device-persistent-id', persistentId);
+            }
+            components.push(persistentId);
+            
+            // 组合所有组件并生成哈希
+            const fingerprint = components.join('|||');
+            
+            // 使用 SHA-256 生成最终指纹
+            const encoder = new TextEncoder();
+            const data = encoder.encode(fingerprint);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            return hashHex;
+        }
+        
+        // 获取设备指纹的可读摘要（用于显示）
+        async function getDeviceFingerprintSummary() {
+            const fingerprint = await generateDeviceFingerprint();
+            return fingerprint.substring(0, 16).toUpperCase(); // 显示前16位
+        }
+
         // 导出角色功能
         document.getElementById('export-character-btn')?.addEventListener('click', async () => {
             if (!currentChatId || currentChatType !== 'private') {
@@ -36487,23 +37006,77 @@ ${memoriesText}
         });
 
         // 加密类型选择
-        document.getElementById('export-encryption-type')?.addEventListener('change', function() {
+        document.getElementById('export-encryption-type')?.addEventListener('change', async function() {
             const customSection = document.getElementById('custom-fake-content-section');
             const passwordSection = document.getElementById('encryption-password-section');
             const methodSection = document.getElementById('encryption-method-section');
+            const deviceHint = document.getElementById('device-bound-hint');
+            const authorHint = document.getElementById('author-authorized-hint');
             
             if (this.value === 'custom') {
                 customSection.style.display = 'block';
                 passwordSection.style.display = 'block';
                 methodSection.style.display = 'block';
+                deviceHint.style.display = 'none';
+                authorHint.style.display = 'none';
             } else if (this.value === 'none') {
                 customSection.style.display = 'none';
                 passwordSection.style.display = 'none';
                 methodSection.style.display = 'none';
+                deviceHint.style.display = 'none';
+                authorHint.style.display = 'none';
+            } else if (this.value === 'device-bound') {
+                customSection.style.display = 'none';
+                passwordSection.style.display = 'block';
+                methodSection.style.display = 'block';
+                deviceHint.style.display = 'block';
+                authorHint.style.display = 'none';
+                
+                // 显示当前设备ID
+                const deviceId = await getDeviceFingerprintSummary();
+                document.getElementById('current-device-id').textContent = deviceId;
+                
+                // 修改密码提示文字
+                const passwordLabel = passwordSection.querySelector('label');
+                const passwordInput = document.getElementById('export-decrypt-password');
+                const passwordHint = passwordSection.querySelector('small');
+                
+                passwordLabel.textContent = '额外密码（可选）';
+                passwordInput.placeholder = '可选：设置额外密码增强安全性';
+                passwordHint.innerHTML = '提示：设备绑定加密已经很安全，额外密码是可选的。如果设置了额外密码，解密时需要同时满足：在本设备上 + 输入正确密码。';
+                passwordHint.style.color = '#2196F3';
+            } else if (this.value === 'author-authorized') {
+                customSection.style.display = 'none';
+                passwordSection.style.display = 'block';
+                methodSection.style.display = 'block';
+                deviceHint.style.display = 'none';
+                authorHint.style.display = 'block';
+                
+                // 修改密码提示文字
+                const passwordLabel = passwordSection.querySelector('label');
+                const passwordInput = document.getElementById('export-decrypt-password');
+                const passwordHint = passwordSection.querySelector('small');
+                
+                passwordLabel.textContent = '主密码（必填）';
+                passwordInput.placeholder = '设置主密码，用于生成授权密钥';
+                passwordHint.innerHTML = '<strong>重要：</strong>主密码用于生成所有授权密钥，请务必妥善保管。建议使用16位以上的强密码。';
+                passwordHint.style.color = '#9c27b0';
             } else {
                 customSection.style.display = 'none';
                 passwordSection.style.display = 'block';
                 methodSection.style.display = 'block';
+                deviceHint.style.display = 'none';
+                authorHint.style.display = 'none';
+                
+                // 恢复默认密码提示文字
+                const passwordLabel = passwordSection.querySelector('label');
+                const passwordInput = document.getElementById('export-decrypt-password');
+                const passwordHint = passwordSection.querySelector('small');
+                
+                passwordLabel.textContent = '解密口令（必填）';
+                passwordInput.placeholder = '设置解密口令，建议8位以上';
+                passwordHint.innerHTML = '重要提示：密码只有作者知道，请务必妥善保管。密码丢失后无法恢复，建议使用密码管理器。推荐使用8位以上的复杂密码。';
+                passwordHint.style.color = '#ff5722';
             }
         });
 
@@ -36513,6 +37086,96 @@ ${memoriesText}
         });
 
         // ===== 高级加密系统 =====
+        
+        // 生成角色唯一ID（用于授权绑定）
+        async function generateCharacterUniqueId(characterData, masterPassword) {
+            const encoder = new TextEncoder();
+            const data = JSON.stringify({
+                realName: characterData.realName,
+                remarkName: characterData.remarkName,
+                persona: characterData.persona.substring(0, 100), // 只取前100字符
+                masterPassword: masterPassword
+            });
+            const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+        }
+        
+        // 生成授权密钥（设备码 + 角色ID + 主密码 + 随机盐 + 时间戳 -> 授权密钥）
+        async function generateAuthorizationKey(deviceCode, characterUniqueId, masterPassword) {
+            const encoder = new TextEncoder();
+            
+            // 生成随机盐（32字节）
+            const randomSalt = crypto.getRandomValues(new Uint8Array(32));
+            const saltHex = Array.from(randomSalt).map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // 添加时间戳（防止重放攻击）
+            const timestamp = Date.now().toString();
+            
+            // 组合所有数据（增加复杂度）
+            const data = `${deviceCode}|||${characterUniqueId}|||${masterPassword}|||${saltHex}|||${timestamp}`;
+            
+            // 使用PBKDF2进行多次哈希（增加破解难度）
+            const passwordKey = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(data),
+                'PBKDF2',
+                false,
+                ['deriveBits']
+            );
+            
+            // 使用高迭代次数（600000次）
+            const derivedBits = await crypto.subtle.deriveBits(
+                {
+                    name: 'PBKDF2',
+                    salt: randomSalt,
+                    iterations: 600000,
+                    hash: 'SHA-512'
+                },
+                passwordKey,
+                512 // 64字节
+            );
+            
+            const hashArray = Array.from(new Uint8Array(derivedBits));
+            const key = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // 返回格式化的密钥（分段显示更易读）+ 盐值和时间戳（用于验证）
+            const formattedKey = key.match(/.{1,8}/g).join('-');
+            
+            // 将盐值和时间戳编码到密钥中（前16字符）
+            const metadata = `${saltHex.substring(0, 8)}-${timestamp.substring(0, 8)}`;
+            
+            return `${metadata}-${formattedKey}`;
+        }
+        
+        // 验证授权密钥
+        async function verifyAuthorizationKey(authKey, characterUniqueId, encryptedData) {
+            try {
+                // 移除密钥中的分隔符
+                const cleanKey = authKey.replace(/-/g, '');
+                
+                // 提取元数据（前16字符：8字符盐 + 8字符时间戳）
+                const saltPrefix = cleanKey.substring(0, 8);
+                const timestampPrefix = cleanKey.substring(8, 16);
+                const actualKey = cleanKey.substring(16);
+                
+                // 验证时间戳（可选：检查密钥是否过期）
+                // const keyTimestamp = parseInt(timestampPrefix + '00000', 10);
+                // const now = Date.now();
+                // if (now - keyTimestamp > 365 * 24 * 60 * 60 * 1000) {
+                //     // 密钥超过1年，可以选择拒绝
+                //     return null;
+                // }
+                
+                // 尝试使用授权密钥解密
+                const decrypted = await decryptDataAES(encryptedData, actualKey, 'aes-gcm');
+                return decrypted;
+            } catch (error) {
+                console.error('授权密钥验证失败:', error);
+                return null;
+            }
+        }
+        
         // AES-256-GCM 加密函数
         async function encryptDataAES(data, password, method = 'aes-gcm') {
             try {
@@ -36663,7 +37326,7 @@ ${memoriesText}
             const customFakePersona = document.getElementById('custom-fake-persona').value;
             
             // 验证加密设置
-            if (encryptionType !== 'none' && !decryptPassword) {
+            if (encryptionType !== 'none' && encryptionType !== 'device-bound' && !decryptPassword) {
                 showToast('请设置解密口令');
                 return;
             }
@@ -36673,8 +37336,8 @@ ${memoriesText}
                 return;
             }
             
-            // 密码强度检查
-            if (encryptionType !== 'none' && decryptPassword.length < 8) {
+            // 密码强度检查（设备绑定加密的额外密码可选）
+            if (encryptionType !== 'none' && encryptionType !== 'device-bound' && decryptPassword.length < 8) {
                 if (!confirm('密码长度少于8位，安全性较低。是否继续？')) {
                     return;
                 }
@@ -36717,14 +37380,48 @@ ${memoriesText}
                         myAvatarLibrary: exportAvatar ? (character.myAvatarLibrary || []) : []
                     };
                     
+                    // 根据加密类型选择密码
+                    let finalPassword = decryptPassword;
+                    if (encryptionType === 'device-bound') {
+                        // 设备绑定加密：使用设备指纹作为主密码
+                        const deviceFingerprint = await generateDeviceFingerprint();
+                        // 如果用户设置了额外密码，则组合使用
+                        if (decryptPassword && decryptPassword.trim()) {
+                            finalPassword = deviceFingerprint + '|||' + decryptPassword;
+                        } else {
+                            finalPassword = deviceFingerprint;
+                        }
+                        // 保存设备指纹摘要（用于验证）
+                        exportData.deviceFingerprintHash = await getDeviceFingerprintSummary();
+                    } else if (encryptionType === 'author-authorized') {
+                        // 作者授权加密：生成角色唯一ID
+                        if (!decryptPassword || decryptPassword.length < 16) {
+                            showToast('作者授权加密需要16位以上的主密码');
+                            return;
+                        }
+                        const characterUniqueId = await generateCharacterUniqueId(character, decryptPassword);
+                        exportData.characterUniqueId = characterUniqueId;
+                        exportData.authorDeviceId = await getDeviceFingerprintSummary();
+                        // 使用主密码加密（实际解密需要授权密钥）
+                        finalPassword = decryptPassword;
+                        
+                        // 保存授权信息到角色数据（用于后续管理）
+                        character.isAuthorEncrypted = true;
+                        character.characterUniqueId = characterUniqueId;
+                        character.masterPasswordHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(decryptPassword))
+                            .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''));
+                        character.authorizedDevices = character.authorizedDevices || [];
+                        await saveData();
+                    }
+                    
                     // 使用选择的加密方法
-                    exportData.encryptedData = await encryptDataAES(realData, decryptPassword, encryptionMethod);
+                    exportData.encryptedData = await encryptDataAES(realData, finalPassword, encryptionMethod);
                     
                     // 不再保存密码哈希，只有作者知道密码
                     // exportData.passwordHash = ''; // 移除密码哈希
                     
                     // 设置假数据（用户看到的）
-                    if (encryptionType === 'blank') {
+                    if (encryptionType === 'blank' || encryptionType === 'device-bound') {
                         exportData.character.persona = '';
                         exportData.worldBooks = selectedWorldBooks.map(wb => ({
                             name: wb.name,
@@ -37026,8 +37723,63 @@ ${memoriesText}
                 decryptBtn.style.width = '100%';
                 decryptBtn.style.marginBottom = '10px';
                 
-                decryptBtn.addEventListener('click', () => {
+                decryptBtn.addEventListener('click', async () => {
                     currentDecryptCharacterId = characterId;
+                    
+                    // 检查加密类型
+                    const isDeviceBound = character.encryptionType === 'device-bound';
+                    const isAuthorAuthorized = character.encryptionType === 'author-authorized';
+                    const deviceHint = document.getElementById('device-bound-decrypt-hint');
+                    const authorHint = document.getElementById('author-authorized-decrypt-hint');
+                    const passwordOptionalHint = document.getElementById('password-optional-hint');
+                    const decryptHintText = document.getElementById('decrypt-hint-text');
+                    const passwordLabel = document.querySelector('#decrypt-character-modal label[for="decrypt-password-input"]');
+                    const passwordInput = document.getElementById('decrypt-password-input');
+                    
+                    // 隐藏所有提示
+                    if (deviceHint) deviceHint.style.display = 'none';
+                    if (authorHint) authorHint.style.display = 'none';
+                    if (passwordOptionalHint) passwordOptionalHint.style.display = 'none';
+                    
+                    if (isAuthorAuthorized) {
+                        // 显示授权加密提示
+                        if (authorHint) authorHint.style.display = 'block';
+                        if (decryptHintText) decryptHintText.textContent = '该角色卡使用作者授权加密';
+                        if (passwordLabel) passwordLabel.textContent = '授权密钥';
+                        if (passwordInput) passwordInput.placeholder = '请输入作者提供的授权密钥';
+                        
+                        // 显示当前设备码
+                        const currentDeviceId = await getDeviceFingerprintSummary();
+                        const deviceCodeEl = document.getElementById('user-device-code');
+                        if (deviceCodeEl) deviceCodeEl.textContent = currentDeviceId;
+                    } else if (isDeviceBound) {
+                        // 显示设备绑定提示
+                        if (deviceHint) deviceHint.style.display = 'block';
+                        if (passwordOptionalHint) passwordOptionalHint.style.display = 'inline';
+                        if (decryptHintText) decryptHintText.textContent = '该角色卡使用设备绑定加密';
+                        if (passwordLabel) passwordLabel.textContent = '额外密码（可选）';
+                        if (passwordInput) passwordInput.placeholder = '如果设置了额外密码，请输入';
+                        
+                        // 显示绑定的设备ID和当前设备ID
+                        const boundDeviceEl = document.getElementById('bound-device-id');
+                        const currentDeviceEl = document.getElementById('current-decrypt-device-id');
+                        if (boundDeviceEl) boundDeviceEl.textContent = character.deviceFingerprintHash || '未知';
+                        const currentDeviceId = await getDeviceFingerprintSummary();
+                        if (currentDeviceEl) currentDeviceEl.textContent = currentDeviceId;
+                        
+                        // 检查设备是否匹配
+                        if (character.deviceFingerprintHash && character.deviceFingerprintHash !== currentDeviceId) {
+                            if (currentDeviceEl) currentDeviceEl.style.color = '#f44336';
+                        } else {
+                            if (currentDeviceEl) currentDeviceEl.style.color = '#4CAF50';
+                        }
+                    } else {
+                        // 普通密码加密
+                        if (decryptHintText) decryptHintText.textContent = '该角色卡已加密，请输入作者设置的解密口令';
+                        if (passwordLabel) passwordLabel.textContent = '解密口令';
+                        if (passwordInput) passwordInput.placeholder = '请输入解密口令';
+                    }
+                    
                     document.getElementById('decrypt-character-modal').classList.add('visible');
                 });
                 
@@ -37038,10 +37790,6 @@ ${memoriesText}
         // 确认解密
         document.getElementById('confirm-decrypt-btn')?.addEventListener('click', async () => {
             const password = document.getElementById('decrypt-password-input').value;
-            if (!password) {
-                showToast('请输入解密口令');
-                return;
-            }
             
             const character = db.characters.find(c => c.id === currentDecryptCharacterId);
             if (!character || !character.isEncrypted) {
@@ -37049,27 +37797,96 @@ ${memoriesText}
                 return;
             }
             
+            // 检查是否是设备绑定加密
+            const isDeviceBound = character.encryptionType === 'device-bound';
+            // 检查是否是作者授权加密
+            const isAuthorAuthorized = character.encryptionType === 'author-authorized';
+            
+            // 如果不是设备绑定加密且不是授权加密，必须输入密码
+            if (!isDeviceBound && !isAuthorAuthorized && !password) {
+                showToast('请输入解密口令');
+                return;
+            }
+            
+            // 如果是授权加密，必须输入授权密钥
+            if (isAuthorAuthorized && !password) {
+                showToast('请输入授权密钥');
+                return;
+            }
+            
             try {
                 let realData;
+                let finalPassword = password;
                 
-                // 检测加密版本
-                if (character.version === '2.0' || character.encryptionMethod) {
-                    // 新版AES加密
-                    showToast('正在解密，请稍候...');
-                    const method = character.encryptionMethod || 'aes-gcm';
-                    realData = await decryptDataAES(character.encryptedData, password, method);
-                } else {
-                    // 旧版Base64加密（兼容性）
-                    const correctPasswordHash = character.passwordHash;
-                    const inputPasswordHash = btoa(encodeURIComponent(password));
+                // 如果是作者授权加密
+                if (isAuthorAuthorized) {
+                    showToast('正在验证授权密钥...');
+                    // 使用授权密钥解密
+                    realData = await verifyAuthorizationKey(password, character.characterUniqueId, character.encryptedData);
+                    if (!realData) {
+                        showToast('授权密钥无效或已过期');
+                        return;
+                    }
+                }
+                // 如果是设备绑定加密
+                else if (isDeviceBound) {
+                    const deviceFingerprint = await generateDeviceFingerprint();
+                    const currentDeviceId = await getDeviceFingerprintSummary();
                     
-                    if (inputPasswordHash !== correctPasswordHash) {
-                        showToast('解密口令错误');
+                    // 验证设备指纹
+                    if (character.deviceFingerprintHash && character.deviceFingerprintHash !== currentDeviceId) {
+                        showToast(`设备验证失败！此角色卡只能在设备 ${character.deviceFingerprintHash} 上解密，当前设备是 ${currentDeviceId}`);
                         return;
                     }
                     
-                    const decryptedStr = decodeURIComponent(atob(character.encryptedData));
-                    realData = JSON.parse(decryptedStr);
+                    // 组合设备指纹和用户密码
+                    if (password && password.trim()) {
+                        finalPassword = deviceFingerprint + '|||' + password;
+                    } else {
+                        finalPassword = deviceFingerprint;
+                    }
+                    
+                    // 检测加密版本
+                    if (character.version === '2.0' || character.encryptionMethod) {
+                        // 新版AES加密
+                        showToast('正在解密，请稍候...');
+                        const method = character.encryptionMethod || 'aes-gcm';
+                        realData = await decryptDataAES(character.encryptedData, finalPassword, method);
+                    } else {
+                        // 旧版Base64加密（兼容性）
+                        const correctPasswordHash = character.passwordHash;
+                        const inputPasswordHash = btoa(encodeURIComponent(finalPassword));
+                        
+                        if (inputPasswordHash !== correctPasswordHash) {
+                            showToast('解密口令错误');
+                            return;
+                        }
+                        
+                        const decryptedStr = decodeURIComponent(atob(character.encryptedData));
+                        realData = JSON.parse(decryptedStr);
+                    }
+                }
+                // 普通密码加密
+                else {
+                    // 检测加密版本
+                    if (character.version === '2.0' || character.encryptionMethod) {
+                        // 新版AES加密
+                        showToast('正在解密，请稍候...');
+                        const method = character.encryptionMethod || 'aes-gcm';
+                        realData = await decryptDataAES(character.encryptedData, finalPassword, method);
+                    } else {
+                        // 旧版Base64加密（兼容性）
+                        const correctPasswordHash = character.passwordHash;
+                        const inputPasswordHash = btoa(encodeURIComponent(finalPassword));
+                        
+                        if (inputPasswordHash !== correctPasswordHash) {
+                            showToast('解密口令错误');
+                            return;
+                        }
+                        
+                        const decryptedStr = decodeURIComponent(atob(character.encryptedData));
+                        realData = JSON.parse(decryptedStr);
+                    }
                 }
                 
                 // 恢复真实数据
@@ -37080,6 +37897,7 @@ ${memoriesText}
                 character.encryptionType = null;
                 character.encryptionMethod = null;
                 character.version = null;
+                character.deviceFingerprintHash = null; // 清除设备指纹
                 
                 // 删除旧的加密世界书
                 if (character.worldBookIds && character.worldBookIds.length > 0) {
@@ -37150,3 +37968,206 @@ ${memoriesText}
         console.log('✅ 小手机加密角色卡功能已加载');
     });
 
+
+
+// ===== 作者授权管理系统 =====
+(function() {
+    let currentAuthCharacter = null;
+    let verifiedMasterPassword = null;
+    
+    // 打开授权管理器（从聊天设置中调用）
+    window.openAuthorizationManager = async function(characterId) {
+        const character = db.characters.find(c => c.id === characterId);
+        if (!character || !character.isAuthorEncrypted) {
+            showToast('该角色未使用作者授权加密');
+            return;
+        }
+        
+        currentAuthCharacter = character;
+        verifiedMasterPassword = null;
+        
+        // 重置界面
+        document.getElementById('auth-master-password').value = '';
+        document.getElementById('auth-manager-content').style.display = 'none';
+        document.getElementById('generated-auth-key-display').style.display = 'none';
+        
+        // 显示模态框
+        document.getElementById('authorization-manager-modal').classList.add('visible');
+    };
+    
+    // 验证主密码
+    document.getElementById('verify-master-password-btn')?.addEventListener('click', async function() {
+        const password = document.getElementById('auth-master-password').value;
+        if (!password) {
+            showToast('请输入主密码');
+            return;
+        }
+        
+        if (!currentAuthCharacter) {
+            showToast('未选择角色');
+            return;
+        }
+        
+        try {
+            // 验证密码哈希
+            const passwordHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password))
+                .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''));
+            
+            if (passwordHash === currentAuthCharacter.masterPasswordHash) {
+                verifiedMasterPassword = password;
+                document.getElementById('auth-manager-content').style.display = 'block';
+                showToast('主密码验证成功');
+                
+                // 加载已授权设备列表
+                renderAuthorizedDevices();
+            } else {
+                showToast('主密码错误');
+            }
+        } catch (error) {
+            console.error('验证失败:', error);
+            showToast('验证失败');
+        }
+    });
+    
+    // 生成授权密钥
+    document.getElementById('generate-auth-key-btn')?.addEventListener('click', async function() {
+        const deviceCode = document.getElementById('new-device-code').value.trim();
+        const userNote = document.getElementById('auth-user-note').value.trim();
+        
+        if (!deviceCode) {
+            showToast('请输入设备码');
+            return;
+        }
+        
+        if (!verifiedMasterPassword || !currentAuthCharacter) {
+            showToast('请先验证主密码');
+            return;
+        }
+        
+        try {
+            // 生成授权密钥
+            const authKey = await generateAuthorizationKey(
+                deviceCode,
+                currentAuthCharacter.characterUniqueId,
+                verifiedMasterPassword
+            );
+            
+            // 保存授权记录
+            if (!currentAuthCharacter.authorizedDevices) {
+                currentAuthCharacter.authorizedDevices = [];
+            }
+            
+            // 检查是否已存在
+            const existing = currentAuthCharacter.authorizedDevices.find(d => d.deviceCode === deviceCode);
+            if (existing) {
+                if (!confirm('该设备已授权，是否重新生成密钥？')) {
+                    return;
+                }
+                existing.authKey = authKey;
+                existing.note = userNote;
+                existing.updatedAt = new Date().toISOString();
+            } else {
+                currentAuthCharacter.authorizedDevices.push({
+                    deviceCode: deviceCode,
+                    authKey: authKey,
+                    note: userNote,
+                    createdAt: new Date().toISOString()
+                });
+            }
+            
+            await saveData();
+            
+            // 显示生成的密钥
+            document.getElementById('auth-key-text').textContent = authKey;
+            document.getElementById('generated-auth-key-display').style.display = 'block';
+            
+            // 清空输入
+            document.getElementById('new-device-code').value = '';
+            document.getElementById('auth-user-note').value = '';
+            
+            // 刷新列表
+            renderAuthorizedDevices();
+            
+            showToast('授权密钥已生成');
+        } catch (error) {
+            console.error('生成授权密钥失败:', error);
+            showToast('生成失败');
+        }
+    });
+    
+    // 复制授权密钥
+    document.getElementById('copy-auth-key-btn')?.addEventListener('click', function() {
+        const authKey = document.getElementById('auth-key-text').textContent;
+        navigator.clipboard.writeText(authKey).then(() => {
+            showToast('授权密钥已复制');
+        }).catch(() => {
+            showToast('复制失败，请手动复制');
+        });
+    });
+    
+    // 渲染已授权设备列表
+    function renderAuthorizedDevices() {
+        const container = document.getElementById('authorized-devices-list');
+        if (!currentAuthCharacter || !currentAuthCharacter.authorizedDevices || currentAuthCharacter.authorizedDevices.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无授权设备</p>';
+            return;
+        }
+        
+        container.innerHTML = currentAuthCharacter.authorizedDevices.map((device, index) => `
+            <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; color: #333; font-weight: 600; margin-bottom: 4px;">
+                            ${device.note || '未命名用户'}
+                        </div>
+                        <div style="font-size: 11px; color: #888; font-family: monospace;">
+                            设备码: ${device.deviceCode.substring(0, 16)}...
+                        </div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                            授权时间: ${new Date(device.createdAt).toLocaleString()}
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-danger" onclick="revokeAuthorization(${index})" style="padding: 6px 12px; font-size: 12px;">撤销</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // 撤销授权
+    window.revokeAuthorization = async function(index) {
+        if (!currentAuthCharacter) return;
+        
+        if (!confirm('确定要撤销该设备的授权吗？撤销后该设备将无法解密角色卡。')) {
+            return;
+        }
+        
+        currentAuthCharacter.authorizedDevices.splice(index, 1);
+        await saveData();
+        renderAuthorizedDevices();
+        showToast('授权已撤销');
+    };
+    
+    // 关闭授权管理器
+    document.getElementById('close-auth-manager-btn')?.addEventListener('click', function() {
+        document.getElementById('authorization-manager-modal').classList.remove('visible');
+        currentAuthCharacter = null;
+        verifiedMasterPassword = null;
+    });
+    
+    // 在导入角色卡时显示设备码
+    const originalShowDecryptModal = window.showDecryptModal;
+    window.showDecryptModal = async function(characterId) {
+        const character = db.characters.find(c => c.id === characterId);
+        if (character && character.encryptionType === 'author-authorized') {
+            const deviceCode = await getDeviceFingerprintSummary();
+            document.getElementById('user-device-code').textContent = deviceCode;
+            document.getElementById('author-authorized-decrypt-hint').style.display = 'block';
+        } else {
+            document.getElementById('author-authorized-decrypt-hint').style.display = 'none';
+        }
+        
+        if (originalShowDecryptModal) {
+            originalShowDecryptModal(characterId);
+        }
+    };
+})();

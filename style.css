@@ -1323,11 +1323,11 @@
         }
 
         .transfer-card.sent-transfer::before {
-            background-image: url('https://i.postimg.cc/sxN893WF/IMG-20250712.png');
+            background-image: var(--custom-bg-image, url('https://i.postimg.cc/sxN893WF/IMG-20250712.png'));
         }
 
         .transfer-card.received-transfer::before {
-            background-image: url('https://i.postimg.cc/FzR8LY7g/IMG-20250712-170703.png');
+            background-image: var(--custom-bg-image, url('https://i.postimg.cc/FzR8LY7g/IMG-20250712-170703.png'));
         }
 
         .transfer-card .overlay {
