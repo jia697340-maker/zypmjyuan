@@ -1,6 +1,6 @@
 // Service Worker for 章鱼喷墨机 PWA
 // 每次更新时修改这个版本号，强制更新缓存
-const CACHE_VERSION = '4';
+const CACHE_VERSION = '5';
 const CACHE_NAME = `zhangyu-pwa-v${CACHE_VERSION}`;
 const urlsToCache = [
   './',
@@ -64,8 +64,9 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(event.request.url);
   
-  // 对于 HTML 文件，强制使用网络优先，添加时间戳防止缓存
-  if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+  // 对于 HTML、JS、CSS 文件，强制使用网络优先，添加时间戳防止缓存
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('/') || 
+      url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     event.respondWith(
       fetch(event.request.url + '?t=' + Date.now(), {
         cache: 'no-store'

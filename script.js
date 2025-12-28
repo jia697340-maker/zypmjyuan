@@ -53,10 +53,10 @@
                             });
                         });
                         
-                        // 定期检查更新（每30秒）
+                        // 定期检查更新（每10秒）- 更激进的更新检查
                         setInterval(() => {
                             registration.update();
-                        }, 30000);
+                        }, 10000);
                         
                         // 立即检查一次更新
                         registration.update();
