@@ -4861,7 +4861,9 @@ ${contextSummary}
                             const newUrl = reader.result;
                             db.customIcons[iconId] = newUrl;
                             const previewImg = document.getElementById(`icon-preview-${iconId}`);
-                            previewImg.src = newUrl;
+                            if (previewImg) {
+                                previewImg.src = newUrl;
+                            }
                             await saveData();
                             setupHomeScreen();
                         };
@@ -6624,6 +6626,142 @@ ${contextSummary}
                 </div>
             `;
             customizeForm.insertAdjacentHTML('beforeend', floatingLyricsSettingsHTML);
+            
+            // 添加全局USER头像更换区域
+            const globalUserAvatarHTML = `
+                <hr style="border:none; border-top:2px solid #f0f0f0; margin: 30px 0 20px 0;">
+                <div class="global-user-avatar-section">
+                    <h3 style="font-size: 18px; font-weight: 600; color: var(--primary-color); margin-bottom: 15px;">全局USER头像更换</h3>
+                    <p style="font-size: 14px; color: #666; background-color: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                        设置后，所有对话中的用户头像都将使用此头像，无需逐个更换
+                    </p>
+                    
+                    <!-- 头像预览 -->
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">当前全局头像</label>
+                        <div id="global-user-avatar-preview" style="width: 100px; height: 100px; border-radius: 50%; margin: 0 auto 15px; background-color: #f0f0f0; background-size: cover; background-position: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; color: #999; font-size: 14px;">
+                            ${db.globalUserAvatar ? '' : '未设置'}
+                        </div>
+                    </div>
+                    
+                    <!-- 本地上传 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <input type="file" id="global-user-avatar-upload" accept="image/*" style="display: none;">
+                        <label for="global-user-avatar-upload" class="btn btn-primary" style="width: 100%; text-align: center; cursor: pointer;">
+                            从相册选择头像
+                        </label>
+                    </div>
+                    
+                    <!-- URL上传 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">或通过URL上传</label>
+                        <input type="url" id="global-user-avatar-url-input" placeholder="输入头像图片URL" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                        <button type="button" class="btn btn-secondary" id="global-user-avatar-url-btn" style="width: 100%;">
+                            通过URL上传头像
+                        </button>
+                    </div>
+                    
+                    <!-- 重置按钮 -->
+                    <div class="form-group">
+                        <button type="button" class="btn btn-danger" id="reset-global-user-avatar-btn" style="width: 100%;">
+                            重置全局头像
+                        </button>
+                        <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0;">
+                            重置后将恢复各对话的原始头像设置
+                        </p>
+                    </div>
+                </div>
+            `;
+            customizeForm.insertAdjacentHTML('beforeend', globalUserAvatarHTML);
+            
+            // 更新全局头像预览
+            const updateGlobalAvatarPreview = () => {
+                const preview = document.getElementById('global-user-avatar-preview');
+                if (!preview) return;
+                
+                if (db.globalUserAvatar) {
+                    preview.style.backgroundImage = `url(${db.globalUserAvatar})`;
+                    preview.textContent = '';
+                } else {
+                    preview.style.backgroundImage = 'none';
+                    preview.textContent = '未设置';
+                }
+            };
+            
+            // 初始化预览
+            setTimeout(() => {
+                updateGlobalAvatarPreview();
+            }, 100);
+            
+            // 本地上传头像
+            const avatarUploadInput = document.getElementById('global-user-avatar-upload');
+            if (avatarUploadInput) {
+                avatarUploadInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                        const compressedDataUrl = await compressImage(file, { quality: 0.7, maxWidth: 200, maxHeight: 200 });
+                        db.globalUserAvatar = compressedDataUrl;
+                        await saveData();
+                        updateGlobalAvatarPreview();
+                        showToast('全局USER头像已更新');
+                    } catch (error) {
+                        console.error('头像上传失败:', error);
+                        showToast('头像上传失败，请重试');
+                    }
+                });
+            }
+            
+            // URL上传头像
+            const avatarUrlBtn = document.getElementById('global-user-avatar-url-btn');
+            if (avatarUrlBtn) {
+                avatarUrlBtn.addEventListener('click', async () => {
+                    const urlInput = document.getElementById('global-user-avatar-url-input');
+                    if (!urlInput) return;
+                    
+                    const url = urlInput.value.trim();
+                    
+                    if (!url) {
+                        showToast('请输入头像URL');
+                        return;
+                    }
+                    
+                    try {
+                        // 验证URL是否有效
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = () => reject(new Error('图片加载失败'));
+                            img.src = url;
+                        });
+                        
+                        db.globalUserAvatar = url;
+                        await saveData();
+                        updateGlobalAvatarPreview();
+                        urlInput.value = '';
+                        showToast('全局USER头像已更新');
+                    } catch (error) {
+                        console.error('URL头像设置失败:', error);
+                        showToast('URL无效或图片加载失败');
+                    }
+                });
+            }
+            
+            // 重置全局头像
+            const resetBtn = document.getElementById('reset-global-user-avatar-btn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', async () => {
+                    if (!confirm('确定要重置全局USER头像吗？')) return;
+                    
+                    delete db.globalUserAvatar;
+                    await saveData();
+                    updateGlobalAvatarPreview();
+                    showToast('全局USER头像已重置');
+                });
+            }
         }
 
         function renderPresetList() {
@@ -7306,6 +7444,321 @@ ${contextSummary}
                     console.error('导出错误详情:', e);
                 }
             });
+            
+            // 选择性备份按钮
+            const selectiveBackupBtn = document.createElement('button');
+            selectiveBackupBtn.className = 'btn btn-secondary';
+            selectiveBackupBtn.textContent = '选择性备份数据';
+            selectiveBackupBtn.style.marginTop = '15px';
+            selectiveBackupBtn.disabled = loadingBtn;
+            
+            selectiveBackupBtn.addEventListener('click', () => {
+                if(loadingBtn) return;
+                showSelectiveBackupModal();
+            });
+            
+            // 选择性备份弹窗函数
+            async function showSelectiveBackupModal() {
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay visible';
+                modal.style.zIndex = '10001';
+                
+                const modalContent = document.createElement('div');
+                modalContent.className = 'modal-window';
+                modalContent.style.maxWidth = '500px';
+                modalContent.style.maxHeight = '80vh';
+                modalContent.style.display = 'flex';
+                modalContent.style.flexDirection = 'column';
+                
+                modalContent.innerHTML = `
+                    <h3 style="margin: 0 0 15px 0; color: var(--primary-color); text-align: center;">选择性备份数据</h3>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 15px; text-align: center;">选择需要备份的数据类型</p>
+                    
+                    <div style="flex: 1; overflow-y: auto; padding: 10px 0;">
+                        <!-- 全选 -->
+                        <div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600;">
+                                <input type="checkbox" id="select-all-backup" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                                <span>全选</span>
+                            </label>
+                        </div>
+                        
+                        <!-- 基础设置 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600; margin-bottom: 8px;">
+                                <input type="checkbox" class="backup-category" data-category="settings" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>基础设置</span>
+                            </label>
+                            <div style="margin-left: 28px; font-size: 12px; color: #666;">
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="apiSettings" style="margin-right: 8px;" checked>
+                                    API设置
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="wallpaper" style="margin-right: 8px;" checked>
+                                    主屏幕壁纸
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="lockScreenWallpaper" style="margin-right: 8px;" checked>
+                                    锁屏壁纸
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="globalChatBg" style="margin-right: 8px;" checked>
+                                    全局聊天背景
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="wallpaperLibrary" style="margin-right: 8px;" checked>
+                                    壁纸库
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="homeScreenMode" style="margin-right: 8px;" checked>
+                                    主屏幕模式
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="fontSettings" style="margin-right: 8px;" checked>
+                                    字体设置
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="customIcons" style="margin-right: 8px;" checked>
+                                    自定义图标
+                                </label>
+                                <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                    <input type="checkbox" class="backup-item" data-item="globalUserAvatar" style="margin-right: 8px;" checked>
+                                    全局USER头像
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- 角色数据 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600; margin-bottom: 8px;">
+                                <input type="checkbox" class="backup-category" data-category="characters" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>角色数据 (${db.characters.length}个)</span>
+                            </label>
+                            <div style="margin-left: 28px; font-size: 12px; color: #666; max-height: 150px; overflow-y: auto;">
+                                ${db.characters.map(char => `
+                                    <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                        <input type="checkbox" class="backup-character" data-id="${char.id}" style="margin-right: 8px;" checked>
+                                        ${char.remarkName || char.name}
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- 群组数据 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600; margin-bottom: 8px;">
+                                <input type="checkbox" class="backup-category" data-category="groups" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>群组数据 (${db.groups.length}个)</span>
+                            </label>
+                            <div style="margin-left: 28px; font-size: 12px; color: #666; max-height: 150px; overflow-y: auto;">
+                                ${db.groups.map(group => `
+                                    <label style="display: block; margin: 5px 0; cursor: pointer;">
+                                        <input type="checkbox" class="backup-group" data-id="${group.id}" style="margin-right: 8px;" checked>
+                                        ${group.name}
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- 世界书 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600;">
+                                <input type="checkbox" class="backup-category" data-category="worldBooks" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>世界书 (${db.worldBooks?.length || 0}个)</span>
+                            </label>
+                        </div>
+                        
+                        <!-- 表情包 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600;">
+                                <input type="checkbox" class="backup-category" data-category="stickers" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>表情包 (${db.myStickers?.length || 0}个)</span>
+                            </label>
+                        </div>
+                        
+                        <!-- 人设预设 -->
+                        <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600;">
+                                <input type="checkbox" class="backup-category" data-category="personaPresets" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" checked>
+                                <span>人设预设 (${db.personaPresets?.length || 0}个)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                        <button class="btn btn-primary" id="confirm-selective-backup" style="flex: 1;">开始备份</button>
+                        <button class="btn btn-secondary" id="cancel-selective-backup" style="flex: 1;">取消</button>
+                    </div>
+                `;
+                
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+                
+                // 全选功能
+                const selectAllCheckbox = modalContent.querySelector('#select-all-backup');
+                selectAllCheckbox.addEventListener('change', (e) => {
+                    const checked = e.target.checked;
+                    modalContent.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                        if (cb !== selectAllCheckbox) cb.checked = checked;
+                    });
+                });
+                
+                // 分类复选框联动
+                modalContent.querySelectorAll('.backup-category').forEach(categoryCheckbox => {
+                    categoryCheckbox.addEventListener('change', (e) => {
+                        const category = e.target.dataset.category;
+                        const checked = e.target.checked;
+                        
+                        if (category === 'settings') {
+                            modalContent.querySelectorAll('.backup-item').forEach(cb => cb.checked = checked);
+                        } else if (category === 'characters') {
+                            modalContent.querySelectorAll('.backup-character').forEach(cb => cb.checked = checked);
+                        } else if (category === 'groups') {
+                            modalContent.querySelectorAll('.backup-group').forEach(cb => cb.checked = checked);
+                        }
+                    });
+                });
+                
+                // 取消按钮
+                modalContent.querySelector('#cancel-selective-backup').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+                
+                // 确认备份按钮
+                modalContent.querySelector('#confirm-selective-backup').addEventListener('click', async () => {
+                    const selectedData = {
+                        _exportVersion: '2.0',
+                        _exportTimestamp: Date.now(),
+                        _optimizedStorage: true,
+                        _selectiveBackup: true,
+                        exportTime: new Date().toISOString()
+                    };
+                    
+                    // 收集选中的基础设置
+                    if (modalContent.querySelector('[data-item="apiSettings"]')?.checked) {
+                        selectedData.apiSettings = db.apiSettings || {};
+                    }
+                    if (modalContent.querySelector('[data-item="wallpaper"]')?.checked) {
+                        selectedData.wallpaper = db.wallpaper || '';
+                    }
+                    if (modalContent.querySelector('[data-item="lockScreenWallpaper"]')?.checked) {
+                        selectedData.lockScreenWallpaper = db.lockScreenWallpaper || '';
+                    }
+                    if (modalContent.querySelector('[data-item="globalChatBg"]')?.checked) {
+                        selectedData.globalChatBg = db.globalChatBg || '';
+                    }
+                    if (modalContent.querySelector('[data-item="wallpaperLibrary"]')?.checked) {
+                        selectedData.wallpaperLibrary = db.wallpaperLibrary || [];
+                    }
+                    if (modalContent.querySelector('[data-item="homeScreenMode"]')?.checked) {
+                        selectedData.homeScreenMode = db.homeScreenMode || 'night';
+                    }
+                    if (modalContent.querySelector('[data-item="fontSettings"]')?.checked) {
+                        selectedData.fontUrl = db.fontUrl || '';
+                        selectedData.fontLibrary = db.fontLibrary || [];
+                        selectedData.fontSize = db.fontSize || 16;
+                    }
+                    if (modalContent.querySelector('[data-item="customIcons"]')?.checked) {
+                        selectedData.customIcons = db.customIcons || {};
+                        selectedData.customIconNames = db.customIconNames || {};
+                    }
+                    if (modalContent.querySelector('[data-item="globalUserAvatar"]')?.checked) {
+                        selectedData.globalUserAvatar = db.globalUserAvatar || '';
+                    }
+                    
+                    // 收集选中的角色
+                    const selectedCharacterIds = Array.from(modalContent.querySelectorAll('.backup-character:checked'))
+                        .map(cb => cb.dataset.id);
+                    
+                    if (selectedCharacterIds.length > 0) {
+                        selectedData.characters = [];
+                        for (const charId of selectedCharacterIds) {
+                            const char = db.characters.find(c => c.id === charId);
+                            if (char) {
+                                const fullHistory = await dataStorage.getChatMessages(charId, 'private');
+                                const charData = await dataStorage.getData(`character_${charId}`) || char;
+                                selectedData.characters.push({
+                                    ...charData,
+                                    worldBookIds: charData.worldBookIds || char.worldBookIds || [],
+                                    history: fullHistory || []
+                                });
+                            }
+                        }
+                    }
+                    
+                    // 收集选中的群组
+                    const selectedGroupIds = Array.from(modalContent.querySelectorAll('.backup-group:checked'))
+                        .map(cb => cb.dataset.id);
+                    
+                    if (selectedGroupIds.length > 0) {
+                        selectedData.groups = [];
+                        for (const groupId of selectedGroupIds) {
+                            const group = db.groups.find(g => g.id === groupId);
+                            if (group) {
+                                const fullHistory = await dataStorage.getChatMessages(groupId, 'group');
+                                const groupData = await dataStorage.getData(`group_${groupId}`) || group;
+                                selectedData.groups.push({
+                                    ...groupData,
+                                    worldBookIds: groupData.worldBookIds || group.worldBookIds || [],
+                                    history: fullHistory || []
+                                });
+                            }
+                        }
+                    }
+                    
+                    // 收集其他选中的数据
+                    if (modalContent.querySelector('[data-category="worldBooks"]')?.checked) {
+                        selectedData.worldBooks = db.worldBooks || [];
+                    }
+                    if (modalContent.querySelector('[data-category="stickers"]')?.checked) {
+                        selectedData.myStickers = db.myStickers || [];
+                        selectedData.stickerCategories = db.stickerCategories || [];
+                    }
+                    if (modalContent.querySelector('[data-category="personaPresets"]')?.checked) {
+                        selectedData.personaPresets = db.personaPresets || [];
+                    }
+                    
+                    // 关闭弹窗
+                    document.body.removeChild(modal);
+                    
+                    // 执行备份
+                    try {
+                        loadingBtn = true;
+                        showToast('正在准备选择性备份...');
+                        
+                        const jsonString = JSON.stringify(selectedData);
+                        const dataBlob = new Blob([jsonString]);
+                        
+                        // 压缩数据
+                        const compressionStream = new CompressionStream('gzip');
+                        const compressedStream = dataBlob.stream().pipeThrough(compressionStream);
+                        const compressedBlob = await new Response(compressedStream).blob();
+                        
+                        const url = URL.createObjectURL(compressedBlob);
+                        const a = document.createElement('a');
+                        
+                        const now = new Date();
+                        const date = now.toISOString().slice(0, 10);
+                        const time = now.toTimeString().slice(0, 8).replace(/:/g, '');
+                        const fileName = `章鱼喷墨_选择性备份_${date}_${time}.ee`;
+                        
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        showToast('选择性备份完成！');
+                    } catch (e) {
+                        showToast(`备份失败: ${e.message}`);
+                        console.error('选择性备份错误:', e);
+                    } finally {
+                        loadingBtn = false;
+                    }
+                });
+            }
             
             // VIA浏览器专属备份按钮
             const viaBackupBtn = document.createElement('button');
@@ -8969,6 +9422,7 @@ ${contextSummary}
             });
 
             tutorialContentArea.appendChild(backupDataBtn);
+            tutorialContentArea.appendChild(selectiveBackupBtn);
             tutorialContentArea.appendChild(viaBackupBtn);
             tutorialContentArea.appendChild(streamBackupBtn);
             tutorialContentArea.appendChild(convertBackupBtn);
@@ -14333,7 +14787,12 @@ ${contextSummary}
             let messageSenderId = isSent ? 'user_me' : senderId;
 
             if (isSent) {
-                avatarUrl = (currentChatType === 'private') ? chat.myAvatar : (chat.me ? chat.me.avatar : 'https://i.postimg.cc/GtbTnxhP/o-o-1.jpg');
+                // 优先使用全局USER头像，如果没有设置则使用原有逻辑
+                if (db.globalUserAvatar) {
+                    avatarUrl = db.globalUserAvatar;
+                } else {
+                    avatarUrl = (currentChatType === 'private') ? chat.myAvatar : (chat.me ? chat.me.avatar : 'https://i.postimg.cc/GtbTnxhP/o-o-1.jpg');
+                }
                 bubbleTheme = theme.sent;
             } else {
                 if (currentChatType === 'private') {
