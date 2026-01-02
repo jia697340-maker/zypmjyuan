@@ -5423,13 +5423,19 @@ ${contextSummary}
                 }
             }
             
-            // 应用时间和日期显示设置
+            // 应用时间和日期显示设置（与顶栏小组件互斥）
             const timeWidget = document.querySelector('.time-widget');
-            if (timeWidget) {
+            const topBlurContainerElement = document.querySelector('.top-blur-container');
+            
+            if (timeWidget && topBlurContainerElement) {
                 if (db.showLockScreenTime) {
+                    // 显示时间小组件，隐藏顶栏小组件
                     timeWidget.classList.remove('hidden');
+                    topBlurContainerElement.style.display = 'none';
                 } else {
+                    // 隐藏时间小组件，显示顶栏小组件
                     timeWidget.classList.add('hidden');
+                    topBlurContainerElement.style.display = 'flex';
                 }
             }
             
@@ -5767,22 +5773,28 @@ ${contextSummary}
                     showToast(db.enableLockScreen ? '锁屏页面已启用' : '锁屏页面已关闭');
                 }
                 
-                // 显示/隐藏主屏幕时间和日期开关
+                // 显示/隐藏主屏幕时间和日期开关（与顶栏小组件互斥）
                 if (e.target.id === 'show-lock-screen-time-toggle') {
                     db.showLockScreenTime = e.target.checked;
                     await saveData();
                     
-                    // 更新主屏幕时间小部件的显示状态
+                    // 更新主屏幕时间小部件和顶栏小组件的显示状态（互斥）
                     const timeWidget = document.querySelector('.time-widget');
-                    if (timeWidget) {
+                    const topBlurContainerElement = document.querySelector('.top-blur-container');
+                    
+                    if (timeWidget && topBlurContainerElement) {
                         if (e.target.checked) {
+                            // 显示时间小组件，隐藏顶栏小组件
                             timeWidget.classList.remove('hidden');
+                            topBlurContainerElement.style.display = 'none';
                         } else {
+                            // 隐藏时间小组件，显示顶栏小组件
                             timeWidget.classList.add('hidden');
+                            topBlurContainerElement.style.display = 'flex';
                         }
                     }
                     
-                    showToast(db.showLockScreenTime ? '时间和日期已显示' : '时间和日期已隐藏');
+                    showToast(db.showLockScreenTime ? '已切换到原本的时间和年月日' : '已切换到顶栏小组件');
                 }
                 
                 // 重置主页面所有外观设置按钮
