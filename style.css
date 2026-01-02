@@ -468,10 +468,200 @@
             z-index: 10;
         }
 
+        /* 顶部巨大模糊背景 - 独立美化组件 */
+        .top-blur-container {
+            width: calc(100% - 40px);
+            margin: 20px 20px 0 20px;
+            height: 210px;
+            background-color: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 18px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 确保子元素在背景之上 */
+        .top-blur-container > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 搜索栏容器 */
+        .top-search-wrapper {
+            position: relative;
+            width: 100%;
+            height: 24px;
+        }
+
+        /* 搜索图标 */
+        .top-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            opacity: 0.5;
+        }
+
+        /* 顶部细长搜索栏 */
+        .top-search-bar {
+            width: 100%;
+            height: 24px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 12px;
+            padding: 0 12px 0 32px;
+            font-size: 12px;
+            color: #666;
+            outline: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .top-search-bar::placeholder {
+            color: #999;
+        }
+
+        /* 圆形头像区域 */
+        .top-avatar-container {
+            margin-top: 15px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 0 20px;
+        }
+
+        /* 头像列（包含头像和星期几） */
+        .top-avatar-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .top-avatar {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        /* 星期几显示徽章 */
+        .weekday-badge {
+            padding: 4px 12px;
+            background-color: rgba(200, 200, 200, 0.5);
+            border-radius: 10px;
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            width: fit-content;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        /* 头像右侧信息区域 */
+        .top-avatar-info {
+            margin-left: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .top-avatar-nickname {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .top-avatar-datetime {
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* 纯文案样式 - 无背景无边框 */
+        .top-text-badge {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+            text-align: left;
+            width: 100%;
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: color 0.2s ease, transform 0.2s ease;
+        }
+
+        .top-text-badge:hover {
+            color: #333;
+            transform: scale(1.02);
+        }
+
+        .top-text-badge:active {
+            transform: scale(0.98);
+        }
+
+        /* 顶部图标组 - 定位到右下角 */
+        .top-icons-group {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-icon-btn {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.6);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 0;
+            transition: transform 0.2s ease, background 0.2s ease;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        .top-icon-btn:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .top-icon-btn:active {
+            transform: scale(0.95);
+        }
+
+        .top-icon-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: #666;
+        }
+
         .time-widget {
             text-align: center;
             padding: 0 20px;
             color: var(--text-color);
+        }
+
+        .time-widget.hidden {
+            display: none !important;
         }
 
         .time-widget .time {
@@ -490,6 +680,10 @@
             color: var(--white-color);
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
         }
+        
+        #home-screen.day-mode .top-blur-container {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
 
         .app-grid {
             width: 100%;
@@ -499,7 +693,7 @@
             gap: 20px;
             justify-content: center;
             align-content: center;
-            margin-top: 40px;
+            margin-top: 20px;
         }
 
         #home-screen.day-mode .time-widget,

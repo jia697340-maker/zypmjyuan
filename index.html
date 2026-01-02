@@ -491,6 +491,94 @@
     
     <input type="file" id="image-upload-input" accept="image/*" style="display:none;">
     <input type="file" id="camera-capture-input" accept="image/*" capture="environment" style="display:none;">
+    
+    <!-- 搜索栏文案编辑弹窗 -->
+    <div id="edit-search-text-modal" class="modal-overlay">
+        <div class="modal-window">
+            <h3>编辑搜索栏文案</h3>
+            <form id="edit-search-text-form">
+                <div class="form-group">
+                    <label for="search-text-input">搜索栏文案</label>
+                    <textarea id="search-text-input" rows="3" placeholder="输入你想显示的文案..." required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
+                    <button type="button" class="btn btn-secondary" id="reset-search-text-btn" style="flex: 1;">重置</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-search-text-btn" style="flex: 1;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 宝宝生日文案编辑弹窗 -->
+    <div id="edit-birthday-text-modal" class="modal-overlay">
+        <div class="modal-window" style="max-width: 380px;">
+            <h3>编辑生日倒计时</h3>
+            <form id="edit-birthday-text-form">
+                <div class="form-group">
+                    <label for="birthday-prefix-input">前缀文案</label>
+                    <input type="text" id="birthday-prefix-input" placeholder="例如：宝宝生日还有" maxlength="20" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                </div>
+                <div class="form-group">
+                    <label for="birthday-suffix-input">后缀文案</label>
+                    <input type="text" id="birthday-suffix-input" placeholder="例如：天" maxlength="10" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                </div>
+                <div class="form-group">
+                    <label for="birthday-date-input">选择日期</label>
+                    <input type="date" id="birthday-date-input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; cursor: pointer;">
+                    <small style="display: block; color: #666; margin-top: 5px; font-size: 12px;">💡 可以选择过去或未来的日期</small>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-birthday-text-btn" style="flex: 1;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 头像编辑弹窗 -->
+    <div id="edit-avatar-modal" class="modal-overlay">
+        <div class="modal-window">
+            <h3>更换头像</h3>
+            <div style="margin-bottom: 20px;">
+                <div id="avatar-preview" style="width: 100px; height: 100px; margin: 0 auto 15px; border-radius: 50%; background-color: #f0f0f0; background-size: cover; background-position: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+            </div>
+            <div class="form-group">
+                <label>本地上传</label>
+                <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
+                <button type="button" class="btn btn-secondary" id="avatar-local-upload-btn" style="width: 100%;">从相册选择</button>
+            </div>
+            <div class="form-group">
+                <label for="avatar-url-input">URL上传</label>
+                <input type="url" id="avatar-url-input" placeholder="输入图片URL地址" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 10px;">
+                <button type="button" class="btn btn-secondary" id="avatar-url-upload-btn" style="width: 100%;">通过URL上传</button>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" class="btn btn-primary" id="save-avatar-btn" style="flex: 1;">保存</button>
+                <button type="button" class="btn btn-secondary" id="reset-avatar-btn" style="flex: 1;">重置</button>
+                <button type="button" class="btn btn-secondary" id="cancel-avatar-btn" style="flex: 1;">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 昵称编辑弹窗 -->
+    <div id="edit-nickname-modal" class="modal-overlay">
+        <div class="modal-window">
+            <h3>编辑昵称</h3>
+            <form id="edit-nickname-form">
+                <div class="form-group">
+                    <label for="nickname-input">昵称</label>
+                    <input type="text" id="nickname-input" placeholder="输入你的昵称..." required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
+                    <button type="button" class="btn btn-secondary" id="reset-nickname-btn" style="flex: 1;">重置</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-nickname-btn" style="flex: 1;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <div id="add-char-modal" class="modal-overlay">
         <div class="modal-window">
             <h3>创建新角色</h3>
@@ -1343,6 +1431,22 @@
                         </label>
                         <input type="number" id="setting-char-bg-check-interval" min="10" step="10" placeholder="留空使用全局设置" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
                         <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">留空则使用API设置中的全局值</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-size: 14px; font-weight: 600; margin-bottom: 5px; display: block;">
+                            或使用便捷时间设置
+                        </label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="setting-char-bg-interval-value" min="0.1" step="0.1" placeholder="数值" style="width: 70%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;">
+                            <select id="setting-char-bg-interval-unit" style="width: 30%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 16px;">
+                                <option value="seconds">秒</option>
+                                <option value="minutes">分钟</option>
+                                <option value="hours">小时</option>
+                                <option value="days">天</option>
+                            </select>
+                        </div>
+                        <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">填写此项会自动转换为秒并覆盖上方设置</small>
                     </div>
                     
                     <div class="form-group" style="margin-bottom: 0;">
@@ -4376,6 +4480,30 @@
         <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button id="confirm-batch-clear-btn" class="btn btn-danger" style="flex: 1;">清除选中</button>
             <button id="cancel-batch-clear-btn" class="btn btn-secondary" style="flex: 1;">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 简洁模式角色选择弹窗 -->
+<div id="simple-mode-character-modal" class="modal-overlay">
+    <div class="modal-window" style="max-width: 400px;">
+        <h3>选择应用简洁模式的角色</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">勾选需要使用简洁模式的角色</p>
+        
+        <div style="margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background-color: #f0f8ff; border-radius: 8px; cursor: pointer; border: 2px solid #90caf9;">
+                <input type="checkbox" id="simple-mode-all-characters" style="width: 20px; height: 20px; cursor: pointer;">
+                <span style="font-weight: 600; font-size: 15px; color: #333;">全部角色</span>
+            </label>
+        </div>
+        
+        <div id="simple-mode-character-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+            <!-- 角色列表将动态生成 -->
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-primary" id="confirm-character-selection-btn" style="flex: 1;">确定</button>
+            <button type="button" class="btn btn-secondary" id="cancel-character-selection-btn" style="flex: 1;">取消</button>
         </div>
     </div>
 </div>

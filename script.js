@@ -1,5 +1,5 @@
 ﻿// ===== 版本信息 =====
-    const APP_VERSION = '0.0.2';
+    const APP_VERSION = '0.0.3';
     const APP_BUILD_DATE = '2025-12-28';
     
     // 在控制台输出版本信息
@@ -476,6 +476,7 @@
             lockScreenBg: '', // 锁屏壁纸
             globalChatBg: '', // 全局聊天背景（应用于所有角色和群聊）
             enableLockScreen: false, // 是否启用锁屏
+            showLockScreenTime: false, // 是否显示锁屏时间和日期
             lockScreenPassword: { // 锁屏密码设置
                 type: 'none', // 'none', 'pin', 'gesture'
                 pin: '', // 数字密码
@@ -493,6 +494,7 @@
             fontLibrary: [],
             fontSize: 16,
             simplePromptMode: false, // 简洁模式开关，默认关闭
+            simplePromptCharacters: ['__all__'], // 应用简洁模式的角色列表，默认全部
             simplePromptFeatures: { // 简洁模式下启用的功能模块
                 innerThought: true,
                 music: true,
@@ -2108,7 +2110,10 @@
          */
         function createSystemTimestampElement(timestamp) {
             const wrapper = document.createElement('div');
-            wrapper.className = 'message-wrapper system-notification'; 
+            wrapper.className = 'message-wrapper system-notification';
+            // 为时间戳添加唯一ID，使其可以被选中删除
+            wrapper.dataset.id = `timestamp_${timestamp}`;
+            wrapper.dataset.type = 'timestamp';
             
             const bubble = document.createElement('div');
             bubble.className = 'system-notification-bubble'; 
@@ -2650,7 +2655,7 @@
             });
 
             updateClock();
-            setInterval(updateClock, 30000);
+            setInterval(updateClock, 1000);
             applyGlobalFont(db.fontUrl);
             applyGlobalFontSize(db.fontSize);
             initStatusBar(); // 初始化顶部状态栏
@@ -3796,12 +3801,34 @@ ${contextSummary}
             const now = new Date();
             const timeDisplay = document.getElementById('time-display');
             const dateDisplay = document.getElementById('date-display');
+            const topAvatarDatetime = document.getElementById('top-avatar-datetime');
+            const weekdayBadge = document.getElementById('weekday-badge');
             
             const timeText = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
             const dateText = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日`;
             
+            // 更新主屏幕时间组件
             if (timeDisplay) timeDisplay.textContent = timeText;
             if (dateDisplay) dateDisplay.textContent = dateText;
+            
+            // 更新顶部头像区域的时间日期
+            if (topAvatarDatetime) {
+                const year = now.getFullYear();
+                const month = pad(now.getMonth() + 1);
+                const day = pad(now.getDate());
+                const hours = pad(now.getHours());
+                const minutes = pad(now.getMinutes());
+                const seconds = pad(now.getSeconds());
+                // 使用多个空格分隔日期和时间，让它们分布在两端
+                const spaces = '\u00A0'.repeat(50); // 使用50个不间断空格
+                topAvatarDatetime.textContent = `${year}-${month}-${day}${spaces}${hours}:${minutes}:${seconds}`;
+            }
+            
+            // 更新星期几显示
+            if (weekdayBadge) {
+                const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+                weekdayBadge.textContent = weekdays[now.getDay()];
+            }
         }
 
         // --- 主屏幕页面滑动功能 ---
@@ -3903,6 +3930,518 @@ ${contextSummary}
 
             // 初始化位置
             updatePagePosition(false);
+        }
+
+        // --- 音乐播放器功能 ---
+        function initMusicPlayer() {
+            const playPauseBtn = document.getElementById('music-play-pause-btn');
+            const prevBtn = document.getElementById('music-prev-btn');
+            const nextBtn = document.getElementById('music-next-btn');
+            const progressBar = document.querySelector('.music-progress-bar');
+            const progressFill = document.getElementById('music-progress-fill');
+            const playIcon = playPauseBtn?.querySelector('.play-icon');
+            const pauseIcon = playPauseBtn?.querySelector('.pause-icon');
+
+            if (!playPauseBtn || !progressBar) return;
+
+            let isPlaying = false;
+            let currentProgress = 0;
+            let progressInterval = null;
+
+            // 播放/暂停切换
+            playPauseBtn.addEventListener('click', () => {
+                isPlaying = !isPlaying;
+                
+                if (isPlaying) {
+                    playIcon.style.display = 'none';
+                    pauseIcon.style.display = 'block';
+                    startProgress();
+                } else {
+                    playIcon.style.display = 'block';
+                    pauseIcon.style.display = 'none';
+                    stopProgress();
+                }
+            });
+
+            // 上一曲
+            prevBtn.addEventListener('click', () => {
+                currentProgress = 0;
+                updateProgressBar();
+                if (isPlaying) {
+                    stopProgress();
+                    startProgress();
+                }
+            });
+
+            // 下一曲
+            nextBtn.addEventListener('click', () => {
+                currentProgress = 0;
+                updateProgressBar();
+                if (isPlaying) {
+                    stopProgress();
+                    startProgress();
+                }
+            });
+
+            // 点击进度条跳转
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const percentage = (clickX / rect.width) * 100;
+                currentProgress = Math.max(0, Math.min(100, percentage));
+                updateProgressBar();
+            });
+
+            // 更新进度条
+            function updateProgressBar() {
+                progressFill.style.width = currentProgress + '%';
+            }
+
+            // 开始播放进度
+            function startProgress() {
+                progressInterval = setInterval(() => {
+                    currentProgress += 0.1;
+                    if (currentProgress >= 100) {
+                        currentProgress = 0;
+                        // 自动播放下一曲
+                    }
+                    updateProgressBar();
+                }, 100);
+            }
+
+            // 停止播放进度
+            function stopProgress() {
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+            }
+
+            // 初始化进度条
+            updateProgressBar();
+        }
+
+        // --- 搜索栏文案编辑功能 ---
+        function initSearchBarEditor() {
+            const searchBar = document.getElementById('top-search-bar');
+            const modal = document.getElementById('edit-search-text-modal');
+            const form = document.getElementById('edit-search-text-form');
+            const input = document.getElementById('search-text-input');
+            const resetBtn = document.getElementById('reset-search-text-btn');
+            const cancelBtn = document.getElementById('cancel-search-text-btn');
+
+            if (!searchBar || !modal) return;
+
+            const DEFAULT_TEXT = '想到漫长一生无法和你相见，我就忍不住哽咽 @ my love';
+            const STORAGE_KEY = 'customSearchBarText';
+
+            // 从localStorage加载保存的文案
+            function loadSearchText() {
+                const savedText = localStorage.getItem(STORAGE_KEY);
+                if (savedText) {
+                    searchBar.placeholder = savedText;
+                } else {
+                    searchBar.placeholder = DEFAULT_TEXT;
+                }
+            }
+
+            // 保存文案到localStorage
+            function saveSearchText(text) {
+                localStorage.setItem(STORAGE_KEY, text);
+                searchBar.placeholder = text;
+            }
+
+            // 重置为默认文案
+            function resetSearchText() {
+                localStorage.removeItem(STORAGE_KEY);
+                searchBar.placeholder = DEFAULT_TEXT;
+            }
+
+            // 点击搜索栏打开编辑弹窗
+            searchBar.addEventListener('click', () => {
+                input.value = searchBar.placeholder;
+                modal.classList.add('visible');
+            });
+
+            // 保存按钮
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newText = input.value.trim();
+                if (newText) {
+                    saveSearchText(newText);
+                    modal.classList.remove('visible');
+                    showToast('搜索栏文案已保存', 2000);
+                }
+            });
+
+            // 重置按钮
+            resetBtn.addEventListener('click', () => {
+                if (confirm('确定要重置为默认文案吗？')) {
+                    resetSearchText();
+                    input.value = DEFAULT_TEXT;
+                    modal.classList.remove('visible');
+                    showToast('已重置为默认文案', 2000);
+                }
+            });
+
+            // 取消按钮
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+
+            // 点击弹窗外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('visible');
+                }
+            });
+
+            // 初始化加载
+            loadSearchText();
+        }
+
+        // --- 头像编辑功能 ---
+        function initAvatarEditor() {
+            const avatar = document.getElementById('top-avatar');
+            const modal = document.getElementById('edit-avatar-modal');
+            const preview = document.getElementById('avatar-preview');
+            const fileInput = document.getElementById('avatar-file-input');
+            const localUploadBtn = document.getElementById('avatar-local-upload-btn');
+            const urlInput = document.getElementById('avatar-url-input');
+            const urlUploadBtn = document.getElementById('avatar-url-upload-btn');
+            const saveBtn = document.getElementById('save-avatar-btn');
+            const resetBtn = document.getElementById('reset-avatar-btn');
+            const cancelBtn = document.getElementById('cancel-avatar-btn');
+
+            if (!avatar || !modal) return;
+
+            const STORAGE_KEY = 'customAvatarImage';
+            let tempAvatarData = null;
+
+            // 从localStorage加载保存的头像
+            function loadAvatar() {
+                const savedAvatar = localStorage.getItem(STORAGE_KEY);
+                if (savedAvatar) {
+                    avatar.style.backgroundImage = `url(${savedAvatar})`;
+                    avatar.style.backgroundSize = 'cover';
+                    avatar.style.backgroundPosition = 'center';
+                } else {
+                    // 默认头像（空白或默认图片）
+                    avatar.style.backgroundImage = '';
+                    avatar.style.backgroundColor = '#ffffff';
+                }
+            }
+
+            // 保存头像到localStorage
+            function saveAvatar(imageData) {
+                localStorage.setItem(STORAGE_KEY, imageData);
+                avatar.style.backgroundImage = `url(${imageData})`;
+                avatar.style.backgroundSize = 'cover';
+                avatar.style.backgroundPosition = 'center';
+            }
+
+            // 重置为默认头像
+            function resetAvatar() {
+                localStorage.removeItem(STORAGE_KEY);
+                avatar.style.backgroundImage = '';
+                avatar.style.backgroundColor = '#ffffff';
+            }
+
+            // 更新预览
+            function updatePreview(imageData) {
+                preview.style.backgroundImage = `url(${imageData})`;
+                preview.style.backgroundSize = 'cover';
+                preview.style.backgroundPosition = 'center';
+                tempAvatarData = imageData;
+            }
+
+            // 点击头像打开编辑弹窗
+            avatar.addEventListener('click', () => {
+                const currentAvatar = localStorage.getItem(STORAGE_KEY);
+                if (currentAvatar) {
+                    preview.style.backgroundImage = `url(${currentAvatar})`;
+                    tempAvatarData = currentAvatar;
+                } else {
+                    preview.style.backgroundImage = '';
+                    preview.style.backgroundColor = '#f0f0f0';
+                    tempAvatarData = null;
+                }
+                modal.classList.add('visible');
+            });
+
+            // 本地上传按钮
+            localUploadBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // 文件选择
+            fileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        // 压缩图片
+                        const compressedImage = await compressImage(file, {
+                            quality: 0.8,
+                            maxWidth: 400,
+                            maxHeight: 400,
+                            maxSizeKB: 300
+                        });
+                        updatePreview(compressedImage);
+                        showToast('图片已加载，点击保存生效', 2000);
+                    } catch (error) {
+                        showToast('图片加载失败: ' + error.message, 3000);
+                    }
+                }
+                fileInput.value = '';
+            });
+
+            // URL上传按钮
+            urlUploadBtn.addEventListener('click', () => {
+                const url = urlInput.value.trim();
+                if (url) {
+                    // 验证URL格式
+                    try {
+                        new URL(url);
+                        updatePreview(url);
+                        showToast('图片已加载，点击保存生效', 2000);
+                    } catch (error) {
+                        showToast('请输入有效的URL地址', 2000);
+                    }
+                } else {
+                    showToast('请输入图片URL', 2000);
+                }
+            });
+
+            // 保存按钮
+            saveBtn.addEventListener('click', () => {
+                if (tempAvatarData) {
+                    saveAvatar(tempAvatarData);
+                    modal.classList.remove('visible');
+                    showToast('头像已保存', 2000);
+                    urlInput.value = '';
+                } else {
+                    showToast('请先选择或上传头像', 2000);
+                }
+            });
+
+            // 重置按钮
+            resetBtn.addEventListener('click', () => {
+                if (confirm('确定要重置为默认头像吗？')) {
+                    resetAvatar();
+                    preview.style.backgroundImage = '';
+                    preview.style.backgroundColor = '#f0f0f0';
+                    tempAvatarData = null;
+                    modal.classList.remove('visible');
+                    showToast('已重置为默认头像', 2000);
+                    urlInput.value = '';
+                }
+            });
+
+            // 取消按钮
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+                urlInput.value = '';
+            });
+
+            // 点击弹窗外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('visible');
+                    urlInput.value = '';
+                }
+            });
+
+            // 初始化加载
+            loadAvatar();
+        }
+
+        // --- 昵称编辑功能 ---
+        function initNicknameEditor() {
+            const nickname = document.getElementById('top-avatar-nickname');
+            const modal = document.getElementById('edit-nickname-modal');
+            const form = document.getElementById('edit-nickname-form');
+            const input = document.getElementById('nickname-input');
+            const resetBtn = document.getElementById('reset-nickname-btn');
+            const cancelBtn = document.getElementById('cancel-nickname-btn');
+
+            if (!nickname || !modal) return;
+
+            const DEFAULT_NICKNAME = '昵称';
+            const STORAGE_KEY = 'customNickname';
+
+            // 从localStorage加载保存的昵称
+            function loadNickname() {
+                const savedNickname = localStorage.getItem(STORAGE_KEY);
+                if (savedNickname) {
+                    nickname.textContent = savedNickname;
+                } else {
+                    nickname.textContent = DEFAULT_NICKNAME;
+                }
+            }
+
+            // 保存昵称到localStorage
+            function saveNickname(text) {
+                localStorage.setItem(STORAGE_KEY, text);
+                nickname.textContent = text;
+            }
+
+            // 重置为默认昵称
+            function resetNickname() {
+                localStorage.removeItem(STORAGE_KEY);
+                nickname.textContent = DEFAULT_NICKNAME;
+            }
+
+            // 点击昵称打开编辑弹窗
+            nickname.addEventListener('click', () => {
+                input.value = nickname.textContent;
+                modal.classList.add('visible');
+                // 自动聚焦输入框
+                setTimeout(() => input.focus(), 100);
+            });
+
+            // 保存按钮
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newNickname = input.value.trim();
+                if (newNickname) {
+                    saveNickname(newNickname);
+                    modal.classList.remove('visible');
+                    showToast('昵称已保存', 2000);
+                }
+            });
+
+            // 重置按钮
+            resetBtn.addEventListener('click', () => {
+                if (confirm('确定要重置为默认昵称吗？')) {
+                    resetNickname();
+                    input.value = DEFAULT_NICKNAME;
+                    modal.classList.remove('visible');
+                    showToast('已重置为默认昵称', 2000);
+                }
+            });
+
+            // 取消按钮
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+
+            // 点击弹窗外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('visible');
+                }
+            });
+
+            // 初始化加载
+            loadNickname();
+        }
+
+        // --- 生日倒计时编辑功能 ---
+        function initBirthdayCountdownEditor() {
+            const badge = document.getElementById('top-text-badge');
+            const modal = document.getElementById('edit-birthday-text-modal');
+            const form = document.getElementById('edit-birthday-text-form');
+            const prefixInput = document.getElementById('birthday-prefix-input');
+            const suffixInput = document.getElementById('birthday-suffix-input');
+            const dateInput = document.getElementById('birthday-date-input');
+            const cancelBtn = document.getElementById('cancel-birthday-text-btn');
+
+            if (!badge || !modal) return;
+
+            const DEFAULT_PREFIX = '宝宝生日还有';
+            const DEFAULT_SUFFIX = '天';
+            const STORAGE_KEY_PREFIX = 'birthdayCountdownPrefix';
+            const STORAGE_KEY_SUFFIX = 'birthdayCountdownSuffix';
+            const STORAGE_KEY_DATE = 'birthdayCountdownDate';
+
+            // 计算天数差
+            function calculateDaysDiff(targetDate) {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const target = new Date(targetDate);
+                target.setHours(0, 0, 0, 0);
+                const diffTime = target - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays;
+            }
+
+            // 从localStorage加载并更新显示
+            function loadAndUpdateBadge() {
+                const savedPrefix = localStorage.getItem(STORAGE_KEY_PREFIX) || DEFAULT_PREFIX;
+                const savedSuffix = localStorage.getItem(STORAGE_KEY_SUFFIX) || DEFAULT_SUFFIX;
+                const savedDate = localStorage.getItem(STORAGE_KEY_DATE);
+
+                if (savedDate) {
+                    const daysDiff = calculateDaysDiff(savedDate);
+                    badge.textContent = `${savedPrefix}${daysDiff}${savedSuffix}`;
+                } else {
+                    badge.textContent = `${savedPrefix}69${savedSuffix}`;
+                }
+            }
+
+            // 保存设置到localStorage
+            function saveBirthdaySettings(prefix, suffix, date) {
+                localStorage.setItem(STORAGE_KEY_PREFIX, prefix);
+                localStorage.setItem(STORAGE_KEY_SUFFIX, suffix);
+                localStorage.setItem(STORAGE_KEY_DATE, date);
+                loadAndUpdateBadge();
+            }
+
+            // 点击文案打开编辑弹窗
+            badge.addEventListener('click', () => {
+                prefixInput.value = localStorage.getItem(STORAGE_KEY_PREFIX) || DEFAULT_PREFIX;
+                suffixInput.value = localStorage.getItem(STORAGE_KEY_SUFFIX) || DEFAULT_SUFFIX;
+                const savedDate = localStorage.getItem(STORAGE_KEY_DATE);
+                if (savedDate) {
+                    dateInput.value = savedDate;
+                } else {
+                    // 默认设置为今天之后69天
+                    const defaultDate = new Date();
+                    defaultDate.setDate(defaultDate.getDate() + 69);
+                    dateInput.value = defaultDate.toISOString().split('T')[0];
+                }
+                modal.classList.add('visible');
+            });
+
+            // 保存按钮
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const prefix = prefixInput.value.trim() || DEFAULT_PREFIX;
+                const suffix = suffixInput.value.trim() || DEFAULT_SUFFIX;
+                const date = dateInput.value;
+                
+                if (date) {
+                    saveBirthdaySettings(prefix, suffix, date);
+                    modal.classList.remove('visible');
+                    const daysDiff = calculateDaysDiff(date);
+                    showToast(`生日倒计时已保存（${daysDiff > 0 ? '还有' : '已过'}${Math.abs(daysDiff)}天）`, 2000);
+                } else {
+                    showToast('请选择日期', 2000);
+                }
+            });
+
+            // 取消按钮
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+
+            // 点击弹窗外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('visible');
+                }
+            });
+
+            // 初始化加载
+            loadAndUpdateBadge();
+            
+            // 每天更新一次倒计时（在午夜时更新）
+            setInterval(() => {
+                const now = new Date();
+                if (now.getHours() === 0 && now.getMinutes() === 0) {
+                    loadAndUpdateBadge();
+                }
+            }, 60000); // 每分钟检查一次
         }
 
         // --- 状态栏控制函数 ---
@@ -4658,6 +5197,7 @@ ${contextSummary}
                         if (importData.wallpaperLibrary) db.wallpaperLibrary = importData.wallpaperLibrary;
                         // 修复：添加简洁模式设置的导入
                         if (importData.simplePromptMode !== undefined) db.simplePromptMode = importData.simplePromptMode;
+                        if (importData.simplePromptCharacters) db.simplePromptCharacters = importData.simplePromptCharacters;
                         if (importData.simplePromptFeatures) db.simplePromptFeatures = importData.simplePromptFeatures;
                         if (importData.showDockAppNames !== undefined) db.showDockAppNames = importData.showDockAppNames;
                         if (importData.showStatusBar !== undefined) db.showStatusBar = importData.showStatusBar;
@@ -4742,6 +5282,50 @@ ${contextSummary}
             <div class="home-pages-container" id="home-pages-container">
                 <!-- 第一页 -->
                 <div class="home-page">
+                    <!-- 顶部巨大模糊背景 - 独立美化组件 -->
+                    <div class="top-blur-container">
+                        <div class="top-search-wrapper">
+                            <svg class="top-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                            <input type="text" class="top-search-bar" id="top-search-bar" placeholder="想到漫长一生无法和你相见，我就忍不住哽咽 @ my love" readonly style="cursor: pointer;">
+                        </div>
+                        <div class="top-avatar-container">
+                            <div class="top-avatar-column">
+                                <div class="top-avatar" id="top-avatar" style="cursor: pointer;"></div>
+                                <!-- 星期几显示 -->
+                                <div class="weekday-badge" id="weekday-badge">星期一</div>
+                            </div>
+                            <div class="top-avatar-info">
+                                <div class="top-avatar-nickname" id="top-avatar-nickname" style="cursor: pointer;">昵称</div>
+                                <div class="top-avatar-datetime" id="top-avatar-datetime">2025-01-01 12:00</div>
+                                <!-- 圆角文案框 -->
+                                <div class="top-text-badge" id="top-text-badge">宝宝生日还有69天</div>
+                            </div>
+                            <!-- 顶部图标组 - 移到右下角 -->
+                            <div class="top-icons-group">
+                                <button class="top-icon-btn" id="top-at-btn" title="@">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8v1.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.93 0 3.5-1.57 3.5-3.5V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
+                                    </svg>
+                                </button>
+                                <button class="top-icon-btn" id="top-message-btn" title="消息">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                                        <circle cx="8" cy="10" r="1.5"/>
+                                        <circle cx="12" cy="10" r="1.5"/>
+                                        <circle cx="16" cy="10" r="1.5"/>
+                                    </svg>
+                                </button>
+                                <button class="top-icon-btn" id="top-heart-btn" title="喜欢">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="time-widget"><div class="time" id="time-display"></div><div class="date" id="date-display"></div></div>
                     <div class="app-grid">
                         <a href="#" class="app-icon" data-target="chat-list-screen"><img src="${getIcon('chat-list-screen')}" alt="404" class="icon-img"><span class="app-name">${getName('chat-list-screen')}</span></a>
@@ -4776,6 +5360,79 @@ ${contextSummary}
             updateClock();
             applyWallpaper(db.wallpaper);
             applyHomeScreenMode(db.homeScreenMode);
+            
+            // 应用顶栏背景和模糊效果
+            const topBlurContainer = document.querySelector('.top-blur-container');
+            if (topBlurContainer) {
+                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
+                
+                // 清除之前的样式
+                topBlurContainer.style.backgroundImage = 'none';
+                topBlurContainer.style.backgroundColor = '';
+                topBlurContainer.style.position = 'relative';
+                topBlurContainer.style.overflow = 'hidden';
+                
+                // 移除旧的伪元素样式
+                let styleEl = document.getElementById('top-bar-blur-style');
+                if (styleEl) {
+                    styleEl.remove();
+                }
+                
+                // 背景图和纯色二选一
+                if (db.topBarBackground) {
+                    // 使用背景图
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'top-bar-blur-style';
+                    styleEl.textContent = `
+                        .top-blur-container::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-image: url(${db.topBarBackground});
+                            background-size: cover;
+                            background-position: center;
+                            filter: blur(${blurValue}px);
+                            z-index: -1;
+                        }
+                    `;
+                    document.head.appendChild(styleEl);
+                } else if (db.topBarColor) {
+                    // 使用纯色（纯色也支持模糊）
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'top-bar-blur-style';
+                    styleEl.textContent = `
+                        .top-blur-container::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-color: ${db.topBarColor};
+                            filter: blur(${blurValue}px);
+                            z-index: -1;
+                        }
+                    `;
+                    document.head.appendChild(styleEl);
+                } else {
+                    // 使用默认背景
+                    topBlurContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                }
+            }
+            
+            // 应用时间和日期显示设置
+            const timeWidget = document.querySelector('.time-widget');
+            if (timeWidget) {
+                if (db.showLockScreenTime) {
+                    timeWidget.classList.remove('hidden');
+                } else {
+                    timeWidget.classList.add('hidden');
+                }
+            }
+            
             document.getElementById('day-mode-btn')?.addEventListener('click', (e) => {
                 e.preventDefault();
                 applyHomeScreenMode('day');
@@ -4804,6 +5461,21 @@ ${contextSummary}
             
             // 初始化主屏幕页面滑动
             initHomeScreenSwipe();
+            
+            // 初始化音乐播放器
+            initMusicPlayer();
+            
+            // 初始化搜索栏编辑器
+            initSearchBarEditor();
+            
+            // 初始化头像编辑器
+            initAvatarEditor();
+            
+            // 初始化昵称编辑器
+            initNicknameEditor();
+            
+            // 初始化生日倒计时编辑器
+            initBirthdayCountdownEditor();
         }
 
         function applyWallpaper(url) {
@@ -4981,6 +5653,7 @@ ${contextSummary}
                             wallpaperLibrary: db.wallpaperLibrary || [],
                             // 修复：添加简洁模式设置
                             simplePromptMode: db.simplePromptMode || false,
+                            simplePromptCharacters: db.simplePromptCharacters || ['__all__'],
                             simplePromptFeatures: db.simplePromptFeatures || {},
                             showDockAppNames: db.showDockAppNames !== undefined ? db.showDockAppNames : true,
                             showStatusBar: db.showStatusBar !== undefined ? db.showStatusBar : true
@@ -5092,6 +5765,24 @@ ${contextSummary}
                         passwordSection.style.display = e.target.checked ? 'block' : 'none';
                     }
                     showToast(db.enableLockScreen ? '锁屏页面已启用' : '锁屏页面已关闭');
+                }
+                
+                // 显示/隐藏主屏幕时间和日期开关
+                if (e.target.id === 'show-lock-screen-time-toggle') {
+                    db.showLockScreenTime = e.target.checked;
+                    await saveData();
+                    
+                    // 更新主屏幕时间小部件的显示状态
+                    const timeWidget = document.querySelector('.time-widget');
+                    if (timeWidget) {
+                        if (e.target.checked) {
+                            timeWidget.classList.remove('hidden');
+                        } else {
+                            timeWidget.classList.add('hidden');
+                        }
+                    }
+                    
+                    showToast(db.showLockScreenTime ? '时间和日期已显示' : '时间和日期已隐藏');
                 }
                 
                 // 重置主页面所有外观设置按钮
@@ -6236,6 +6927,16 @@ ${contextSummary}
                     </div>
                 </div>
                 
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #fff8fa; border-radius: 12px; border: 1px solid #fce4ec;">
+                        <label for="show-lock-screen-time-toggle" style="font-weight: 600; margin: 0; color: var(--text-color); flex-grow: 1;">还原原本的时间和年月日</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="show-lock-screen-time-toggle" ${db.showLockScreenTime ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                
                 <!-- 重置主页面外观设置按钮 -->
                 <div class="form-group" style="margin-bottom: 20px;">
                     <button type="button" class="btn btn-danger" id="reset-appearance-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
@@ -6674,6 +7375,85 @@ ${contextSummary}
             `;
             customizeForm.insertAdjacentHTML('beforeend', globalUserAvatarHTML);
             
+            // 添加顶栏背景图更换区域
+            const topBarBackgroundHTML = `
+                <hr style="border:none; border-top:2px solid #f0f0f0; margin: 30px 0 20px 0;">
+                <div class="top-bar-background-section">
+                    <h3 style="font-size: 18px; font-weight: 600; color: var(--primary-color); margin-bottom: 15px;">更换顶栏背景</h3>
+                    <p style="font-size: 14px; color: #666; background-color: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                        <strong>注意：</strong>背景图和纯色只能二选一。设置背景图会清除纯色，设置纯色会清除背景图。模糊度对两者都有效。
+                    </p>
+                    
+                    <!-- 背景图预览 -->
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">当前顶栏背景预览</label>
+                        <div id="top-bar-bg-preview" style="width: 100%; height: 150px; border-radius: 12px; margin: 0 auto 15px; background-color: ${db.topBarColor || 'rgba(255, 255, 255, 0.7)'}; background-size: cover; background-position: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; color: #999; font-size: 14px; position: relative; overflow: hidden;">
+                            <span style="position: relative; z-index: 2;">${!db.topBarBackground && !db.topBarColor ? '未设置' : ''}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 纯色背景设置 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">纯色背景（与背景图二选一）</label>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                            <input type="color" id="top-bar-color-picker" value="${(db.topBarColor || 'rgba(255, 255, 255, 0.7)').replace(/rgba?\((\d+),\s*(\d+),\s*(\d+).*\)/, (m, r, g, b) => '#' + [r, g, b].map(x => parseInt(x).toString(16).padStart(2, '0')).join(''))}" style="width: 60px; height: 40px; border: none; border-radius: 8px; cursor: pointer;">
+                            <input type="text" id="top-bar-color-text" value="${db.topBarColor || 'rgba(255, 255, 255, 0.7)'}" placeholder="rgba(255, 255, 255, 0.7)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
+                            <button type="button" id="reset-top-bar-color-btn" style="background: var(--secondary-color); color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                        </div>
+                        <p style="font-size: 12px; color: #888; margin: 0;">
+                            设置纯色背景会自动清除背景图
+                        </p>
+                    </div>
+                    
+                    <!-- 本地上传 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">背景图（与纯色二选一）</label>
+                        <input type="file" id="top-bar-bg-upload" accept="image/*" style="display: none;">
+                        <label for="top-bar-bg-upload" class="btn btn-primary" style="width: 100%; text-align: center; cursor: pointer;">
+                            从相册选择背景图
+                        </label>
+                        <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0;">
+                            上传背景图会自动清除纯色
+                        </p>
+                    </div>
+                    
+                    <!-- URL上传 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">或通过URL上传背景图</label>
+                        <input type="url" id="top-bar-bg-url-input" placeholder="输入背景图片URL" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px;">
+                        <button type="button" class="btn btn-secondary" id="top-bar-bg-url-btn" style="width: 100%;">
+                            通过URL上传背景图
+                        </button>
+                    </div>
+                    
+                    <!-- 模糊度调整 -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600;">背景模糊度</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span id="top-bar-blur-value" style="color: var(--primary-color); font-weight: 600;">${db.topBarBlur !== undefined ? db.topBarBlur : 3}px</span>
+                                <button type="button" id="reset-top-bar-blur-btn" style="background: var(--secondary-color); color: white; border: none; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;">重置</button>
+                            </div>
+                        </label>
+                        <input type="range" id="top-bar-blur-slider" min="0" max="100" value="${db.topBarBlur !== undefined ? db.topBarBlur : 3}" step="1" style="width: 100%; cursor: pointer;">
+                        <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0;">
+                            调整背景的模糊程度，数值越大越模糊。纯色和背景图都支持模糊效果。
+                        </p>
+                    </div>
+                    
+                    <!-- 重置按钮 -->
+                    <div class="form-group">
+                        <button type="button" class="btn btn-danger" id="reset-top-bar-bg-btn" style="width: 100%;">
+                            重置顶栏背景
+                        </button>
+                        <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0;">
+                            重置后将清除背景图和纯色，恢复默认背景
+                        </p>
+                    </div>
+                </div>
+            `;
+            customizeForm.insertAdjacentHTML('beforeend', topBarBackgroundHTML);
+            
             // 更新全局头像预览
             const updateGlobalAvatarPreview = () => {
                 const preview = document.getElementById('global-user-avatar-preview');
@@ -6691,7 +7471,316 @@ ${contextSummary}
             // 初始化预览
             setTimeout(() => {
                 updateGlobalAvatarPreview();
+                updateTopBarBgPreview();
             }, 100);
+            
+            // 更新顶栏背景预览
+            const updateTopBarBgPreview = () => {
+                const preview = document.getElementById('top-bar-bg-preview');
+                if (!preview) return;
+                
+                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
+                
+                // 清除之前的样式
+                preview.style.backgroundImage = 'none';
+                preview.style.backgroundColor = '';
+                preview.style.position = 'relative';
+                preview.style.overflow = 'hidden';
+                
+                // 移除旧的预览模糊样式
+                let previewStyleEl = document.getElementById('top-bar-preview-blur-style');
+                if (previewStyleEl) {
+                    previewStyleEl.remove();
+                }
+                
+                // 背景图和纯色二选一
+                if (db.topBarBackground) {
+                    // 使用背景图
+                    preview.textContent = '';
+                    
+                    // 创建模糊效果
+                    previewStyleEl = document.createElement('style');
+                    previewStyleEl.id = 'top-bar-preview-blur-style';
+                    previewStyleEl.textContent = `
+                        #top-bar-bg-preview::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-image: url(${db.topBarBackground});
+                            background-size: cover;
+                            background-position: center;
+                            filter: blur(${blurValue}px);
+                            z-index: 1;
+                        }
+                        #top-bar-bg-preview > span {
+                            position: relative;
+                            z-index: 2;
+                        }
+                    `;
+                    document.head.appendChild(previewStyleEl);
+                } else if (db.topBarColor) {
+                    // 使用纯色
+                    preview.textContent = '';
+                    
+                    // 创建模糊效果（纯色也支持模糊）
+                    previewStyleEl = document.createElement('style');
+                    previewStyleEl.id = 'top-bar-preview-blur-style';
+                    previewStyleEl.textContent = `
+                        #top-bar-bg-preview::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-color: ${db.topBarColor};
+                            filter: blur(${blurValue}px);
+                            z-index: 1;
+                        }
+                        #top-bar-bg-preview > span {
+                            position: relative;
+                            z-index: 2;
+                        }
+                    `;
+                    document.head.appendChild(previewStyleEl);
+                } else {
+                    // 未设置
+                    preview.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                    preview.textContent = '未设置';
+                }
+            };
+            
+            // 应用顶栏背景到主屏幕
+            const applyTopBarBackground = () => {
+                const topBlurContainer = document.querySelector('.top-blur-container');
+                if (!topBlurContainer) return;
+                
+                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
+                
+                // 清除之前的样式
+                topBlurContainer.style.backgroundImage = 'none';
+                topBlurContainer.style.backgroundColor = '';
+                topBlurContainer.style.position = 'relative';
+                topBlurContainer.style.overflow = 'hidden';
+                
+                // 移除旧的伪元素样式
+                let styleEl = document.getElementById('top-bar-blur-style');
+                if (styleEl) {
+                    styleEl.remove();
+                }
+                
+                // 背景图和纯色二选一
+                if (db.topBarBackground) {
+                    // 使用背景图
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'top-bar-blur-style';
+                    styleEl.textContent = `
+                        .top-blur-container::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-image: url(${db.topBarBackground});
+                            background-size: cover;
+                            background-position: center;
+                            filter: blur(${blurValue}px);
+                            z-index: -1;
+                        }
+                    `;
+                    document.head.appendChild(styleEl);
+                } else if (db.topBarColor) {
+                    // 使用纯色（纯色也支持模糊）
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'top-bar-blur-style';
+                    styleEl.textContent = `
+                        .top-blur-container::before {
+                            content: '';
+                            position: absolute;
+                            top: -10px;
+                            left: -10px;
+                            right: -10px;
+                            bottom: -10px;
+                            background-color: ${db.topBarColor};
+                            filter: blur(${blurValue}px);
+                            z-index: -1;
+                        }
+                    `;
+                    document.head.appendChild(styleEl);
+                } else {
+                    // 使用默认背景
+                    topBlurContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                }
+            };
+            
+            // 纯色背景颜色选择器事件
+            const colorPicker = document.getElementById('top-bar-color-picker');
+            const colorText = document.getElementById('top-bar-color-text');
+            
+            if (colorPicker) {
+                colorPicker.addEventListener('input', async (e) => {
+                    const hexColor = e.target.value;
+                    const rgbaColor = `rgba(${parseInt(hexColor.slice(1, 3), 16)}, ${parseInt(hexColor.slice(3, 5), 16)}, ${parseInt(hexColor.slice(5, 7), 16)}, 0.7)`;
+                    
+                    if (colorText) colorText.value = rgbaColor;
+                    
+                    // 设置纯色时，清除背景图（二选一）
+                    delete db.topBarBackground;
+                    db.topBarColor = rgbaColor;
+                    await saveData();
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                });
+            }
+            
+            if (colorText) {
+                colorText.addEventListener('change', async (e) => {
+                    const color = e.target.value.trim();
+                    if (!color) return;
+                    
+                    // 设置纯色时，清除背景图（二选一）
+                    delete db.topBarBackground;
+                    db.topBarColor = color;
+                    await saveData();
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                    showToast('纯色背景已更新');
+                });
+            }
+            
+            // 重置纯色背景按钮
+            const resetColorBtn = document.getElementById('reset-top-bar-color-btn');
+            if (resetColorBtn) {
+                resetColorBtn.addEventListener('click', async () => {
+                    delete db.topBarColor;
+                    await saveData();
+                    
+                    if (colorPicker) colorPicker.value = '#ffffff';
+                    if (colorText) colorText.value = 'rgba(255, 255, 255, 0.7)';
+                    
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                    showToast('纯色背景已重置');
+                });
+            }
+            
+            // 模糊度滑动条事件 - 实时更新预览和主屏幕
+            const blurSlider = document.getElementById('top-bar-blur-slider');
+            const blurValue = document.getElementById('top-bar-blur-value');
+            
+            if (blurSlider && blurValue) {
+                blurSlider.addEventListener('input', async (e) => {
+                    const value = parseInt(e.target.value);
+                    blurValue.textContent = `${value}px`;
+                    db.topBarBlur = value;
+                    await saveData();
+                    // 实时更新预览和主屏幕
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                });
+            }
+            
+            // 重置模糊度按钮
+            const resetBlurBtn = document.getElementById('reset-top-bar-blur-btn');
+            if (resetBlurBtn) {
+                resetBlurBtn.addEventListener('click', async () => {
+                    db.topBarBlur = 30;
+                    await saveData();
+                    if (blurSlider) blurSlider.value = 30;
+                    if (blurValue) blurValue.textContent = '30px';
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                    showToast('模糊度已重置为默认值');
+                });
+            }
+            
+            // 本地上传顶栏背景
+            const topBarBgUploadInput = document.getElementById('top-bar-bg-upload');
+            if (topBarBgUploadInput) {
+                topBarBgUploadInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                        const compressedDataUrl = await compressImage(file, { quality: 0.8, maxWidth: 800, maxHeight: 400 });
+                        // 设置背景图时，清除纯色（二选一）
+                        delete db.topBarColor;
+                        db.topBarBackground = compressedDataUrl;
+                        await saveData();
+                        updateTopBarBgPreview();
+                        applyTopBarBackground();
+                        showToast('顶栏背景已更新');
+                    } catch (error) {
+                        console.error('背景上传失败:', error);
+                        showToast('背景上传失败，请重试');
+                    }
+                });
+            }
+            
+            // URL上传顶栏背景
+            const topBarBgUrlBtn = document.getElementById('top-bar-bg-url-btn');
+            if (topBarBgUrlBtn) {
+                topBarBgUrlBtn.addEventListener('click', async () => {
+                    const urlInput = document.getElementById('top-bar-bg-url-input');
+                    if (!urlInput) return;
+                    
+                    const url = urlInput.value.trim();
+                    
+                    if (!url) {
+                        showToast('请输入背景图URL');
+                        return;
+                    }
+                    
+                    try {
+                        // 验证URL是否有效
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = () => reject(new Error('图片加载失败'));
+                            img.src = url;
+                        });
+                        
+                        // 设置背景图时，清除纯色（二选一）
+                        delete db.topBarColor;
+                        db.topBarBackground = url;
+                        await saveData();
+                        updateTopBarBgPreview();
+                        applyTopBarBackground();
+                        urlInput.value = '';
+                        showToast('顶栏背景已更新');
+                    } catch (error) {
+                        console.error('URL背景设置失败:', error);
+                        showToast('URL无效或图片加载失败');
+                    }
+                });
+            }
+            
+            // 重置顶栏背景
+            const resetTopBarBgBtn = document.getElementById('reset-top-bar-bg-btn');
+            if (resetTopBarBgBtn) {
+                resetTopBarBgBtn.addEventListener('click', async () => {
+                    if (!confirm('确定要重置顶栏背景吗？')) return;
+                    
+                    // 同时清除背景图和纯色
+                    delete db.topBarBackground;
+                    delete db.topBarColor;
+                    await saveData();
+                    
+                    // 重置颜色选择器
+                    if (colorPicker) colorPicker.value = '#ffffff';
+                    if (colorText) colorText.value = 'rgba(255, 255, 255, 0.7)';
+                    
+                    updateTopBarBgPreview();
+                    applyTopBarBackground();
+                    showToast('顶栏背景已重置');
+                });
+            }
             
             // 本地上传头像
             const avatarUploadInput = document.getElementById('global-user-avatar-upload');
@@ -13534,11 +14623,19 @@ ${contextSummary}
             if (isInMultiSelectMode) return;
             clearTimeout(longPressTimer);
             const messageId = messageWrapper.dataset.id;
+            if (!messageId) return; // 如果没有ID，不处理
+            
             activeMessageId = messageId; // 设置当前操作的消息ID
             
             const chat = (currentChatType === 'private') ? db.characters.find(c => c.id === currentChatId) : db.groups.find(g => g.id === currentChatId);
             const message = chat.history.find(m => m.id === messageId);
-            if (!message) return;
+            
+            // 如果是时间戳或系统通知（没有对应的message对象），只显示删除选项
+            if (!message || messageWrapper.dataset.type === 'timestamp') {
+                const menuItems = [{label: '删除', action: () => enterMultiSelectMode(messageId)}];
+                createContextMenu(menuItems, x, y);
+                return;
+            }
 
             const isImageRecognitionMsg = message.parts && message.parts.some(p => p.type === 'image');
             const isVoiceMessage = /\[.*?的语音：.*?\]/.test(message.content);
@@ -14298,19 +15395,31 @@ ${contextSummary}
             const deletedCount = selectedMessageIds.size;
             const chat = (currentChatType === 'private') ? db.characters.find(c => c.id === currentChatId) : db.groups.find(g => g.id === currentChatId);
             
-            // 从 IndexedDB 中删除每条选中的消息
+            // 分离时间戳和真实消息
+            const timestampIds = [];
+            const realMessageIds = [];
+            
             for (const messageId of selectedMessageIds) {
+                if (messageId.startsWith('timestamp_')) {
+                    timestampIds.push(messageId);
+                } else {
+                    realMessageIds.push(messageId);
+                }
+            }
+            
+            // 从 IndexedDB 中删除每条选中的真实消息
+            for (const messageId of realMessageIds) {
                 await deleteMessageFromStorage(currentChatId, currentChatType, messageId);
             }
             
-            // 从内存中过滤掉已删除的消息
-            chat.history = chat.history.filter(m => !selectedMessageIds.has(m.id));
+            // 从内存中过滤掉已删除的真实消息
+            chat.history = chat.history.filter(m => !realMessageIds.includes(m.id));
             await saveData();
             currentPage = 1;
             renderMessages(false, true);
             renderChatList();
             exitMultiSelectMode();
-            showToast(`已删除 ${deletedCount} 条消息`);
+            showToast(`已删除 ${deletedCount} 项`);
         }
 
         async function openChatRoom(chatId, type) {
@@ -16497,8 +17606,13 @@ ${contextSummary}
         }
         
         async function generatePrivateSystemPrompt(character, memoryLibrary = null) {
-            // 获取功能模块配置（如果开启简洁模式，使用用户选择；否则全部启用）
-            const features = db.simplePromptMode ? (db.simplePromptFeatures || {}) : {
+            // 判断当前角色是否应用简洁模式
+            const shouldUseSimpleMode = db.simplePromptMode && 
+                db.simplePromptCharacters && 
+                (db.simplePromptCharacters.includes('__all__') || db.simplePromptCharacters.includes(character.id));
+            
+            // 获取功能模块配置（如果该角色开启简洁模式，使用用户选择；否则全部启用）
+            const features = shouldUseSimpleMode ? (db.simplePromptFeatures || {}) : {
                 innerThought: true,
                 music: true,
                 avatar: true,
@@ -21976,9 +23090,10 @@ ${summaryPrompt}`;
                 db.groups.find(g => g.id === chatId);
             if (!chat) return;
             
-            if (!chat.musicData) chat.musicData = {totalTime: 0};
+            if (!chat.musicData) chat.musicData = {totalTime: 0, timeDisplayUnit: 'hours'};
             
             musicState.totalElapsedTime = chat.musicData.totalTime || 0;
+            musicState.timeDisplayUnit = chat.musicData.timeDisplayUnit || 'hours';
             musicState.isActive = true;
             musicState.activeChatId = chatId;
             musicState.playlist = db.musicPlaylist || [];
@@ -22021,8 +23136,9 @@ ${summaryPrompt}`;
                         db.characters.find(c => c.id === oldChatId) : 
                         db.groups.find(g => g.id === oldChatId);
                     if (chat) {
-                        if (!chat.musicData) chat.musicData = {totalTime: 0};
+                        if (!chat.musicData) chat.musicData = {totalTime: 0, timeDisplayUnit: 'hours'};
                         chat.musicData.totalTime = musicState.totalElapsedTime;
+                        chat.musicData.timeDisplayUnit = musicState.timeDisplayUnit;
                         await saveData();
                     }
                 }
@@ -26758,6 +27874,17 @@ ${summaryPrompt}`;
                     const index = db.personaPresets.findIndex(p => p.id === id);
                     if (index > -1) {
                         db.personaPresets[index] = preset;
+                        // 更新所有使用该预设的角色和群组
+                        const updateCount = await updateAllCharactersUsingPreset(id, preset);
+                        await saveData();
+                        renderPersonaPresetsList();
+                        document.getElementById('edit-persona-preset-modal').classList.remove('visible');
+                        if (updateCount > 0) {
+                            showToast(`人设预设已保存，已同步更新 ${updateCount} 个角色/群组`);
+                        } else {
+                            showToast('人设预设已保存');
+                        }
+                        return;
                     }
                 } else {
                     db.personaPresets.push(preset);
@@ -27003,6 +28130,54 @@ ${summaryPrompt}`;
                 document.getElementById('edit-persona-preset-modal').classList.add('visible');
             }
             
+            // 更新所有使用该预设的角色和群组
+            async function updateAllCharactersUsingPreset(presetId, preset) {
+                let updateCount = 0;
+                
+                // 更新所有使用该预设的角色
+                db.characters.forEach(character => {
+                    if (character.presetId === presetId) {
+                        character.myName = preset.name;
+                        character.myPersona = preset.description;
+                        character.myAvatar = preset.avatar;
+                        updateCount++;
+                    }
+                });
+                
+                // 更新所有使用该预设的群组
+                db.groups.forEach(group => {
+                    if (group.me && group.me.presetId === presetId) {
+                        group.me.nickname = preset.name;
+                        group.me.persona = preset.description;
+                        group.me.avatar = preset.avatar;
+                        updateCount++;
+                    }
+                });
+                
+                if (updateCount > 0) {
+                    console.log(`✅ 已同步更新 ${updateCount} 个使用该预设的角色/群组`);
+                    
+                    // 如果当前正在查看使用该预设的角色或群组，更新UI
+                    if (currentChatId) {
+                        const character = db.characters.find(c => c.id === currentChatId);
+                        if (character && character.presetId === presetId) {
+                            document.getElementById('setting-my-name').value = preset.name;
+                            document.getElementById('setting-my-persona').value = preset.description;
+                            document.getElementById('setting-my-avatar-preview').src = preset.avatar;
+                        }
+                        
+                        const group = db.groups.find(g => g.id === currentChatId);
+                        if (group && group.me && group.me.presetId === presetId) {
+                            document.getElementById('setting-group-my-nickname').value = preset.name;
+                            document.getElementById('setting-group-my-persona').value = preset.description;
+                            document.getElementById('setting-group-my-avatar-preview').src = preset.avatar;
+                        }
+                    }
+                }
+                
+                return updateCount;
+            }
+            
             // Apply Persona Preset
             async function applyPersonaPreset(presetId) {
                 const preset = db.personaPresets.find(p => p.id === presetId);
@@ -27014,6 +28189,7 @@ ${summaryPrompt}`;
                         character.myName = preset.name;
                         character.myPersona = preset.description;
                         character.myAvatar = preset.avatar;
+                        character.presetId = presetId; // 记录使用的预设ID
                         
                         // Update UI
                         document.getElementById('setting-my-name').value = preset.name;
@@ -27030,6 +28206,7 @@ ${summaryPrompt}`;
                         group.me.nickname = preset.name;
                         group.me.persona = preset.description;
                         group.me.avatar = preset.avatar;
+                        group.me.presetId = presetId; // 记录使用的预设ID
                         
                         // Update UI
                         document.getElementById('setting-group-my-nickname').value = preset.name;
@@ -27874,7 +29051,34 @@ ${summaryPrompt}`;
                 e.autoGroupInterval = !isNaN(autoGroupInterval) && autoGroupInterval > 0 ? autoGroupInterval : undefined;
                 
                 // 保存角色专属的后台活动设置
-                const bgCheckInterval = parseFloat(document.getElementById('setting-char-bg-check-interval').value);
+                let bgCheckInterval = parseFloat(document.getElementById('setting-char-bg-check-interval').value);
+                
+                // 处理便捷时间设置
+                const bgIntervalValue = document.getElementById('setting-char-bg-interval-value');
+                const bgIntervalUnit = document.getElementById('setting-char-bg-interval-unit');
+                if (bgIntervalValue && bgIntervalUnit && bgIntervalValue.value) {
+                    const value = parseFloat(bgIntervalValue.value);
+                    const unit = bgIntervalUnit.value;
+                    if (!isNaN(value) && value > 0) {
+                        switch(unit) {
+                            case 'seconds':
+                                bgCheckInterval = value;
+                                break;
+                            case 'minutes':
+                                bgCheckInterval = value * 60;
+                                break;
+                            case 'hours':
+                                bgCheckInterval = value * 3600;
+                                break;
+                            case 'days':
+                                bgCheckInterval = value * 86400;
+                                break;
+                        }
+                        // 同步更新秒输入框
+                        document.getElementById('setting-char-bg-check-interval').value = bgCheckInterval;
+                    }
+                }
+                
                 e.backgroundActivityInterval = !isNaN(bgCheckInterval) && bgCheckInterval > 0 ? bgCheckInterval : undefined;
                 
                 const bgTriggerChance = parseInt(document.getElementById('setting-char-bg-trigger-chance').value);
@@ -27882,9 +29086,27 @@ ${summaryPrompt}`;
                 
                 const cooldownValue = parseFloat(document.getElementById('setting-char-block-cooldown').value);
                 e.blockCooldownHours = !isNaN(cooldownValue) && cooldownValue > 0 ? cooldownValue : undefined;
-                e.myAvatar = document.getElementById('setting-my-avatar-preview').src;
-                e.myName = document.getElementById('setting-my-name').value;
-                e.myPersona = document.getElementById('setting-my-persona').value;
+                
+                // 检查用户人设是否被手动修改
+                const newMyAvatar = document.getElementById('setting-my-avatar-preview').src;
+                const newMyName = document.getElementById('setting-my-name').value;
+                const newMyPersona = document.getElementById('setting-my-persona').value;
+                
+                // 如果有关联的预设，检查是否被手动修改
+                if (e.presetId) {
+                    const preset = db.personaPresets.find(p => p.id === e.presetId);
+                    if (preset) {
+                        // 如果任何一个字段被手动修改，解除预设关联
+                        if (newMyAvatar !== preset.avatar || newMyName !== preset.name || newMyPersona !== preset.description) {
+                            delete e.presetId;
+                            console.log('✂️ 检测到手动修改，已解除与预设的关联');
+                        }
+                    }
+                }
+                
+                e.myAvatar = newMyAvatar;
+                e.myName = newMyName;
+                e.myPersona = newMyPersona;
                 e.theme = newTheme;
                 e.maxMemory = document.getElementById('setting-max-memory').value;
                 
@@ -27945,6 +29167,35 @@ ${summaryPrompt}`;
                 bgSettingsContainer.style.display = e.target.checked ? 'block' : 'none';
             }
         });
+        
+        // 角色专属便捷时间输入的实时转换功能
+        const charIntervalValueInput = document.getElementById('setting-char-bg-interval-value');
+        const charIntervalUnitSelect = document.getElementById('setting-char-bg-interval-unit');
+        const charIntervalSecondsInput = document.getElementById('setting-char-bg-check-interval');
+        if (charIntervalValueInput && charIntervalUnitSelect && charIntervalSecondsInput) {
+            const updateCharSecondsPreview = () => {
+                const value = parseFloat(charIntervalValueInput.value);
+                if (!isNaN(value) && value > 0) {
+                    const unit = charIntervalUnitSelect.value;
+                    let seconds = value;
+                    switch(unit) {
+                        case 'minutes':
+                            seconds = value * 60;
+                            break;
+                        case 'hours':
+                            seconds = value * 3600;
+                            break;
+                        case 'days':
+                            seconds = value * 86400;
+                            break;
+                    }
+                    charIntervalSecondsInput.value = seconds;
+                }
+            };
+            
+            charIntervalValueInput.addEventListener('input', updateCharSecondsPreview);
+            charIntervalUnitSelect.addEventListener('change', updateCharSecondsPreview);
+        }
 
         // 角色主动拉群开关事件监听器
         document.getElementById('setting-char-auto-group')?.addEventListener('change', (e) => {
@@ -27987,7 +29238,15 @@ ${summaryPrompt}`;
                         <input type="checkbox" id="simple-prompt-mode-switch" style="width: auto; height: 20px;">
                     </div>
                     <div id="simple-mode-features-container" style="display: none; margin-top: 15px; padding: 15px; background-color: #f0f8ff; border-radius: 8px; border: 1px solid #90caf9;">
-                        <h4 style="font-size: 14px; margin: 0 0 10px 0; color: #333;">功能模块选择</h4>
+                        <h4 style="font-size: 14px; margin: 0 0 10px 0; color: #333;">应用到角色</h4>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">选择哪些角色使用简洁模式</p>
+                        <div style="margin-bottom: 15px;">
+                            <button type="button" id="select-characters-btn" class="btn btn-secondary" style="width: 100%; padding: 12px; font-size: 14px; text-align: left; display: flex; justify-content: space-between; align-items: center;">
+                                <span id="selected-characters-text">全部角色</span>
+                                <span style="font-size: 18px;">›</span>
+                            </button>
+                        </div>
+                        <h4 style="font-size: 14px; margin: 15px 0 10px 0; color: #333; padding-top: 15px; border-top: 1px solid #ddd;">功能模块选择</h4>
                         <p style="font-size: 12px; color: #666; margin-bottom: 15px;">勾选你想要保留的功能模块（未勾选的功能将从Prompt中移除）</p>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -28063,6 +29322,21 @@ ${summaryPrompt}`;
                             </label>
                             <input type="number" id="background-interval-input" min="0.1" step="0.1" value="60" style="width: 80px; text-align: center;">
                         </div>
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label style="font-size: 14px; font-weight: 600; margin-bottom: 5px; display: block;">
+                                或使用便捷时间设置
+                            </label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="number" id="background-interval-value" min="0.1" step="0.1" placeholder="数值" style="width: 70%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;">
+                                <select id="background-interval-unit" style="width: 30%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 16px;">
+                                    <option value="seconds">秒</option>
+                                    <option value="minutes">分钟</option>
+                                    <option value="hours">小时</option>
+                                    <option value="days">天</option>
+                                </select>
+                            </div>
+                            <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">填写此项会自动转换为秒并覆盖上方设置</small>
+                        </div>
                         <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                             <label for="background-probability-input" style="margin-bottom: 0;">
                                 角色唤醒概率 (%)
@@ -28119,6 +29393,125 @@ ${summaryPrompt}`;
                     });
                 }
                 
+                // 初始化角色选择按钮
+                const selectCharactersBtn = document.getElementById('select-characters-btn');
+                const selectedCharactersText = document.getElementById('selected-characters-text');
+                const characterModal = document.getElementById('simple-mode-character-modal');
+                const characterList = document.getElementById('simple-mode-character-list');
+                const allCharactersCheckbox = document.getElementById('simple-mode-all-characters');
+                const confirmCharacterSelectionBtn = document.getElementById('confirm-character-selection-btn');
+                const cancelCharacterSelectionBtn = document.getElementById('cancel-character-selection-btn');
+                
+                // 更新显示文本
+                function updateSelectedCharactersText() {
+                    if (!db.simplePromptCharacters || db.simplePromptCharacters.length === 0 || db.simplePromptCharacters.includes('__all__')) {
+                        selectedCharactersText.textContent = '全部角色';
+                    } else {
+                        const count = db.simplePromptCharacters.length;
+                        selectedCharactersText.textContent = `已选择 ${count} 个角色`;
+                    }
+                }
+                
+                // 填充角色列表
+                function populateCharacterList() {
+                    characterList.innerHTML = '';
+                    const normalCharacters = db.characters.filter(c => !c.isNPC);
+                    
+                    normalCharacters.forEach(char => {
+                        const label = document.createElement('label');
+                        label.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer;';
+                        label.innerHTML = `
+                            <input type="checkbox" class="character-checkbox" data-character-id="${char.id}" style="width: 18px; height: 18px; cursor: pointer;">
+                            <img src="${char.avatar}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                            <span style="font-size: 14px; color: #333;">${char.remarkName || char.name}</span>
+                        `;
+                        characterList.appendChild(label);
+                    });
+                    
+                    // 恢复选中状态
+                    if (db.simplePromptCharacters && !db.simplePromptCharacters.includes('__all__')) {
+                        document.querySelectorAll('.character-checkbox').forEach(cb => {
+                            if (db.simplePromptCharacters.includes(cb.dataset.characterId)) {
+                                cb.checked = true;
+                            }
+                        });
+                        allCharactersCheckbox.checked = false;
+                    } else {
+                        allCharactersCheckbox.checked = true;
+                        document.querySelectorAll('.character-checkbox').forEach(cb => {
+                            cb.disabled = true;
+                            cb.checked = false;
+                        });
+                    }
+                }
+                
+                // 点击选择角色按钮
+                if (selectCharactersBtn) {
+                    selectCharactersBtn.addEventListener('click', () => {
+                        populateCharacterList();
+                        characterModal.classList.add('visible');
+                    });
+                }
+                
+                // "全部角色"复选框变化
+                if (allCharactersCheckbox) {
+                    allCharactersCheckbox.addEventListener('change', () => {
+                        const checkboxes = document.querySelectorAll('.character-checkbox');
+                        if (allCharactersCheckbox.checked) {
+                            checkboxes.forEach(cb => {
+                                cb.disabled = true;
+                                cb.checked = false;
+                            });
+                        } else {
+                            checkboxes.forEach(cb => {
+                                cb.disabled = false;
+                            });
+                        }
+                    });
+                }
+                
+                // 确定按钮
+                if (confirmCharacterSelectionBtn) {
+                    confirmCharacterSelectionBtn.addEventListener('click', () => {
+                        if (allCharactersCheckbox.checked) {
+                            db.simplePromptCharacters = ['__all__'];
+                        } else {
+                            const selectedIds = Array.from(document.querySelectorAll('.character-checkbox:checked'))
+                                .map(cb => cb.dataset.characterId);
+                            
+                            if (selectedIds.length === 0) {
+                                showToast('请至少选择一个角色，或选择"全部角色"');
+                                return;
+                            }
+                            
+                            db.simplePromptCharacters = selectedIds;
+                        }
+                        
+                        updateSelectedCharactersText();
+                        characterModal.classList.remove('visible');
+                    });
+                }
+                
+                // 取消按钮
+                if (cancelCharacterSelectionBtn) {
+                    cancelCharacterSelectionBtn.addEventListener('click', () => {
+                        characterModal.classList.remove('visible');
+                    });
+                }
+                
+                // 点击背景关闭
+                if (characterModal) {
+                    characterModal.addEventListener('click', (e) => {
+                        if (e.target === characterModal) {
+                            characterModal.classList.remove('visible');
+                        }
+                    });
+                }
+                
+                // 初始化显示文本
+                updateSelectedCharactersText();
+
+                
                 // 加载功能模块选择
                 if (db.simplePromptFeatures) {
                     document.getElementById('feature-inner-thought').checked = db.simplePromptFeatures.innerThought !== false;
@@ -28160,6 +29553,34 @@ ${summaryPrompt}`;
                     backgroundSwitch.addEventListener('change', () => {
                         settingsContainer.style.display = backgroundSwitch.checked ? 'block' : 'none';
                     });
+                    
+                    // 添加便捷时间输入的实时转换功能
+                    const intervalValueInput = document.getElementById('background-interval-value');
+                    const intervalUnitSelect = document.getElementById('background-interval-unit');
+                    if (intervalValueInput && intervalUnitSelect) {
+                        const updateSecondsPreview = () => {
+                            const value = parseFloat(intervalValueInput.value);
+                            if (!isNaN(value) && value > 0) {
+                                const unit = intervalUnitSelect.value;
+                                let seconds = value;
+                                switch(unit) {
+                                    case 'minutes':
+                                        seconds = value * 60;
+                                        break;
+                                    case 'hours':
+                                        seconds = value * 3600;
+                                        break;
+                                    case 'days':
+                                        seconds = value * 86400;
+                                        break;
+                                }
+                                intervalInput.value = seconds;
+                            }
+                        };
+                        
+                        intervalValueInput.addEventListener('input', updateSecondsPreview);
+                        intervalUnitSelect.addEventListener('change', updateSecondsPreview);
+                    }
                     
                     // 测试后台发消息按钮
                     const testBackgroundBtn = document.getElementById('test-background-btn');
@@ -28591,6 +30012,8 @@ ${summaryPrompt}`;
                 if (simplePromptSwitch) {
                     db.simplePromptMode = simplePromptSwitch.checked;
                     
+                    // simplePromptCharacters 已经在弹窗确定时保存了，这里不需要再处理
+                    
                     // 保存功能模块选择
                     db.simplePromptFeatures = {
                         innerThought: document.getElementById('feature-inner-thought').checked,
@@ -28637,6 +30060,8 @@ ${summaryPrompt}`;
                 // 保存后台活动设置
                 const backgroundSwitch = document.getElementById('background-activity-switch');
                 const intervalInput = document.getElementById('background-interval-input');
+                const intervalValueInput = document.getElementById('background-interval-value');
+                const intervalUnitSelect = document.getElementById('background-interval-unit');
                 const probabilityInput = document.getElementById('background-probability-input');
                 const blockCooldownInput = document.getElementById('block-cooldown-input');
                 if (backgroundSwitch && intervalInput && probabilityInput && blockCooldownInput) {
@@ -28654,9 +30079,34 @@ ${summaryPrompt}`;
                     }
                     
                     db.enableBackgroundActivity = newEnableState;
-                    const intervalValue = parseFloat(intervalInput.value) || 60;
+                    
+                    // 处理时间间隔：优先使用便捷时间设置
+                    let intervalInSeconds = parseFloat(intervalInput.value) || 60;
+                    if (intervalValueInput && intervalUnitSelect && intervalValueInput.value) {
+                        const value = parseFloat(intervalValueInput.value);
+                        const unit = intervalUnitSelect.value;
+                        if (!isNaN(value) && value > 0) {
+                            switch(unit) {
+                                case 'seconds':
+                                    intervalInSeconds = value;
+                                    break;
+                                case 'minutes':
+                                    intervalInSeconds = value * 60;
+                                    break;
+                                case 'hours':
+                                    intervalInSeconds = value * 3600;
+                                    break;
+                                case 'days':
+                                    intervalInSeconds = value * 86400;
+                                    break;
+                            }
+                            // 同步更新秒输入框
+                            intervalInput.value = intervalInSeconds;
+                        }
+                    }
+                    
                     // 确保间隔大于0
-                    db.backgroundActivityInterval = intervalValue > 0 ? intervalValue : 60;
+                    db.backgroundActivityInterval = intervalInSeconds > 0 ? intervalInSeconds : 60;
                     db.backgroundActivityProbability = parseInt(probabilityInput.value) || 20;
                     db.blockCooldownHours = parseFloat(blockCooldownInput.value) || 1;
                     
@@ -33103,9 +34553,27 @@ ${summaryPrompt}`;
             const newTheme = document.getElementById('setting-group-theme-color').value;
             
             group.avatar = document.getElementById('setting-group-avatar-preview').src;
-            group.me.avatar = document.getElementById('setting-group-my-avatar-preview').src;
-            group.me.nickname = document.getElementById('setting-group-my-nickname').value;
-            group.me.persona = document.getElementById('setting-group-my-persona').value;
+            
+            // 检查用户人设是否被手动修改
+            const newMyAvatar = document.getElementById('setting-group-my-avatar-preview').src;
+            const newMyNickname = document.getElementById('setting-group-my-nickname').value;
+            const newMyPersona = document.getElementById('setting-group-my-persona').value;
+            
+            // 如果有关联的预设，检查是否被手动修改
+            if (group.me && group.me.presetId) {
+                const preset = db.personaPresets.find(p => p.id === group.me.presetId);
+                if (preset) {
+                    // 如果任何一个字段被手动修改，解除预设关联
+                    if (newMyAvatar !== preset.avatar || newMyNickname !== preset.name || newMyPersona !== preset.description) {
+                        delete group.me.presetId;
+                        console.log('✂️ 检测到手动修改，已解除与预设的关联');
+                    }
+                }
+            }
+            
+            group.me.avatar = newMyAvatar;
+            group.me.nickname = newMyNickname;
+            group.me.persona = newMyPersona;
             group.theme = newTheme;
             group.maxMemory = document.getElementById('setting-group-max-memory').value;
             group.autoSummaryEnabled = document.getElementById('setting-group-auto-summary-enabled').checked;
@@ -33277,6 +34745,7 @@ ${summaryPrompt}`;
                     wallpaperLibrary: db.wallpaperLibrary || [],
                     // 修复：确保简洁模式设置被包含
                     simplePromptMode: db.simplePromptMode || false,
+                    simplePromptCharacters: db.simplePromptCharacters || ['__all__'],
                     simplePromptFeatures: db.simplePromptFeatures || {},
                     // 添加版本信息用于兼容性检测
                     _exportVersion: '2.0',
@@ -33358,6 +34827,7 @@ ${summaryPrompt}`;
                     wallpaperLibrary: data.wallpaperLibrary || [],
                     // 修复：确保简洁模式设置被导入
                     simplePromptMode: data.simplePromptMode || false,
+                    simplePromptCharacters: data.simplePromptCharacters || ['__all__'],
                     simplePromptFeatures: data.simplePromptFeatures || {}
                 };
 
@@ -36093,6 +37563,17 @@ ${memoriesText}
                     const unitHint = document.getElementById('current-unit-hint');
                     unitHint.textContent = musicState.timeDisplayUnit === 'minutes' ? '当前显示：分钟' : '当前显示：小时';
                     
+                    // 保存到数据库
+                    if (musicState.activeChatId) {
+                        const chat = db.characters.find(c => c.id === musicState.activeChatId) ||
+                                    db.groups.find(g => g.id === musicState.activeChatId);
+                        if (chat) {
+                            if (!chat.musicData) chat.musicData = {totalTime: 0, timeDisplayUnit: 'hours'};
+                            chat.musicData.timeDisplayUnit = musicState.timeDisplayUnit;
+                            await saveData();
+                        }
+                    }
+                    
                     showToast(musicState.timeDisplayUnit === 'minutes' ? '已切换为分钟显示' : '已切换为小时显示');
                 } else if (action === 'reset-time') {
                     // 重置时长
@@ -36110,8 +37591,10 @@ ${memoriesText}
                         const chat = db.characters.find(c => c.id === musicState.activeChatId) ||
                                     db.groups.find(g => g.id === musicState.activeChatId);
                         if (chat) {
-                            if (!chat.musicData) chat.musicData = {totalTime: 0};
+                            if (!chat.musicData) chat.musicData = {totalTime: 0, timeDisplayUnit: 'hours'};
                             chat.musicData.totalTime = 0;
+                            // 保留当前的时长单位设置
+                            chat.musicData.timeDisplayUnit = musicState.timeDisplayUnit;
                             await saveData();
                         }
                     }
