@@ -272,6 +272,13 @@
             </div>
             
             <div class="message-input-area" id="message-input-default">
+                <button id="expand-sticker-bar-btn" class="icon-btn" style="display: none; margin-right: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                    </svg>
+                </button>
                 <input type="text" id="message-input" placeholder="输入消息...">
                 <button id="send-message-btn" class="icon-btn send-btn">➤</button>
                 <button id="get-reply-btn" class="icon-btn">
@@ -310,6 +317,19 @@
                 </div>
             </div>
             <div class="sticker-grid" id="sticker-grid-container"></div>
+        </div>
+        
+        <!-- 聊天拓展栏弹窗 -->
+        <div id="sticker-bar-modal" class="modal-overlay">
+            <div class="modal-window" style="max-width: 500px; max-height: 70vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
+                    <h3 style="margin: 0; color: var(--primary-color);">聊天拓展功能</h3>
+                    <button class="btn btn-neutral" id="close-sticker-bar-modal-btn" style="padding: 6px 12px;">关闭</button>
+                </div>
+                <div id="sticker-bar-modal-content" style="flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; padding: 10px;">
+                    <!-- 按钮将通过JavaScript动态生成 -->
+                </div>
+            </div>
         </div>
     </div>
     <div id="world-book-screen" class="screen">
@@ -1429,7 +1449,7 @@
                         <label for="setting-char-bg-check-interval" style="font-size: 14px; font-weight: 600; margin-bottom: 5px; display: block;">
                             后台活动检测间隔（秒）
                         </label>
-                        <input type="number" id="setting-char-bg-check-interval" min="10" step="10" placeholder="留空使用全局设置" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                        <input type="number" id="setting-char-bg-check-interval" step="1" placeholder="留空使用全局设置" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
                         <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">留空则使用API设置中的全局值</small>
                     </div>
                     
@@ -1449,13 +1469,7 @@
                         <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">填写此项会自动转换为秒并覆盖上方设置</small>
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="setting-char-bg-trigger-chance" style="font-size: 14px; font-weight: 600; margin-bottom: 5px; display: block;">
-                            角色唤醒概率（%）
-                        </label>
-                        <input type="number" id="setting-char-bg-trigger-chance" min="0" max="100" step="1" placeholder="留空使用全局设置" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
-                        <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">留空则使用API设置中的全局值</small>
-                    </div>
+
                 </div>
                 
                 <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
@@ -3678,8 +3692,8 @@
     
     <!-- Convert CHAR to NPC Modal -->
     <div id="convert-char-to-npc-modal" class="modal-overlay">
-        <div class="modal-window" style="max-width: 600px; max-height: 80vh;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div class="modal-window" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
                 <h3 style="margin: 0;">转换CHAR为NPC</h3>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" id="convert-char-select-all-btn" style="padding: 6px 12px;">全选</button>
@@ -3687,10 +3701,10 @@
                     <button class="btn btn-neutral" id="close-convert-char-modal-btn" style="padding: 6px 12px;">取消</button>
                 </div>
             </div>
-            <small style="color: #888; font-size: 12px; display: block; margin-bottom: 15px;">
+            <small style="color: #888; font-size: 12px; display: block; margin-bottom: 15px; flex-shrink: 0;">
                 选择要转换为NPC的角色，转换后将使用角色的名称、头像和人设作为NPC信息
             </small>
-            <div id="convert-char-list" style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background-color: white;">
+            <div id="convert-char-list" style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #ddd; border-radius: 4px; padding: 0; background-color: white;">
                 <div style="color: #999; text-align: center; padding: 20px;">暂无可转换的角色</div>
             </div>
         </div>

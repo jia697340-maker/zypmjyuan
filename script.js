@@ -1,5 +1,5 @@
 ﻿// ===== 版本信息 =====
-    const APP_VERSION = '0.0.3';
+    const APP_VERSION = '0.0.4';
     const APP_BUILD_DATE = '2025-12-28';
     
     // 在控制台输出版本信息
@@ -1007,20 +1007,18 @@
                     // 将消息分块存储到 OPFS: messages/chatType_chatId/chunk_0.json
                     const dirName = `messages/${chatType}_${chatId}`;
                     
-                    // 先删除旧的分块文件
-                    const oldFiles = await this.listFiles(dirName);
-                    for (const file of oldFiles) {
-                        await this.deleteFile(dirName, file);
-                    }
-
-                    // 将消息分块存储
+                    // 【关键修复】先保存所有新分块到临时文件，确保全部成功后再替换旧文件
                     const chunks = [];
+                    const tempChunks = [];
+                    
+                    // 第一步：保存所有分块到临时文件
                     for (let i = 0; i < processedMessages.length; i += this.chunkSize) {
                         const chunkMessages = processedMessages.slice(i, i + this.chunkSize);
                         const chunkIndex = Math.floor(i / this.chunkSize);
                         const fileName = `chunk_${chunkIndex}.json`;
+                        const tempFileName = `temp_chunk_${chunkIndex}.json`;
 
-                        await this.writeFile(dirName, fileName, {
+                        const success = await this.writeFile(dirName, tempFileName, {
                             id: `${chatId}_${chatType}_${chunkIndex}`,
                             chatId: chatId,
                             chatType: chatType,
@@ -1029,17 +1027,66 @@
                             timestamp: Date.now()
                         });
 
+                        if (!success) {
+                            throw new Error(`保存临时分块 ${tempFileName} 失败`);
+                        }
+
                         chunks.push(fileName);
+                        tempChunks.push(tempFileName);
+                    }
+
+                    // 第二步：验证所有临时文件都保存成功
+                    console.log(`✅ 所有 ${tempChunks.length} 个临时分块保存成功，开始替换旧文件...`);
+
+                    // 第三步：删除旧的分块文件
+                    const oldFiles = await this.listFiles(dirName);
+                    for (const file of oldFiles) {
+                        if (!file.startsWith('temp_')) {
+                            await this.deleteFile(dirName, file);
+                        }
+                    }
+
+                    // 第四步：将临时文件重命名为正式文件
+                    for (let i = 0; i < tempChunks.length; i++) {
+                        const tempFileName = tempChunks[i];
+                        const fileName = chunks[i];
+                        
+                        // 读取临时文件
+                        const data = await this.readFile(dirName, tempFileName);
+                        if (!data) {
+                            throw new Error(`读取临时文件 ${tempFileName} 失败`);
+                        }
+                        
+                        // 写入正式文件
+                        const success = await this.writeFile(dirName, fileName, data);
+                        if (!success) {
+                            throw new Error(`写入正式文件 ${fileName} 失败`);
+                        }
+                        
+                        // 删除临时文件
+                        await this.deleteFile(dirName, tempFileName);
                     }
 
                     // 更新缓存（缓存原始消息，不是处理后的）
                     const cacheKey = `messages_${chatId}_${chatType}`;
                     this.updateCache(cacheKey, messages);
 
-                    console.log(`消息已分块保存: ${chatId} (${chunks.length}个分块)`);
+                    console.log(`✅ 消息已安全保存: ${chatId} (${chunks.length}个分块，共${messages.length}条消息)`);
                     return true;
                 } catch (error) {
-                    console.error('保存消息失败:', error);
+                    console.error('❌ 保存消息失败:', error);
+                    // 清理可能残留的临时文件
+                    try {
+                        const dirName = `messages/${chatType}_${chatId}`;
+                        const files = await this.listFiles(dirName);
+                        for (const file of files) {
+                            if (file.startsWith('temp_')) {
+                                await this.deleteFile(dirName, file);
+                            }
+                        }
+                    } catch (cleanupError) {
+                        console.error('清理临时文件失败:', cleanupError);
+                    }
                     return false;
                 }
             }
@@ -2674,6 +2721,7 @@
             setupApiSettingsApp();
             setupWallpaperApp();
             await setupStickerSystem();
+            setupStickerBarModal();
             setupVoiceMessageSystem();
             setupPhotoVideoSystem();
             setupImageRecognition();
@@ -2856,17 +2904,10 @@
                         return; // 跳过未启用后台活动的角色
                     }
                     
-                    // 优先使用角色专属的唤醒概率，如果没有则使用全局设置
-                    const probability = (character.backgroundActivityProbability !== undefined ? 
-                                        character.backgroundActivityProbability : 
-                                        (db.backgroundActivityProbability || 20)) / 100;
-                    
-                    // 这里的随机触发逻辑保持不变，因为我们不希望所有好友同时行动
-                    if (Math.random() < probability) {
-                        const characterName = character.remarkName || character.realName || '未命名角色';
-                        console.log(`角色 "${characterName}" 被唤醒（概率: ${(probability * 100).toFixed(0)}%），准备独立行动...`);
-                        triggerBackgroundAiAction(character.id);
-                    }
+                    // 每次检测必定触发（100%唤醒）
+                    const characterName = character.remarkName || character.realName || '未命名角色';
+                    console.log(`角色 "${characterName}" 被唤醒（100%必定触发），准备独立行动...`);
+                    triggerBackgroundAiAction(character.id);
                 }
                 
                 // 检查3：处理【CHAR主动拉群】功能
@@ -2900,12 +2941,10 @@
                         return; // 总成员数不足2个
                     }
                     
-                    // 5%的概率触发拉群（避免过于频繁）
-                    if (Math.random() < 0.05) {
-                        const characterName = character.remarkName || character.realName || '未命名角色';
-                        console.log(`角色 "${characterName}" 准备主动拉群...`);
-                        triggerAutoGroupCreation(character.id);
-                    }
+                    // 每次检测必定触发（100%唤醒）
+                    const characterName = character.remarkName || character.realName || '未命名角色';
+                    console.log(`角色 "${characterName}" 准备主动拉群（100%必定触发）...`);
+                    triggerAutoGroupCreation(character.id);
                 }
             });
         }
@@ -3132,11 +3171,15 @@ ${timeAwarenessContext}
                     if (currentChatId === characterId && currentChatType === 'private' && character._fullHistoryLoaded) {
                         character.history.push(...messagesToSend);
                         await dataStorage.saveChatMessages(characterId, 'private', character.history);
+                        // 【修复】立即刷新聊天界面，显示新消息
+                        renderMessages(false, true);
                     } else {
                         // 否则使用增量保存，避免加载完整历史
                         const existingMessages = await dataStorage.getChatMessages(characterId, 'private');
                         existingMessages.push(...messagesToSend);
                         await dataStorage.saveChatMessages(characterId, 'private', existingMessages);
+                        // 【修复】标记需要重新加载历史，确保下次打开时能看到新消息
+                        character._fullHistoryLoaded = false;
                     }
 
                     // 更新未读计数
@@ -3449,6 +3492,9 @@ ${npcListInfo}
                 
                 // 让CHAR和NPC主动发言（会在内部追加消息并保存）
                 await triggerGroupInitialMessages(groupId, character, selectedNPCs, decision.reason, includeUser, existingMessages);
+
+                // 【修复】标记需要重新加载历史，确保下次打开时能看到新消息
+                newGroup._fullHistoryLoaded = false;
 
                 // 更新未读计数
                 newGroup.unreadCount = selectedNPCs.length + 1; // CHAR + 每个NPC至少一条消息
@@ -3775,7 +3821,18 @@ ${contextSummary}
                     timestamp: Date.now(),
                     isHidden: true
                 };
-                character.history.push(hiddenMessage);
+
+                // 【修复】使用dataStorage保存消息，确保缓存更新
+                if (currentChatId === characterId && currentChatType === 'private' && character._fullHistoryLoaded) {
+                    character.history.push(hiddenMessage);
+                    await dataStorage.saveChatMessages(characterId, 'private', character.history);
+                } else {
+                    const existingMessages = await dataStorage.getChatMessages(characterId, 'private');
+                    existingMessages.push(hiddenMessage);
+                    await dataStorage.saveChatMessages(characterId, 'private', existingMessages);
+                    // 【修复】标记需要重新加载历史
+                    character._fullHistoryLoaded = false;
+                }
 
                 await saveData();
 
@@ -5282,48 +5339,11 @@ ${contextSummary}
             <div class="home-pages-container" id="home-pages-container">
                 <!-- 第一页 -->
                 <div class="home-page">
-                    <!-- 顶部巨大模糊背景 - 独立美化组件 -->
+                    <!-- 顶部小组件 - 新设计 -->
                     <div class="top-blur-container">
-                        <div class="top-search-wrapper">
-                            <svg class="top-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <path d="m21 21-4.35-4.35"></path>
-                            </svg>
-                            <input type="text" class="top-search-bar" id="top-search-bar" placeholder="想到漫长一生无法和你相见，我就忍不住哽咽 @ my love" readonly style="cursor: pointer;">
-                        </div>
-                        <div class="top-avatar-container">
-                            <div class="top-avatar-column">
-                                <div class="top-avatar" id="top-avatar" style="cursor: pointer;"></div>
-                                <!-- 星期几显示 -->
-                                <div class="weekday-badge" id="weekday-badge">星期一</div>
-                            </div>
-                            <div class="top-avatar-info">
-                                <div class="top-avatar-nickname" id="top-avatar-nickname" style="cursor: pointer;">昵称</div>
-                                <div class="top-avatar-datetime" id="top-avatar-datetime">2025-01-01 12:00</div>
-                                <!-- 圆角文案框 -->
-                                <div class="top-text-badge" id="top-text-badge">宝宝生日还有69天</div>
-                            </div>
-                            <!-- 顶部图标组 - 移到右下角 -->
-                            <div class="top-icons-group">
-                                <button class="top-icon-btn" id="top-at-btn" title="@">
-                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8v1.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.93 0 3.5-1.57 3.5-3.5V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
-                                    </svg>
-                                </button>
-                                <button class="top-icon-btn" id="top-message-btn" title="消息">
-                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                                        <circle cx="8" cy="10" r="1.5"/>
-                                        <circle cx="12" cy="10" r="1.5"/>
-                                        <circle cx="16" cy="10" r="1.5"/>
-                                    </svg>
-                                </button>
-                                <button class="top-icon-btn" id="top-heart-btn" title="喜欢">
-                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                                    </svg>
-                                </button>
-                            </div>
+                        <div class="top-avatar" id="top-avatar"></div>
+                        <div class="top-widget-container">
+                            <!-- 内容区域，暂时留空 -->
                         </div>
                     </div>
                     <div class="time-widget"><div class="time" id="time-display"></div><div class="date" id="date-display"></div></div>
@@ -5364,63 +5384,19 @@ ${contextSummary}
             // 应用顶栏背景和模糊效果
             const topBlurContainer = document.querySelector('.top-blur-container');
             if (topBlurContainer) {
-                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
-                
                 // 清除之前的样式
                 topBlurContainer.style.backgroundImage = 'none';
                 topBlurContainer.style.backgroundColor = '';
                 topBlurContainer.style.position = 'relative';
-                topBlurContainer.style.overflow = 'hidden';
+                topBlurContainer.style.overflow = 'visible'; // 改为 visible，让头像可以完全露出
                 
-                // 移除旧的伪元素样式
+                // 移除旧的伪元素样式（不再需要模糊背景）
                 let styleEl = document.getElementById('top-bar-blur-style');
                 if (styleEl) {
                     styleEl.remove();
                 }
                 
-                // 背景图和纯色二选一
-                if (db.topBarBackground) {
-                    // 使用背景图
-                    styleEl = document.createElement('style');
-                    styleEl.id = 'top-bar-blur-style';
-                    styleEl.textContent = `
-                        .top-blur-container::before {
-                            content: '';
-                            position: absolute;
-                            top: -10px;
-                            left: -10px;
-                            right: -10px;
-                            bottom: -10px;
-                            background-image: url(${db.topBarBackground});
-                            background-size: cover;
-                            background-position: center;
-                            filter: blur(${blurValue}px);
-                            z-index: -1;
-                        }
-                    `;
-                    document.head.appendChild(styleEl);
-                } else if (db.topBarColor) {
-                    // 使用纯色（纯色也支持模糊）
-                    styleEl = document.createElement('style');
-                    styleEl.id = 'top-bar-blur-style';
-                    styleEl.textContent = `
-                        .top-blur-container::before {
-                            content: '';
-                            position: absolute;
-                            top: -10px;
-                            left: -10px;
-                            right: -10px;
-                            bottom: -10px;
-                            background-color: ${db.topBarColor};
-                            filter: blur(${blurValue}px);
-                            z-index: -1;
-                        }
-                    `;
-                    document.head.appendChild(styleEl);
-                } else {
-                    // 使用默认背景
-                    topBlurContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-                }
+                // 不再添加任何背景模糊效果，保持纯白色
             }
             
             // 应用时间和日期显示设置（与顶栏小组件互斥）
@@ -5795,6 +5771,30 @@ ${contextSummary}
                     }
                     
                     showToast(db.showLockScreenTime ? '已切换到原本的时间和年月日' : '已切换到顶栏小组件');
+                }
+                
+                // 收起聊天拓展栏开关
+                if (e.target.id === 'collapse-sticker-bar-toggle') {
+                    db.collapseStickerBar = e.target.checked;
+                    await saveData();
+                    
+                    // 更新聊天拓展栏的显示状态
+                    const stickerBar = document.getElementById('sticker-bar');
+                    const expandStickerBarBtn = document.getElementById('expand-sticker-bar-btn');
+                    
+                    if (stickerBar && expandStickerBarBtn) {
+                        if (e.target.checked) {
+                            // 隐藏拓展栏，显示展开按钮
+                            stickerBar.style.display = 'none';
+                            expandStickerBarBtn.style.display = 'flex';
+                        } else {
+                            // 显示拓展栏，隐藏展开按钮
+                            stickerBar.style.display = 'flex';
+                            expandStickerBarBtn.style.display = 'none';
+                        }
+                    }
+                    
+                    showToast(db.collapseStickerBar ? '聊天拓展栏已收起' : '聊天拓展栏已展开');
                 }
                 
                 // 重置主页面所有外观设置按钮
@@ -6949,6 +6949,19 @@ ${contextSummary}
                     </div>
                 </div>
                 
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #fff8fa; border-radius: 12px; border: 1px solid #fce4ec;">
+                        <label for="collapse-sticker-bar-toggle" style="font-weight: 600; margin: 0; color: var(--text-color); flex-grow: 1;">收起聊天拓展栏</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="collapse-sticker-bar-toggle" ${db.collapseStickerBar ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p style="font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 0; line-height: 1.5;">
+                        开启后，聊天拓展栏将被收起，在输入框左侧会出现一个按钮，点击可展开所有功能
+                    </p>
+                </div>
+                
                 <!-- 重置主页面外观设置按钮 -->
                 <div class="form-group" style="margin-bottom: 20px;">
                     <button type="button" class="btn btn-danger" id="reset-appearance-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
@@ -7570,8 +7583,6 @@ ${contextSummary}
                 const topBlurContainer = document.querySelector('.top-blur-container');
                 if (!topBlurContainer) return;
                 
-                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
-                
                 // 清除之前的样式
                 topBlurContainer.style.backgroundImage = 'none';
                 topBlurContainer.style.backgroundColor = '';
@@ -7584,48 +7595,47 @@ ${contextSummary}
                     styleEl.remove();
                 }
                 
-                // 背景图和纯色二选一
+                const blurValue = db.topBarBlur !== undefined ? db.topBarBlur : 30;
+                
+                // 如果有背景图
                 if (db.topBarBackground) {
-                    // 使用背景图
                     styleEl = document.createElement('style');
                     styleEl.id = 'top-bar-blur-style';
                     styleEl.textContent = `
                         .top-blur-container::before {
                             content: '';
                             position: absolute;
-                            top: -10px;
-                            left: -10px;
-                            right: -10px;
-                            bottom: -10px;
-                            background-image: url(${db.topBarBackground});
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
+                            background-image: url('${db.topBarBackground}');
                             background-size: cover;
                             background-position: center;
                             filter: blur(${blurValue}px);
-                            z-index: -1;
+                            z-index: 0;
                         }
                     `;
                     document.head.appendChild(styleEl);
-                } else if (db.topBarColor) {
-                    // 使用纯色（纯色也支持模糊）
+                }
+                // 如果有纯色背景
+                else if (db.topBarColor) {
                     styleEl = document.createElement('style');
                     styleEl.id = 'top-bar-blur-style';
                     styleEl.textContent = `
                         .top-blur-container::before {
                             content: '';
                             position: absolute;
-                            top: -10px;
-                            left: -10px;
-                            right: -10px;
-                            bottom: -10px;
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
                             background-color: ${db.topBarColor};
                             filter: blur(${blurValue}px);
-                            z-index: -1;
+                            z-index: 0;
                         }
                     `;
                     document.head.appendChild(styleEl);
-                } else {
-                    // 使用默认背景
-                    topBlurContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
                 }
             };
             
@@ -13961,7 +13971,13 @@ ${contextSummary}
                                     timestamp: Date.now(),
                                     isHidden: true
                                 };
-                                character.history.push(hiddenMessage);
+
+                                // 【修复】使用dataStorage保存消息，确保缓存更新
+                                const existingMessages = await dataStorage.getChatMessages(currentChatId, 'private');
+                                existingMessages.push(hiddenMessage);
+                                await dataStorage.saveChatMessages(currentChatId, 'private', existingMessages);
+                                // 【修复】标记需要重新加载历史
+                                character._fullHistoryLoaded = false;
                                 
                                 await saveData();
                                 renderChatList();
@@ -15438,7 +15454,7 @@ ${contextSummary}
             const chat = (type === 'private') ? db.characters.find(c => c.id === chatId) : db.groups.find(g => g.id === chatId);
             if (!chat) return;
             
-            // 【性能优化】标记是否已加载完整历史，避免重复加载
+            // 【修复】如果标记为需要重新加载，或者从未加载过，则从数据库加载完整历史
             if (!chat._fullHistoryLoaded) {
                 const fullHistory = await dataStorage.getChatMessages(chatId, type);
                 chat.history = fullHistory;
@@ -20839,6 +20855,85 @@ ${contextSummary}
             updateCategorySelects();
         }
 
+        // ===== 聊天拓展栏弹窗系统 =====
+        function setupStickerBarModal() {
+            const expandBtn = document.getElementById('expand-sticker-bar-btn');
+            const modal = document.getElementById('sticker-bar-modal');
+            const closeBtn = document.getElementById('close-sticker-bar-modal-btn');
+            const modalContent = document.getElementById('sticker-bar-modal-content');
+            const stickerBar = document.getElementById('sticker-bar');
+            
+            // 定义所有拓展功能按钮
+            const stickerBarButtons = [
+                { id: 'regenerate-response-btn', title: '重说', icon: '<svg viewBox="0 0 24 24"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg>' },
+                { id: 'stop-generation-btn', title: '停止', icon: '<svg viewBox="0 0 24 24"><path d="M6,6H18V18H6V6Z" fill="currentColor"/></svg>' },
+                { id: 'sticker-toggle-btn', title: '表情', icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>' },
+                { id: 'photo-video-btn', title: '图片', icon: '<svg viewBox="0 0 24 24"><path d="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z"/></svg>' },
+                { id: 'image-recognition-btn', title: '识图', icon: '<svg viewBox="0 0 24 24"><path d="M21.58,16.09L19.66,18L18.24,16.58L21,13.83C21.39,13.44 22,13.44 22.39,13.83L23.17,14.61C23.56,15 23.56,15.64 23.17,16.03L21.58,17.62M20.13,12.25L18.71,13.66L20.41,15.36L21.83,13.94L20.13,12.25M5.93,19H5C3.9,19 3,18.1 3,17V5C3,3.9 3.9,3 5,3H19C20.1,3 21,3.9 21,5V11.08L19,13.08V5H5V17H5.93L13.5,9.43L16.29,12.21L12.08,16.42L5.93,19Z"/></svg>' },
+                { id: 'camera-capture-btn', title: '拍照', icon: '<svg viewBox="0 0 24 24"><path d="M20,4H16.83L15,2H9L7.17,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M20,18H4V6H8.05L9.88,4H14.12L15.95,6H20V18M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15M19,8A1,1 0 0,0 18,9A1,1 0 0,0 19,10A1,1 0 0,0 20,9A1,1 0 0,0 19,8Z"/></svg>' },
+                { id: 'voice-message-btn', title: '语音', icon: '<svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>' },
+                { id: 'wallet-btn', title: '钱包', icon: '<svg viewBox="0 0 24 24"><path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM20 18H4V8H20V18ZM4 6H20V6H4Z"/></svg>' },
+                { id: 'gift-btn', title: '礼物', icon: '<svg viewBox="0 0 24 24"><path d="M20,8L12,13L4,8V6H20M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M12.5,18C12.5,17.29 12.17,16.65 11.64,16.27C12.17,15.89 12.5,15.26 12.5,14.55C12.5,13.6 11.83,12.79 11,12.58V12H13V10H11V8H13V6H11V5C11,4.45 10.55,4 10,4H8C7.45,4 7,4.45 7,5V6H9V8H7V10H9V12H7V12.58C6.17,12.79 5.5,13.6 5.5,14.55C5.5,15.26 5.83,15.89 6.36,16.27C5.83,16.65 5.5,17.29 5.5,18H12.5Z"/></svg>' },
+                { id: 'time-skip-btn', title: '跳过', icon: '<svg viewBox="0 0 24 24"><path d="M4 5v14l7-7-7-7zm9 0v14l7-7-7-7z"></path></svg>' },
+                { id: 'waimai-btn', title: '外卖', icon: '<svg viewBox="0 0 24 24"><path d="M18.06 23h1.66c.84 0 1.53-.65 1.63-1.47L23 5.05h-5V1h-1.97v4.05h-4.97l.3 2.34c1.71.47 3.31 1.32 4.27 2.26 1.44 1.42 2.43 2.89 2.43 5.29V23zM1 22v-1h15.03v1c0 .54-.45 1-1.03 1H2c-.55 0-1-.46-1-1zm15.03-7C16.03 7 1 7 1 15h15.03zM1 17h15v2H1z"/></svg>' },
+                { id: 'share-link-btn', title: '链接', icon: '<svg viewBox="0 0 24 24"><path d="M3.9,12C3.9,10.29 5.29,8.9 7,8.9H11V7H7A5,5 0 0,0 2,12A5,5 0 0,0 7,17H11V15.1H7C5.29,15.1 3.9,13.71 3.9,12M8,13H16V11H8V13M17,7H13V8.9H17C18.71,8.9 20.1,10.29 20.1,12C20.1,13.71 18.71,15.1 17,15.1H13V17H17A5,5 0 0,0 22,12A5,5 0 0,0 17,7Z"/></svg>' },
+                { id: 'share-location-btn', title: '位置', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>' }
+            ];
+            
+            // 渲染弹窗内容
+            function renderModalContent() {
+                modalContent.innerHTML = '';
+                stickerBarButtons.forEach(btn => {
+                    const btnEl = document.createElement('button');
+                    btnEl.className = 'sticker-bar-modal-btn';
+                    btnEl.innerHTML = `${btn.icon}<span>${btn.title}</span>`;
+                    btnEl.addEventListener('click', () => {
+                        // 触发原始按钮的点击事件
+                        const originalBtn = document.getElementById(btn.id);
+                        if (originalBtn) {
+                            originalBtn.click();
+                        }
+                        // 关闭弹窗
+                        modal.classList.remove('visible');
+                    });
+                    modalContent.appendChild(btnEl);
+                });
+            }
+            
+            // 展开按钮点击事件
+            if (expandBtn) {
+                expandBtn.addEventListener('click', () => {
+                    renderModalContent();
+                    modal.classList.add('visible');
+                });
+            }
+            
+            // 关闭按钮点击事件
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    modal.classList.remove('visible');
+                });
+            }
+            
+            // 点击背景关闭
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.classList.remove('visible');
+                    }
+                });
+            }
+            
+            // 初始化显示状态
+            if (db.collapseStickerBar) {
+                if (stickerBar) stickerBar.style.display = 'none';
+                if (expandBtn) expandBtn.style.display = 'flex';
+            } else {
+                if (stickerBar) stickerBar.style.display = 'flex';
+                if (expandBtn) expandBtn.style.display = 'none';
+            }
+        }
+
         function setupVoiceMessageSystem() {
             voiceMessageBtn.addEventListener('click', () => {
                 sendVoiceForm.reset();
@@ -25545,12 +25640,12 @@ ${summaryPrompt}`;
                     const charAvatar = char.avatar || 'https://i.postimg.cc/GtbTnxhP/o-o-1.jpg';
                     const charPersona = char.persona || '暂无人设';
                     
-                    html += `<div class="convert-char-item" data-char-id="${char.id}" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s;">`;
-                    html += `<input type="checkbox" class="convert-char-checkbox" value="${char.id}" style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer;">`;
+                    html += `<div class="convert-char-item" data-char-id="${char.id}">`;
+                    html += `<input type="checkbox" class="convert-char-checkbox" value="${char.id}" style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;">`;
                     html += `<img src="${charAvatar}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 12px; flex-shrink: 0; background-color: #eee;">`;
-                    html += `<div style="flex: 1; min-width: 0;">`;
-                    html += `<div style="font-weight: 600; font-size: 15px; margin-bottom: 4px; color: #333;">${charName}</div>`;
-                    html += `<div style="font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${charPersona.substring(0, 50)}...</div>`;
+                    html += `<div style="flex: 1; min-width: 0; overflow: hidden; max-width: 100%;">`;
+                    html += `<div style="font-weight: 600; font-size: 15px; margin-bottom: 4px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${charName}</div>`;
+                    html += `<div style="font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${charPersona.substring(0, 80)}${charPersona.length > 80 ? '...' : ''}</div>`;
                     html += `</div>`;
                     html += `</div>`;
                 });
@@ -28863,7 +28958,6 @@ ${summaryPrompt}`;
                 
                 // 加载角色专属的后台活动设置
                 document.getElementById('setting-char-bg-check-interval').value = e.backgroundActivityInterval !== undefined ? e.backgroundActivityInterval : '';
-                document.getElementById('setting-char-bg-trigger-chance').value = e.backgroundActivityProbability !== undefined ? e.backgroundActivityProbability : '';
                 
                 // 根据后台活动开关显示/隐藏设置
                 const bgSettingsContainer = document.getElementById('char-background-activity-settings');
@@ -29092,9 +29186,6 @@ ${summaryPrompt}`;
                 }
                 
                 e.backgroundActivityInterval = !isNaN(bgCheckInterval) && bgCheckInterval > 0 ? bgCheckInterval : undefined;
-                
-                const bgTriggerChance = parseInt(document.getElementById('setting-char-bg-trigger-chance').value);
-                e.backgroundActivityProbability = !isNaN(bgTriggerChance) && bgTriggerChance >= 0 && bgTriggerChance <= 100 ? bgTriggerChance : undefined;
                 
                 const cooldownValue = parseFloat(document.getElementById('setting-char-block-cooldown').value);
                 e.blockCooldownHours = !isNaN(cooldownValue) && cooldownValue > 0 ? cooldownValue : undefined;
@@ -29349,20 +29440,12 @@ ${summaryPrompt}`;
                             </div>
                             <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">填写此项会自动转换为秒并覆盖上方设置</small>
                         </div>
-                        <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                            <label for="background-probability-input" style="margin-bottom: 0;">
-                                角色唤醒概率 (%)
-                                <p style="font-size: 12px; font-weight: normal; color: #999; margin-top: 5px;">
-                                    每次检测时，角色被唤醒的概率。建议值 10-30。
-                                </p>
-                            </label>
-                            <input type="number" id="background-probability-input" min="1" max="100" value="20" style="width: 80px; text-align: center;">
-                        </div>
+
                         <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                             <label for="block-cooldown-input" style="margin-bottom: 0;">
                                 AI被拉黑后冷静期 (小时)
                                 <p style="font-size: 12px; font-weight: normal; color: #999; margin-top: 5px;">
-                                    被拉黑超过这个时间后，AI才有几率重新申请好友。
+                                    被拉黑超过这个时间后，AI会自动重新申请好友。
                                 </p>
                             </label>
                             <input type="number" id="block-cooldown-input" min="0.1" step="0.1" value="1" style="width: 80px; text-align: center;">
@@ -29384,7 +29467,6 @@ ${summaryPrompt}`;
                 const messageCountMaxInput = document.getElementById('message-count-max-input');
                 const backgroundSwitch = document.getElementById('background-activity-switch');
                 const intervalInput = document.getElementById('background-interval-input');
-                const probabilityInput = document.getElementById('background-probability-input');
                 const blockCooldownInput = document.getElementById('block-cooldown-input');
                 const settingsContainer = document.getElementById('background-settings-container');
                 
@@ -29552,10 +29634,9 @@ ${summaryPrompt}`;
                     messageCountMaxInput.value = db.messageCountMax || '';
                 }
                 
-                if (backgroundSwitch && intervalInput && probabilityInput && blockCooldownInput && settingsContainer) {
+                if (backgroundSwitch && intervalInput && blockCooldownInput && settingsContainer) {
                     backgroundSwitch.checked = db.enableBackgroundActivity || false;
                     intervalInput.value = db.backgroundActivityInterval || 60;
-                    probabilityInput.value = db.backgroundActivityProbability || 20;
                     blockCooldownInput.value = db.blockCooldownHours || 1;
                     
                     // 根据开关状态显示/隐藏设置项
@@ -30074,9 +30155,8 @@ ${summaryPrompt}`;
                 const intervalInput = document.getElementById('background-interval-input');
                 const intervalValueInput = document.getElementById('background-interval-value');
                 const intervalUnitSelect = document.getElementById('background-interval-unit');
-                const probabilityInput = document.getElementById('background-probability-input');
                 const blockCooldownInput = document.getElementById('block-cooldown-input');
-                if (backgroundSwitch && intervalInput && probabilityInput && blockCooldownInput) {
+                if (backgroundSwitch && intervalInput && blockCooldownInput) {
                     const newEnableState = backgroundSwitch.checked;
                     const oldEnableState = db.enableBackgroundActivity || false;
                     
@@ -30119,14 +30199,13 @@ ${summaryPrompt}`;
                     
                     // 确保间隔大于0
                     db.backgroundActivityInterval = intervalInSeconds > 0 ? intervalInSeconds : 60;
-                    db.backgroundActivityProbability = parseInt(probabilityInput.value) || 20;
                     db.blockCooldownHours = parseFloat(blockCooldownInput.value) || 1;
                     
                     // 动态启动或停止后台活动
                     stopBackgroundSimulation();
                     if (db.enableBackgroundActivity) {
                         startBackgroundSimulation();
-                        console.log(`后台活动已启动，间隔: ${db.backgroundActivityInterval}秒，唤醒概率: ${db.backgroundActivityProbability}%`);
+                        console.log(`后台活动已启动，间隔: ${db.backgroundActivityInterval}秒，唤醒概率: 100%（必定触发）`);
                     } else {
                         console.log("后台活动已停止");
                     }

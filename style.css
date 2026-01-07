@@ -468,242 +468,179 @@
             z-index: 10;
         }
 
-        /* 顶部巨大模糊背景 - 独立美化组件 */
+        /* 顶部小组件 - 新设计 */
         .top-blur-container {
-            width: calc(100% - 40px);
-            margin: 20px 20px 0 20px;
-            min-height: 210px;
-            height: auto;
-            background-color: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 18px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
+            width: calc(100% - 5vw);
+            margin: 2vh 2.5vw 0 2.5vw;
             position: relative;
-            overflow: hidden;
-        }
-        
-        /* 确保子元素在背景之上 */
-        .top-blur-container > * {
-            position: relative;
-            z-index: 1;
-        }
-
-        /* 搜索栏容器 */
-        .top-search-wrapper {
-            position: relative;
-            width: 100%;
-            height: 24px;
-        }
-
-        /* 搜索图标 */
-        .top-search-icon {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 14px;
-            height: 14px;
-            opacity: 0.5;
-        }
-
-        /* 顶部细长搜索栏 */
-        .top-search-bar {
-            width: 100%;
-            height: 24px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: none;
-            border-radius: 12px;
-            padding: 0 12px 0 32px;
-            font-size: 12px;
-            color: #666;
-            outline: none;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        }
-
-        .top-search-bar::placeholder {
-            color: #999;
-        }
-
-        /* 圆形头像区域 */
-        .top-avatar-container {
-            margin-top: 15px;
-            display: flex;
-            align-items: flex-start;
-            justify-content: flex-start;
-            padding: 0 5px;
-            gap: 12px;
-        }
-
-        /* 头像列（包含头像和星期几） */
-        .top-avatar-column {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
         }
 
+        /* 头像 - 纯白色圆形，正好50%在外面50%在里面 */
         .top-avatar {
-            width: 70px;
-            height: 70px;
+            width: 15vw;
+            height: 15vw;
+            max-width: 80px;
+            max-height: 80px;
+            min-width: 50px;
+            min-height: 50px;
             border-radius: 50%;
             background-color: #ffffff;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 0.3vh solid #f8bbd0;
+            box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 2;
+            /* 负边距正好是头像高度的50%，确保一半在外一半在内 */
+            margin-bottom: calc(-15vw / 2);
             object-fit: cover;
-            flex-shrink: 0;
         }
-        
-        /* 移动端响应式调整 */
+
+        /* 头像旁边的小椭圆装饰 - 第一个 */
+        .top-avatar::before {
+            content: '';
+            position: absolute;
+            width: 3vw;
+            height: 2.2vw;
+            max-width: 16px;
+            max-height: 12px;
+            min-width: 11px;
+            min-height: 8px;
+            background-color: #ffffff;
+            border: 0.2vh solid #f8bbd0;
+            border-radius: 50%;
+            top: 20%;
+            right: -3vw;
+            box-shadow: 0 0.2vh 0.5vh rgba(0, 0, 0, 0.08);
+        }
+
+        /* 头像旁边的小椭圆装饰 - 第二个 */
+        .top-avatar::after {
+            content: '';
+            position: absolute;
+            width: 4vw;
+            height: 3vw;
+            max-width: 22px;
+            max-height: 16px;
+            min-width: 15px;
+            min-height: 11px;
+            background-color: #ffffff;
+            border: 0.2vh solid #f8bbd0;
+            border-radius: 50%;
+            top: -5%;
+            right: -7vw;
+            box-shadow: 0 0.2vh 0.5vh rgba(0, 0, 0, 0.08);
+        }
+
+        /* 圆角容器 - 纯白色 */
+        .top-widget-container {
+            width: 100%;
+            min-height: 20vh;
+            background-color: #ffffff;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 3vh;
+            box-shadow: 0 0.5vh 2vh rgba(0, 0, 0, 0.1);
+            /* padding-top 正好是头像高度的50%加上额外间距 */
+            padding: calc(15vw / 2 + 2vh) 4vw 3vh 4vw;
+            position: relative;
+            z-index: 1;
+            box-sizing: border-box;
+        }
+
+        /* 小屏幕响应式调整 */
         @media (max-width: 380px) {
             .top-avatar {
-                width: 60px;
-                height: 60px;
+                width: 16vw;
+                height: 16vw;
+                margin-bottom: calc(-16vw / 2);
+                border-width: 0.25vh;
+            }
+
+            .top-avatar::before {
+                width: 3.3vw;
+                height: 2.4vw;
+                right: -3.2vw;
+            }
+
+            .top-avatar::after {
+                width: 4.3vw;
+                height: 3.2vw;
+                right: -7.5vw;
+            }
+            
+            .top-widget-container {
+                border-radius: 2.5vh;
+                min-height: 18vh;
+                padding-top: calc(16vw / 2 + 2vh);
             }
         }
 
-        /* 星期几显示徽章 */
-        .weekday-badge {
-            padding: 4px 12px;
-            background-color: rgba(200, 200, 200, 0.5);
-            border-radius: 10px;
-            font-size: 11px;
-            color: #666;
-            text-align: center;
-            width: fit-content;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            white-space: nowrap;
-        }
-        
-        /* 移动端响应式调整 */
-        @media (max-width: 380px) {
-            .weekday-badge {
-                font-size: 10px;
-                padding: 3px 10px;
+        /* 大屏幕响应式调整 */
+        @media (min-width: 768px) {
+            .top-avatar {
+                width: 10vw;
+                height: 10vw;
+                max-width: 70px;
+                max-height: 70px;
+                margin-bottom: calc(-10vw / 2);
+                border-width: 0.25vh;
+            }
+
+            .top-avatar::before {
+                width: 2.7vw;
+                height: 2vw;
+                right: -2.5vw;
+            }
+
+            .top-avatar::after {
+                width: 3.5vw;
+                height: 2.6vw;
+                right: -6.5vw;
+            }
+            
+            .top-widget-container {
+                border-radius: 2.5vh;
+                padding-top: calc(10vw / 2 + 2vh);
             }
         }
 
-        /* 头像右侧信息区域 */
-        .top-avatar-info {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 8px;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .top-avatar-nickname {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            word-wrap: break-word;
-        }
-
-        .top-avatar-datetime {
-            font-size: 11px;
-            color: #999;
-            word-wrap: break-word;
-        }
-        
-        /* 移动端响应式调整 */
-        @media (max-width: 380px) {
-            .top-avatar-nickname {
-                font-size: 13px;
+        /* 当头像达到最大尺寸时的调整 */
+        @media (min-width: 533px) {
+            .top-avatar {
+                margin-bottom: -40px;
             }
-            .top-avatar-datetime {
-                font-size: 10px;
+
+            .top-avatar::before {
+                right: -18px;
+            }
+
+            .top-avatar::after {
+                right: -38px;
+            }
+            
+            .top-widget-container {
+                padding-top: calc(40px + 2vh);
             }
         }
 
-        /* 纯文案样式 - 无背景无边框 */
-        .top-text-badge {
-            margin-top: 8px;
-            font-size: 11px;
-            color: #666;
-            text-align: left;
-            width: 100%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            letter-spacing: 1.5px;
-            cursor: pointer;
-            transition: color 0.2s ease, transform 0.2s ease;
-        }
-
-        .top-text-badge:hover {
-            color: #333;
-            transform: scale(1.02);
-        }
-
-        .top-text-badge:active {
-            transform: scale(0.98);
-        }
-        
-        /* 移动端响应式调整 */
-        @media (max-width: 380px) {
-            .top-text-badge {
-                font-size: 10px;
-                letter-spacing: 1px;
+        /* 当头像达到最小尺寸时的调整 */
+        @media (max-width: 333px) {
+            .top-avatar {
+                margin-bottom: -25px;
             }
-        }
 
-        /* 顶部图标组 - 定位到右下角 */
-        .top-icons-group {
-            position: absolute;
-            bottom: 15px;
-            right: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .top-icon-btn {
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.6);
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            padding: 0;
-            transition: transform 0.2s ease, background 0.2s ease;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            flex-shrink: 0;
-        }
-
-        .top-icon-btn:hover {
-            transform: scale(1.1);
-            background: rgba(255, 255, 255, 0.8);
-        }
-
-        .top-icon-btn:active {
-            transform: scale(0.95);
-        }
-
-        .top-icon-btn svg {
-            width: 18px;
-            height: 18px;
-            fill: #666;
-        }
-        
-        /* 移动端响应式调整 */
-        @media (max-width: 380px) {
-            .top-icon-btn {
-                width: 28px;
-                height: 28px;
+            .top-avatar::before {
+                right: -12px;
             }
-            .top-icon-btn svg {
-                width: 16px;
-                height: 16px;
+
+            .top-avatar::after {
+                right: -28px;
+            }
+            
+            .top-widget-container {
+                padding-top: calc(25px + 2vh);
             }
         }
 
@@ -732,10 +669,6 @@
         #home-screen.day-mode .app-icon .app-name {
             color: var(--white-color);
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-        
-        #home-screen.day-mode .top-blur-container {
-            background-color: rgba(255, 255, 255, 0.3);
         }
 
         .app-grid {
@@ -2711,6 +2644,110 @@
         .sticker-bar-btn:active svg {
             transform: scale(0.95);
         }
+        
+        /* 展开拓展栏按钮样式 */
+        #expand-sticker-bar-btn {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            padding: 6px;
+            background-color: var(--white-color);
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        #expand-sticker-bar-btn:hover {
+            background-color: #f5f5f5;
+            border-color: var(--primary-color);
+        }
+        
+        #expand-sticker-bar-btn svg {
+            width: 100%;
+            height: 100%;
+            stroke: #666;
+        }
+        
+        #expand-sticker-bar-btn:hover svg {
+            stroke: var(--primary-color);
+        }
+        
+        /* 拓展栏弹窗样式 */
+        #sticker-bar-modal {
+            z-index: 10001;
+        }
+        
+        #sticker-bar-modal-content {
+            scrollbar-width: thin;
+            scrollbar-color: #ccc #f5f5f5;
+        }
+        
+        #sticker-bar-modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #sticker-bar-modal-content::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        #sticker-bar-modal-content::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        
+        #sticker-bar-modal-content::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        
+        .sticker-bar-modal-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 10px;
+            background-color: var(--white-color);
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 90px;
+        }
+        
+        .sticker-bar-modal-btn:hover {
+            background-color: #fdf6f8;
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 128, 171, 0.2);
+        }
+        
+        .sticker-bar-modal-btn:active {
+            transform: translateY(0);
+        }
+        
+        .sticker-bar-modal-btn svg {
+            width: 32px;
+            height: 32px;
+            fill: #666;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .sticker-bar-modal-btn:hover svg {
+            fill: var(--primary-color);
+            transform: scale(1.1);
+        }
+        
+        .sticker-bar-modal-btn span {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .sticker-bar-modal-btn:hover span {
+            color: var(--primary-color);
+        }
 
         /* 暂停按钮特殊样式 */
         #stop-generation-btn svg {
@@ -4444,6 +4481,31 @@
         }
         
         /* --- Convert CHAR to NPC Item Styles --- */
+        #convert-char-list {
+            scrollbar-width: thin;
+            scrollbar-color: #ccc #f5f5f5;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #convert-char-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #convert-char-list::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        #convert-char-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        
+        #convert-char-list::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        
         .convert-char-item {
             display: flex;
             align-items: center;
@@ -4451,6 +4513,10 @@
             border-bottom: 1px solid #eee;
             cursor: pointer;
             transition: background-color 0.2s;
+            flex-shrink: 0;
+            min-height: 74px;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .convert-char-item:hover {
